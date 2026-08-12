@@ -30,4 +30,4 @@ Los archivos SQL bajo `sql/supabase/migrations/` son cambios preparados. No debe
 - Baseline: `V45.68`
 - Version ID: `dd01b10a-60e6-4412-903b-b21c7f3e577a`
 
-Durante la fase de preparación de infraestructura, el workflow productivo y las RPC productivas permanecen sin cambios.
+El workflow productivo permanece protegido. El P0 se trabaja en una rama aislada y solo se promueve después de QA y regresión. El estado detallado actual está en `docs/status-P0-2026-08-12.md`.
