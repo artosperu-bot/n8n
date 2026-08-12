@@ -15,7 +15,7 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-  v_now timestamptz := clock_timestamp();
+  v_now timestamptz;
   v_lock public.ia_session_locks%rowtype;
   v_queue public.ia_turn_queue%rowtype;
 begin
@@ -40,11 +40,6 @@ begin
     return jsonb_build_object('released', false, 'reason', 'OWNER_MISMATCH');
   end if;
 
-  -- A stale worker must not finalize queue state after losing its lease.
-  if v_lock.locked_until is null or v_lock.locked_until <= v_now then
-    return jsonb_build_object('released', false, 'reason', 'LEASE_EXPIRED');
-  end if;
-
   select *
     into v_queue
     from public.ia_turn_queue
@@ -64,19 +59,25 @@ begin
     return jsonb_build_object('released', false, 'reason', 'QUEUE_NOT_PROCESSING');
   end if;
 
-  -- Both mutations are inside the same function transaction. No QUEUED->DONE
-  -- or FAILED/LOCK_EXPIRED->DONE path exists because of the PROCESSING guard.
+  -- Critical P0 rule: take the effective time only after all blocking reads.
+  -- If this worker waited on either FOR UPDATE, it must validate the lease
+  -- against the current clock immediately before finalizing queue state.
+  v_now := clock_timestamp();
+
+  if v_lock.locked_until is null or v_lock.locked_until <= v_now then
+    return jsonb_build_object('released', false, 'reason', 'LEASE_EXPIRED');
+  end if;
+
   update public.ia_turn_queue
      set status = 'DONE',
-         finished_at = v_now
+         finished_at = v_now,
+         updated_at = v_now
    where session_id = p_session_id
      and message_id = p_message_id
      and owner = p_owner
      and upper(coalesce(status, '')) = 'PROCESSING';
 
   if not found then
-    -- Defensive guard. Raising rolls back the previous statement if the row
-    -- changed unexpectedly despite FOR UPDATE.
     raise exception 'SAFE_RELEASE_QUEUE_STATE_CHANGED';
   end if;
 
