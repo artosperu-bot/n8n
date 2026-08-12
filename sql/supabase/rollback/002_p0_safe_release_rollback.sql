@@ -1,0 +1,11 @@
+-- BLOCKED UNTIL PRE-APPLY BASELINE DDL IS CAPTURED.
+-- Do NOT execute this file as-is.
+--
+-- Required before migration 002 can be approved/applied:
+--   SELECT pg_get_functiondef('public.ia_liberar_turno(text,text,text)'::regprocedure);
+-- Also capture owner and grants for exact restoration.
+--
+-- Replace the marker below with the exact baseline CREATE OR REPLACE FUNCTION
+-- definition and restore the exact ownership/grants. A guessed rollback is not safe.
+
+-- __BASELINE_IA_LIBERAR_TURNO_DEFINITION_REQUIRED__
