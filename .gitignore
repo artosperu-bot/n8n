@@ -1,0 +1,31 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+secrets.*
+credentials.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.keystore
+
+# n8n / local exports that have not been sanitized
+*.raw.json
+*.unsanitized.json
+workflows/**/raw/
+
+# Local tooling
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
