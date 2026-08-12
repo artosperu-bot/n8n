@@ -1,17 +1,17 @@
 # P0 — Hallazgos de concurrencia
 
-Estado: **documentado; fix no aplicado**.
+Estado: **Safe Renew instalado y con permisos verificados; comportamiento pendiente de QA. Safe Release aún no aplicado.**
 
-## Hallazgos reproducidos en QA
+## Hallazgos confirmados
 
-- TTL productivo actual: 120 s.
-- Existen ejecuciones capaces de superar ese TTL.
-- `ia_persistir_turno_atomico` rechaza al owner stale y debe preservarse.
-- La función histórica de renovación puede renovar después de expirar el lease; por tanto puede resucitar un owner vencido.
-- La función histórica de renovación también puede acortar un lease si se invoca con una duración menor.
-- `ia_liberar_turno` protege el lock de otro owner (`released=false`), pero se observó que puede marcar `DONE` la fila de cola del caller incluso cuando este nunca adquirió ownership.
-- Un test QA mantuvo el mismo owner durante más de 180 s mediante renovaciones periódicas; esto demuestra la viabilidad del heartbeat, no la seguridad de la función histórica.
+- TTL productivo actual: aproximadamente 120 s.
+- Existen ejecuciones reales capaces de superar 120 s e incluso 180 s.
+- `ia_persistir_turno_atomico` ya contiene fencing útil: valida lock, owner y lease vigente; debe preservarse.
+- La función histórica `fn_ia_renovar_session_lock` **sí comprueba que el lease siga vigente**, por lo que no resucita directamente un lease ya expirado.
+- Aun así, la renovación histórica es insuficiente para P0 porque puede acortar un lease y no valida `message_id`, owner de queue ni estado `PROCESSING`.
+- `ia_liberar_turno` tiene un defecto crítico: puede permitir que una fila de `ia_turn_queue` pase de `PENDING` a `DONE` aunque el worker no haya adquirido/liberado correctamente el lock; un worker stale también podría intentar finalizar estados que no le corresponden.
+- Los estados reales permitidos en `ia_turn_queue` son `PENDING`, `PROCESSING`, `DONE` y `FAILED`; no existe `QUEUED` como estado real.
 
 ## Decisión
 
-No reutilizar la renovación histórica. Preparar un contrato nuevo y corregir release antes de modificar el workflow productivo.
+No conectar la renovación histórica a producción. Usar la nueva RPC `ia_renovar_turno`, ya instalada y restringida a `postgres`/`service_role`, y someterla primero a QA conductual. No aplicar todavía el cambio de Safe Release ni modificar V45.68.
