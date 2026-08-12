@@ -1,0 +1,23 @@
+-- P0 QA CANDIDATE ONLY — NOT PRODUCTION.
+-- Cause: ia_adquirir_turno could re-acquire the same message_id and could create a live lock
+-- for a different session without a matching queue row (phantom acquire).
+-- Change: strict message identity, explicit idempotent states, FAILED requires a new message_id,
+-- and acquisition raises/rolls back unless exactly one queue row transitions PENDING -> PROCESSING.
+-- Tests: 16/18 requested acquire tests executed PASS; 2 true-parallel tests remain BLOCKED by connector limitations.
+-- Result: candidate remains QA-only. Do not replace public.ia_adquirir_turno yet.
+
+-- Installed QA function signature:
+-- public.ia_adquirir_turno_qa(text,text,integer,integer,text)
+-- Definition MD5 verified in Supabase: ea02f1da6decb9d9eea0cab4fd0ceddf
+--
+-- Contract summary:
+-- NEW -> ACQUIRED + exactly one PROCESSING row + live lock.
+-- PROCESSING duplicate same session -> ALREADY_PROCESSING, no mutation.
+-- DONE duplicate same session -> ALREADY_DONE, no mutation.
+-- FAILED duplicate same session -> FAILED_REQUIRES_NEW_MESSAGE_ID, no mutation.
+-- Same message_id other session -> MESSAGE_SESSION_MISMATCH, no mutation/no lock.
+-- Queue transition affected_rows != 1 -> SQLSTATE 40001 SAFE_ACQUIRE_QUEUE_STATE_CHANGED (transaction rollback).
+--
+-- The executable definition is currently installed only as the QA RPC in Supabase.
+-- Before production promotion, capture pg_get_functiondef(public.ia_adquirir_turno_qa(...)),
+-- complete the two real parallel-connection tests, and rerun the joint ACQUIRE/RENEW/PERSIST/RELEASE matrix.
