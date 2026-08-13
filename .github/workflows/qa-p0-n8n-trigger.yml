@@ -1,0 +1,29 @@
+name: QA P0 n8n webhook trigger
+
+on:
+  push:
+    branches:
+      - p0-concurrency-hardening
+    paths:
+      - .github/workflows/qa-p0-n8n-trigger.yml
+  workflow_dispatch:
+
+jobs:
+  trigger-n8n:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger owner and challenger concurrently
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST 'https://stechsito.app.n8n.cloud/webhook/qa-p0-120-owner-api' \
+            -H 'Content-Type: application/json' \
+            --data '{"source":"github-actions","test":"p0_120_owner_run02"}' &
+          OWNER_PID=$!
+          curl -fsS -X POST 'https://stechsito.app.n8n.cloud/webhook/qa-p0-120-challenger-api' \
+            -H 'Content-Type: application/json' \
+            --data '{"source":"github-actions","test":"p0_120_challenger_run02"}' &
+          CHALLENGER_PID=$!
+          wait "$OWNER_PID"
+          wait "$CHALLENGER_PID"
+          echo 'Both QA webhooks accepted.'
