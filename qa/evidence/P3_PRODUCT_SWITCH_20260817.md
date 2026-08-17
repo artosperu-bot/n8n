@@ -24,7 +24,7 @@ No product name, phrase, price, or ID was hardcoded in the fixes.
 - Execution 3814: exact Armor X13 lookup; active `P-ARMOR-X13`; recommendation null; response about X13.
 - Supabase readback for `P3_FIX3800D_EXACT_20260817_1600`: `cambio_producto_explicito=true`, active X13, recommendation null.
 - Execution 3860: explicit switch from purchase momentum; active X13, recommendation null, stale evidence null, pending purchase null, reservation processing false, reservation registration false.
-- Real response: `Perfecto, tomamos el Armor X13 como el producto a evaluar.`
+- Real response: `Perfecto, tomamos el Armor X13 como el producto a evaluar.\n\nEntiendo.` (safe but commercially terse)
 
 ## Adjacent regression
 
