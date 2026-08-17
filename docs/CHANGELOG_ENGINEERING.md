@@ -189,3 +189,38 @@ Confirmed results:
 - production readiness: NOT READY.
 
 P3 remains IN PROGRESS. Credential rotation/revocation, execution-output redaction and production infrastructure changes require explicit operational authorization.
+
+
+## 2026-08-17 — P3 aggressive advance
+
+### Product switch
+
+- Node 06 now gives deterministic explicit-product evidence precedence over uncorroborated semantic recommendation/comparison classification.
+- Node 17A demotes conflicting recommendations, persists explicit-switch state, clears product-bound commercial/purchase state and preserves unrelated context.
+- Node 18 no longer rehydrates a previous product reservation after an explicit switch.
+- Node 23 maps `cambio_producto_explicito` into the supported atomic conversation payload.
+
+### Work and budget
+
+- Node 06 gained grounded work-clause extraction and locale-aware budget ceilings.
+- Node 17A recommendation rationale now connects verified work context and within-budget fit.
+
+### Capability truth and commercial progression
+
+- Node 17B adds a conditional useful next step only for a single canonical UNKNOWN capability.
+- Institutional topics bypass generic capability detection.
+- Supported sensitive capabilities are appended to, rather than replace, the canonical recommendation rationale.
+- Node 17A blocks arbitrary recommendations without a grounded criterion.
+
+### QA and readiness
+
+- 30 commercial scenarios executed: 21 PASS, 9 WEAK, 0 overall FAIL after fixes.
+- Compact final regression completed with comparison, price, stock, purchase, warranty, budget, switch, capability, objection, institutional, persistence, RAG isolation and third-product checks.
+- P3 conversation candidate classified functionally ready with non-blocking commercial weaknesses.
+- Production remains unpublished.
+
+### Observability and security
+
+- Execution-ID persistence attempt failed at runtime and was fully rolled back; atomic persistence reverified.
+- Four SQL-bridge HTTP nodes confirmed with literal Authorization headers and no credential binding.
+- Stable-endpoint, credential migration and rollback design added.
