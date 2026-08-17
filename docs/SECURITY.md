@@ -80,3 +80,21 @@ Before committing or promoting content, inspect staged/changed files for actual 
 Documentation may legitimately contain these words. The security check is for actual sensitive values, not the vocabulary itself.
 
 If a secret was historically committed, deleting it from the latest tree does not resolve the exposure. Credential rotation and Git history remediation may be required.
+
+
+## P3 confirmed audit — 2026-08-17
+
+Confirmed without exposing values:
+
+- `04G Catálogo para Saludo`, `09 Ejecutar SQL`, `10B Ejecutar SQL Imágenes`, and `20 Registrar Reserva 24h` each contain a literal Authorization header;
+- none of the four has an n8n credential binding;
+- the same four use a literal tunnel-class endpoint rather than an environment/config abstraction;
+- no accessible `httpHeaderAuth` or `httpBearerAuth` credential currently exists;
+- the native Supabase nodes use one scoped `supabaseApi` credential;
+- QA draft and active production are versions of the same workflow, so versioning alone does not provide credential separation.
+
+No credential was rotated, revoked, printed, committed or moved.
+
+Routine QA evidence must never include raw execution transport objects. Use node allowlists and explicit safe fields only.
+
+The reviewed migration sequence, production cutover and rollback plan are in `docs/P3_SECURITY_MIGRATION_DESIGN.md`. Until that work is performed by an authorized operator, production promotion is NOT READY.
