@@ -2,19 +2,47 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make an explicit resolved product switch demote a conflicting recommendation and persist accurate switch metadata without changing production.
+**Goal:** Make a deterministic explicit product switch resolve the named product, demote a conflicting recommendation, and persist accurate switch metadata without changing production.
 
-**Architecture:** Node 17A remains the sole recommendation authority and performs only recommendation reconciliation. Node 23 remains the persistence mapper and copies the already-derived switch flag into the existing atomic conversation payload.
+**Architecture:** Node 06 owns deterministic evidence precedence and exact product targeting for explicit switches. Node 17A remains the sole recommendation authority and performs only recommendation reconciliation. Node 23 remains the persistence mapper and copies the already-derived switch flag into the existing atomic conversation payload.
 
 **Tech Stack:** n8n Code nodes, n8n HTTP persistence node, Supabase/PostgreSQL atomic persistence RPC, manual QA executions.
 
 ## Global Constraints
 
-- P0, P1, P2.1, node 06B, and production are frozen.
+- P0, P1, P2.1, node 06B, and production are frozen; node 06 is authorized only at the fresh execution-3805 boundary.
 - No phrase or product hardcoding.
 - Preserve comparison history, SPIN, activity, budget, priorities, and unrelated pending state.
 - One physical owner per RED→GREEN cycle.
 - Actual persisted response and state determine PASS.
+
+---
+
+### Task 0: Preserve exact targeting for deterministic product switches
+
+**Files:**
+- Modify: n8n node `06 Resolver Turno y Estado`
+- Test: fresh manual QA sequence matching execution 3805
+
+**Interfaces:**
+- Consumes: deterministic explicit product reference, previous active product, deterministic recommendation/comparison cues, grounded semantic requests
+- Produces: exact explicit target, canonical specification action, provisional explicit-switch metadata
+
+- [x] **Step 1: Verify fresh RED**
+
+Execution 3805 established Armor 22 as active and Armor X12 as recommended, then sent `Mejor quiero el Armor X13.`. The interpreter emitted `RECOMMEND`; node 06 accepted it, SQL performed broad recommendation search, and X13 was never resolved.
+
+- [ ] **Step 2: Implement evidence precedence**
+
+Compare the deterministic explicit reference with normalized aliases of the active product. When they differ and deterministic recommendation/comparison language is absent, remove only uncorroborated `RECOMENDAR`/`COMPARAR`, retain exact specification lookup, and emit explicit-switch metadata. Do not hardcode the phrase or product.
+
+- [ ] **Step 3: Validate isolation**
+
+Validate node/workflow, diff versions, and confirm only node 06 changed from the prior draft while production remains unchanged.
+
+- [ ] **Step 4: Re-run the exact sequence**
+
+Require exact X13 resolution before continuing to 17A reconciliation and persistence.
 
 ---
 
