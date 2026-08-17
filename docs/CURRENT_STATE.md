@@ -114,7 +114,7 @@ Deferred/tooling-dependent where still applicable.
 
 ### P2.1
 
-**Status: ACTIVE / NOT CLOSED**
+**Status: FUNCTIONALLY CLOSED**
 
 Historical issue classes already identified:
 
@@ -173,44 +173,37 @@ Classification: `T6-B / T6-C`.
 
 ---
 
-## Current T6 fix draft
+## Final P2.1 QA drafts
 
 - QA parent: `7fdfb2e4-f777-44ed-9cd6-74eca1f5119a`
-- First T6 fix draft: `6a20e2c8-7905-402d-8345-1f763bd4b688`
-- Functional nodes changed: `1`
-- Changed node: `17 Validar y Reducir Estado`
+- Node 17 current-intent fix: `72122572-a5dd-484f-8da5-e44533277df5`
+- Node 06 grounded stock-confirmation fix: `44af7809-24a3-490f-bcf0-73c1482af977`
+- Final node 21 reservation-interruption fix: `8b31e9a1-a9bb-4c44-b75e-d913cc3d6f34`
+- Functional nodes changed across the root-cause sequence: `3`, one at a time
+- Independent static review for every change: SPEC PASS / QUALITY PASS
 - Production published: **NO**
-
-Implemented rule: final `CURRENT_COMPARISON_HAS_PRIORITY` must fire only when comparison is truly current-turn comparison intent.
-
-Do **not** mark PASS yet.
-
-### Remaining node17 risk
-
-An earlier node17 block can build `comparisonAnswer`, assign `answer = comparisonAnswer`, and reject NBA based on historical `has('COMPARAR')`.
-
-Status: **UNVERIFIED**.
-
-Second node17 edit is authorized only if fresh T6 proves this earlier block is still destructive.
+- Production active version remains: `ff0135de-a3ed-4757-83a1-80794b78bb2f`
 
 ---
 
-## Fresh QA
+## Fresh QA closure
 
-- Session: `P2_1_FASTTRACK_T6_20260816_2312`
-- Fresh execution: `3777`
-- Execution initiated: YES
-- Canonical output/state recovered sufficiently for certification: NO
+- Main session: `P2_1_FASTTRACK_T6_20260816_2312`
+- Negative-confirmation session: `P2_1_NEG_CONFIRM_20260817_1455`
+- T1/T2/T3/T4/T5: PASS (`3777`, `3779`–`3782`)
+- T6: PASS after proven node-17-only correction (`3784`)
+- R7: PASS after proven node-06-only correction (`3786`)
+- R8 purchase: PASS (`3787`)
+- R9 warranty: PASS after proven node-21-only correction (`3789`)
+- Negative confirmation: PASS (`3790`–`3791`)
+- Adjacent price/stock/compare/purchase: PASS (`3792`, `3794`–`3796`)
+- Third-product contamination: NO in customer answer or persisted comparison references
+- Final persisted context: version 16; active/recommended Armor 22; refs `P000049` + `Armor X13`; reservation `RECOLECTANDO_DATOS`
+- Sanitized evidence: `qa/evidence/P2_1_FASTTRACK_T6_20260817.md`
 
-Therefore:
+P2.1 dimensions: TECHNICAL, CONTEXT, COMMERCIAL, COHERENCE, SPIN, NEUROVENTAS, EMPATHY, NBA/N+1 and REAL RESPONSE = **PASS**.
 
-- T6: **NOT CERTIFIED**
-- R7: **NOT EXECUTED**
-- R8: **NOT EXECUTED**
-- R9: **NOT EXECUTED**
-- negative confirmation: **NOT EXECUTED**
-- P2.1: **NOT CLOSED**
-- P3: **NOT FORMALLY STARTED**
+**P2.1: FUNCTIONALLY CLOSED.**
 
 ---
 
@@ -252,6 +245,23 @@ Every checkpoint must be evaluated across:
 
 ---
 
+## P3 — measurable start
+
+**Status: IN PROGRESS**
+
+Fresh session `P3_QA_20260817_1503` produced:
+
+- greeting PASS (`3797`);
+- work + budget recommendation WEAK (`3798`): an in-budget rugged model was recommended, but explicit budget/activity were not persisted or reflected in the explanation;
+- unknown 5G capability truth PASS / commercial WEAK (`3799`): UNKNOWN was not invented as supported or unsupported, but no useful next step was offered;
+- product switch TECHNICAL PASS / CONTEXT WEAK (`3800`): active product changed to Armor X13 while recommendation remained Armor X12 Pro and explicit-switch metadata remained false.
+
+Observability: **PARTIAL**. Core conversation and state are reconstructable, but execution ID is not persisted beside the conversation and internal owner/action reconstruction requires execution-data access.
+
+Security: **CRITICAL OPEN**. Execution inspection can expose credential/auth material. Do not reproduce it. Rotation/revocation, output redaction, retention/PII review and controlled SQL-bridge configuration require explicit operational authorization.
+
+Production readiness: **NOT READY**. Production remains unchanged and no QA draft was published.
+
 ## Exact continuation point
 
-`recover/certify execution 3777 → complete fresh T6 → optional second node17-only fix IF fresh evidence proves it → R7 stock → R8 purchase → R9 warranty → negative confirmation → close P2.1 → formally start P3`
+`P3 root-cause isolation for budget/activity persistence and product-switch recommendation coherence → observability correlation/redaction design → credential rotation authorization → compact final QA matrix → production-readiness reassessment`
