@@ -86,3 +86,33 @@ For each important turn reconstruct:
 ## P4
 
 Future / deferred. Do not pre-design or implement until prior phase authority allows it.
+
+
+## P3 exit state — 2026-08-17
+
+**FUNCTIONALLY READY; PRODUCTION PROMOTION BLOCKED**
+
+Completed:
+
+- product-switch correctness and persistence;
+- work/budget continuity and explanation;
+- UNKNOWN capability N+1;
+- 30-case commercial QA matrix;
+- compact certification evidence;
+- security and stable SQL-bridge migration design.
+
+Non-blocking commercial backlog:
+
+- personal-use empathy/naturalness;
+- decision-oriented N+1 after factual comparison;
+- concise city-aware delivery response;
+- narrow re-prompt for bare confirmation to open discovery;
+- resume prior criterion after institutional interruption;
+- live NOT_SUPPORTED catalog fixture.
+
+Promotion blockers:
+
+1. migrate SQL-bridge Authorization values to separate QA/PROD n8n credentials;
+2. replace the literal tunnel endpoint with a named stable endpoint and configuration abstraction;
+3. harden execution retention/redaction for transport objects;
+4. run operator-approved security smoke tests, then promotion review.
