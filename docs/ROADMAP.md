@@ -14,15 +14,22 @@ Selected tooling/source-isolation work may remain deferred. Core authority separ
 
 ## P2 — Conversational/commercial correctness
 
-### P2.1 — ACTIVE / NOT CLOSED
+### P2.1 — FUNCTIONALLY CLOSED
 
-Current blocker: fresh certification of the node17 T6 current-intent-priority fix.
+Fresh closure is recorded in `qa/evidence/P2_1_FASTTRACK_T6_20260817.md`.
 
-Expected sequence:
+Closed paths:
 
-`recover execution 3777 → reach/certify fresh T6 → optional second node17-only fix IF proven → R7 stock → R8 purchase → R9 warranty → negative confirmation → close P2.1`
+- comparison and criterion progression;
+- recommendation;
+- explicit price and stock;
+- purchase initiation;
+- warranty interruption during reservation;
+- negative confirmation;
+- adjacent compare/price/stock/purchase regression;
+- no third-product contamination in answer or persisted refs.
 
-Do not certify from internal flags alone. Inspect actual persisted customer-facing response and canonical state.
+The final QA draft is unpublished; production remains unchanged.
 
 ### P2.2
 
@@ -30,17 +37,26 @@ Do not certify from internal flags alone. Inspect actual persisted customer-faci
 
 ## P3 — Observability / Commercial QA / Security / Readiness
 
-**NOT FORMALLY STARTED**
+**IN PROGRESS**
 
-Planned areas:
+Measured start completed on fresh QA session `P3_QA_20260817_1503`:
 
-1. observability;
-2. commercial QA;
-3. neuroventas/SPIN quality;
-4. NBA/N+1 quality;
-5. final QA matrix;
-6. security;
-7. production readiness.
+1. observability audit: PARTIAL;
+2. greeting: PASS;
+3. work + budget recommendation: WEAK;
+4. UNKNOWN capability truth: PASS / commercial WEAK;
+5. explicit product switch: technical PASS / context WEAK;
+6. credential exposure through execution inspection: CRITICAL OPEN;
+7. production readiness: NOT READY.
+
+Next priorities:
+
+1. isolate budget/activity persistence loss;
+2. isolate product-switch metadata and stale recommendation ownership;
+3. design execution/message correlation without secret-bearing dumps;
+4. obtain authorization for credential rotation/revocation and execution-output redaction;
+5. run the remaining representative commercial and final QA matrix;
+6. reassess production readiness only after security and regression gates.
 
 ### P3 observability target
 
