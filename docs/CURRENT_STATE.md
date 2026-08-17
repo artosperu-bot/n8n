@@ -265,3 +265,44 @@ Production readiness: **NOT READY**. Production remains unchanged and no QA draf
 ## Exact continuation point
 
 `P3 root-cause isolation for budget/activity persistence and product-switch recommendation coherence → observability correlation/redaction design → credential rotation authorization → compact final QA matrix → production-readiness reassessment`
+
+
+---
+
+## P3 aggressive advance — 2026-08-17
+
+**Status: FUNCTIONALLY READY / PRODUCTION BLOCKED BY SECURITY**
+
+Confirmed QA candidate:
+
+- workflow draft: `feebd18e-7147-48c7-8d81-bf7af325aaf6`;
+- active production version remains `ff0135de-a3ed-4757-83a1-80794b78bb2f`;
+- production publication: NO;
+- changed nodes from P3 baseline: 06, 17A, 17B, 18, 23;
+- connections and node groups unchanged;
+- all five changed nodes validate.
+
+Closed functional roots:
+
+- 3800 explicit product switch, including recommendation reconciliation, persisted switch metadata, stale commercial evidence invalidation and reservation non-rehydration;
+- 3798 work + budget extraction, persistence and recommendation explanation;
+- 3799 truthful UNKNOWN capability N+1;
+- recommendation without sufficient criteria;
+- institutional precedence over generic capability classification;
+- supported capability inside a recommendation rationale.
+
+Commercial matrix:
+
+- 30 scenarios executed;
+- 21 PASS, 9 WEAK, 0 overall FAIL after fixes;
+- critical technical/context/truth paths have no remaining exercised FAIL.
+
+Observability remains PARTIAL: session/message/request IDs persist, but execution ID does not. A QA-only attempt failed at runtime and was fully rolled back; atomic persistence was reverified.
+
+Production blockers are security/infrastructure only:
+
+1. literal Authorization headers in four SQL-bridge HTTP nodes;
+2. literal tunnel endpoint without stable environment/config abstraction;
+3. transport-level execution inspection can expose credential material.
+
+Evidence: `qa/evidence/P3_*.md`, `qa/regression/P3_CERTIFICATION_20260817.md`, and `docs/P3_SECURITY_MIGRATION_DESIGN.md`.
