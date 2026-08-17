@@ -6,29 +6,28 @@ Confirm:
 
 - repository: `artosperu-bot/n8n`;
 - branch: `p0-concurrency-hardening`;
-- production workflow ID: `c661Gw0xoqZBsNtf`;
-- current P0 status: CLOSED / FROZEN;
-- current P2.1 status: ACTIVE / NOT CLOSED;
-- current QA draft: `6a20e2c8-7905-402d-8345-1f763bd4b688`;
-- production publication of current T6 fix: NO.
+- workflow ID: `c661Gw0xoqZBsNtf`;
+- P0: CLOSED / FROZEN;
+- P2.1: FUNCTIONALLY CLOSED;
+- P3 QA candidate: `feebd18e-7147-48c7-8d81-bf7af325aaf6`;
+- production active version: `ff0135de-a3ed-4757-83a1-80794b78bb2f`;
+- production publication: NO;
+- production readiness: NOT READY because SQL-bridge credential/tunnel and execution-inspection security work requires an authorized operator.
 
-Read `CURRENT_STATE.md`, `ROADMAP.md`, `QA_STRATEGY.md`, `COMMERCIAL_CONTRACT.md` and relevant evidence before editing workflow behavior.
+Read `CURRENT_STATE.md`, `ROADMAP.md`, `QA_STRATEGY.md`, `COMMERCIAL_CONTRACT.md`, `SECURITY.md`, `P3_SECURITY_MIGRATION_DESIGN.md`, and the latest P3 evidence before editing.
 
 ## 2. Current continuation sequence
 
-1. Recover canonical output/state for fresh execution `3777` in session `P2_1_FASTTRACK_T6_20260816_2312`.
-2. Determine whether fresh T6 actually passes current-intent priority.
-3. Inspect the real persisted assistant response, not only internal flags.
-4. If the earlier node17 comparison block is proven destructive, apply the smallest node17-only fix.
-5. If it is not proven destructive, do not edit it.
-6. Rerun fresh T6 after any functional edit.
-7. Continue to R7 stock/availability.
-8. Continue to R8 purchase.
-9. Continue to R9 warranty.
-10. Run negative confirmation.
-11. Verify no third-product contamination.
-12. Close P2.1 only when all closure dimensions pass.
-13. Only then formally start P3.
+1. Do not publish the P3 draft.
+2. Operator provisions separate QA and production SQL-bridge credentials.
+3. Operator provisions a named stable tunnel/endpoint and per-environment non-secret base URL.
+4. Apply the four-node QA credential/URL migration described in `P3_SECURITY_MIGRATION_DESIGN.md`.
+5. Run unauthorized, timeout, catalog, product SQL, image SQL, purchase and reservation smoke tests.
+6. Confirm routine execution inspection no longer exposes Authorization material.
+7. Re-run `qa/regression/P3_CERTIFICATION_20260817.md` on the security-migrated candidate.
+8. Address only blocking regressions; keep the nine commercial WEAK items on the roadmap.
+9. Request explicit promotion review.
+10. Publish only after approval; retain the previous active version for rollback.
 
 ## 3. Root-cause procedure
 
