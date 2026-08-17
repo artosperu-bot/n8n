@@ -141,3 +141,51 @@ Consequences:
 - negative confirmation NOT EXECUTED
 - P2.1 NOT CLOSED
 - P3 NOT FORMALLY STARTED
+
+
+## 2026-08-17 — P2.1 functional closure
+
+Fresh QA recovered execution `3777` and completed the required stateful sequence in session `P2_1_FASTTRACK_T6_20260816_2312`.
+
+### Proven minimal fixes
+
+- Node 17 only (`72122572-a5dd-484f-8da5-e44533277df5`): current-turn comparison signal now gates comparison ownership, preventing historical comparison state from overwriting explicit price.
+- Node 06 only (`44af7809-24a3-490f-bcf0-73c1482af977`): grounded price and stock signals are preserved independently; stock-only confirmation does not re-add price.
+- Node 21 only (`8b31e9a1-a9bb-4c44-b75e-d913cc3d6f34`): active reservation text owns the current turn only for reservation/purchase/cancellation/registration work, so explicit warranty answers are no longer overwritten.
+
+Every functional change received independent static SPEC PASS / QUALITY PASS review. Production remained active on `ff0135de-a3ed-4757-83a1-80794b78bb2f`; no production publication occurred.
+
+### Fresh execution results
+
+- T1–T5: PASS (`3777`, `3779`–`3782`)
+- T6 price: PASS after fix (`3784`)
+- R7 stock-only confirmation: PASS after fix (`3786`)
+- R8 purchase: PASS (`3787`)
+- R9 warranty interruption: PASS after fix (`3789`)
+- negative confirmation: PASS (`3790`–`3791`)
+- adjacent price/stock/compare/purchase: PASS (`3792`, `3794`–`3796`)
+- third-product contamination: NO in response or persisted comparison references
+
+Execution `3793` was an invalid harness invocation with no chat message and is excluded from workflow-regression evidence.
+
+P2.1 final dimensions passed: technical, context, commercial, coherence, SPIN, neuroventas, empathy, NBA/N+1 and real response.
+
+**P2.1 FUNCTIONALLY CLOSED.**
+
+Sanitized evidence: `qa/evidence/P2_1_FASTTRACK_T6_20260817.md`.
+
+## 2026-08-17 — P3 measurable start
+
+Fresh session `P3_QA_20260817_1503` executed greeting, work/budget recommendation, UNKNOWN capability truth and explicit product switch scenarios (`3797`–`3800`).
+
+Confirmed results:
+
+- greeting: PASS;
+- work + budget recommendation: WEAK because explicit budget/activity were not persisted or reflected in the recommendation explanation;
+- Armor 22 5G truth: PASS because UNKNOWN was stated without invention; commercial next step WEAK;
+- product switch: technical PASS because active product became Armor X13; context WEAK because recommendation remained Armor X12 Pro and explicit-switch metadata remained false;
+- observability: PARTIAL because execution ID is not persisted beside the conversation and internal ownership reconstruction requires execution-data access;
+- security: CRITICAL OPEN because execution inspection can expose credential/auth material; no value is reproduced in repository evidence;
+- production readiness: NOT READY.
+
+P3 remains IN PROGRESS. Credential rotation/revocation, execution-output redaction and production infrastructure changes require explicit operational authorization.
