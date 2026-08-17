@@ -3,15 +3,15 @@
 > **CURRENT STATUS — 2026-08-17**
 >
 > - **P0 — Concurrency:** CLOSED / FROZEN
-> - **P1 — Product/context foundation:** FOUNDATION CLOSED; selected tooling work deferred
-> - **P2.1 — Conversational/commercial correctness:** ACTIVE / NOT CLOSED
-> - **Current QA draft:** `6a20e2c8-7905-402d-8345-1f763bd4b688`
-> - **Current functional change:** `17 Validar y Reducir Estado`
-> - **Current root:** historical comparison state can override explicit current-turn intent
-> - **Fresh QA session:** `P2_1_FASTTRACK_T6_20260816_2312`
-> - **Latest fresh execution:** `3777` — NOT CERTIFIED
-> - **Production publication of current T6 fix:** NO
-> - **Next:** certify fresh T6 → R7 stock → R8 purchase → R9 warranty → negative confirmation → close P2.1 → P3
+> - **P1 — Product/context foundation:** FOUNDATION CLOSED
+> - **P2.1 — Conversational/commercial correctness:** FUNCTIONALLY CLOSED
+> - **P3 — Commercial QA / readiness:** FUNCTIONALLY READY WITH NON-BLOCKING WEAKNESSES
+> - **Current QA draft:** `feebd18e-7147-48c7-8d81-bf7af325aaf6`
+> - **Production active version:** `ff0135de-a3ed-4757-83a1-80794b78bb2f` (unchanged)
+> - **30-case matrix:** 21 PASS / 9 WEAK / 0 overall FAIL
+> - **Production publication:** NO
+> - **Production readiness:** NOT READY — credential/tunnel/execution-log security blockers
+> - **Next:** operator provisions scoped SQL-bridge credentials and stable endpoint, then security smoke test and promotion review
 
 ## Purpose
 
