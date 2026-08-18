@@ -1,0 +1,557 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "P3_COMMERCIAL_QA_V3_20260818",
+  "purpose": "Fresh quality-oriented regression suite. It does not certify production until every case has a captured result and human review.",
+  "review_dimensions": [
+    "TECHNICAL",
+    "CONTEXT",
+    "REFERENCE",
+    "TRUTH",
+    "COMMERCIAL",
+    "COHERENCE",
+    "NATURALNESS",
+    "SPIN",
+    "NEUROVENTAS",
+    "EMPATHY",
+    "NBA_N_PLUS_1",
+    "REAL_RESPONSE"
+  ],
+  "run_rules": {
+    "fresh_session_per_case_unless_setup_is_present": true,
+    "capture_persisted_state": true,
+    "capture_next_turn_state": true,
+    "trace_required_for_switch_boundary": true,
+    "human_review_required": true,
+    "live_prices_must_come_from_authoritative_data": true
+  },
+  "cases": [
+    {
+      "id": "DIRECT-PRICE-01",
+      "category": "DIRECT_INTENT",
+      "setup": ["Estoy viendo el Armor 22."],
+      "message": "¿Cuánto cuesta?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22", "S/"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Answer price first; only then add a useful next step."
+    },
+    {
+      "id": "DIRECT-STOCK-01",
+      "category": "DIRECT_INTENT",
+      "setup": ["Me interesa el Armor X13."],
+      "message": "¿Hay stock?",
+      "expected_state": {"target_product_id": "P-ARMOR-X13"},
+      "response_contract": {"must_contain_all": ["Armor X13"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Give the current stock truth before any follow-up."
+    },
+    {
+      "id": "DIRECT-LOCATION-01",
+      "category": "INSTITUTIONAL",
+      "setup": [],
+      "message": "¿Dónde están?",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Provide the verified location or a transparent limitation."
+    },
+    {
+      "id": "DIRECT-WARRANTY-01",
+      "category": "INSTITUTIONAL",
+      "setup": ["Estoy viendo el Armor X13."],
+      "message": "¿Tiene garantía?",
+      "expected_state": {"target_product_id": "P-ARMOR-X13"},
+      "response_contract": {"must_contain_all": ["Armor X13"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Use only verified warranty terms."
+    },
+    {
+      "id": "DIRECT-5G-01",
+      "category": "DIRECT_INTENT",
+      "setup": [],
+      "message": "¿El Armor22 tiene 5G?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Answer the feature question directly from verified product data."
+    },
+    {
+      "id": "DIRECT-CAMERA-01",
+      "category": "DIRECT_INTENT",
+      "setup": [],
+      "message": "¿Qué cámara tiene el Armor X12 Pro?",
+      "expected_state": {"target_product_id": "P-ARMOR-X12Pro"},
+      "response_contract": {"must_contain_all": ["Armor X12 Pro"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "No unsupported superlatives or invented camera benefits."
+    },
+    {
+      "id": "PROBLEM-BATTERY-01",
+      "category": "PROBLEM_STATEMENT",
+      "setup": [],
+      "message": "Se me acaba rápido la batería.",
+      "expected_state": {},
+      "response_contract": {"must_not_contain": ["Se me acaba rápido la batería"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Advance discovery without parroting or inventing autonomy."
+    },
+    {
+      "id": "PROBLEM-DROPS-01",
+      "category": "PROBLEM_STATEMENT",
+      "setup": [],
+      "message": "Se me cae bastante el celular.",
+      "expected_state": {},
+      "response_contract": {"must_not_contain": ["Se me cae bastante el celular"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Connect verified resistance features to the need; do not claim indestructibility."
+    },
+    {
+      "id": "USE-WORK-OUTDOOR-01",
+      "category": "WORK_USE",
+      "setup": [],
+      "message": "Trabajo casi todo el día afuera.",
+      "expected_state": {},
+      "response_contract": {"must_not_contain": ["Trabajo casi todo el día afuera"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Ask at most one discriminating question and avoid generic praise."
+    },
+    {
+      "id": "USE-PHOTOS-SOCIAL-01",
+      "category": "PERSONAL_USE",
+      "setup": [],
+      "message": "Solo lo quiero para fotos y redes.",
+      "expected_state": {},
+      "response_contract": {"must_not_contain": ["Solo lo quiero para fotos y redes"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Do not force rugged-work discovery when the stated use is personal."
+    },
+    {
+      "id": "USE-DELIVERY-01",
+      "category": "WORK_USE",
+      "setup": [],
+      "message": "Lo usaría para reparto y mapas todo el día.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Translate verified battery/screen/resistance facts into practical effects."
+    },
+    {
+      "id": "USE-CONSTRUCTION-01",
+      "category": "WORK_USE",
+      "setup": [],
+      "message": "Trabajo en construcción y hay bastante polvo.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Use verified protection ratings only."
+    },
+    {
+      "id": "BUDGET-MAX900-01",
+      "category": "BUDGET",
+      "setup": [],
+      "message": "Tengo máximo S/ 900.",
+      "expected_state": {},
+      "response_contract": {"must_not_contain": ["Tengo máximo S/ 900"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Respect the cap and do not fabricate a fit if authoritative price data disagrees."
+    },
+    {
+      "id": "BUDGET-RANGE-01",
+      "category": "BUDGET",
+      "setup": [],
+      "message": "Busco algo entre S/ 800 y S/ 1,100.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Use the budget as a filter, not a cue for an unsupported recommendation."
+    },
+    {
+      "id": "COMPARE-X13-22-01",
+      "category": "COMPARISON",
+      "setup": [],
+      "message": "Compárame el Armor X13 y el Armor 22.",
+      "expected_state": {},
+      "response_contract": {"must_contain_all": ["Armor X13", "Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Compare verified decision-relevant differences, not a feature dump."
+    },
+    {
+      "id": "COMPARE-BATTERY-01",
+      "category": "COMPARISON",
+      "setup": [],
+      "message": "Entre el X13 y el Armor 22, ¿cuál tiene más batería?",
+      "expected_state": {},
+      "response_contract": {"must_contain_all": ["Armor X13", "Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Answer the criterion directly and state the verified basis."
+    },
+    {
+      "id": "RECOMMEND-WORK-01",
+      "category": "RECOMMENDATION",
+      "setup": ["Trabajo afuera y priorizo batería.", "Estoy entre el Armor X13 y el Armor 22."],
+      "message": "¿Cuál me recomiendas entre los dos?",
+      "expected_state": {"recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Recommendation must name the winner, criterion and verified reason."
+    },
+    {
+      "id": "RECOMMEND-CAMERA-01",
+      "category": "RECOMMENDATION",
+      "setup": ["Lo quiero para fotos y redes.", "Estoy entre el Armor X12 Pro y el Armor X13."],
+      "message": "¿Cuál escogerías para mi uso?",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Make a justified recommendation only if verified data is sufficient."
+    },
+    {
+      "id": "REF-PRICE-RECOMMENDED-01",
+      "category": "REFERENCE_FOLLOWUP",
+      "setup": ["Recomiéndame entre Armor X13 y Armor 22 para batería.", "El asistente recomienda Armor 22."],
+      "message": "¿Cuánto cuesta el recomendado?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G", "recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22", "S/"], "must_not_contain": ["Armor X13 está"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Resolve the recommended product before SQL; this is a historical failure boundary."
+    },
+    {
+      "id": "REF-STOCK-RECOMMENDED-01",
+      "category": "REFERENCE_FOLLOWUP",
+      "setup": ["El asistente recomienda Armor 22."],
+      "message": "¿Tiene stock el recomendado?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G", "recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Referential target and stock source must agree."
+    },
+    {
+      "id": "REF-OTHER-01",
+      "category": "REFERENCE_FOLLOWUP",
+      "setup": ["Comparamos Armor X13 y Armor 22.", "El asistente recomienda Armor 22."],
+      "message": "¿Y el otro?",
+      "expected_state": {"target_product_id": "P-ARMOR-X13"},
+      "response_contract": {"must_contain_all": ["Armor X13"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Resolve 'the other one' from the comparison set, not stale active state."
+    },
+    {
+      "id": "REF-THIS-STOCK-01",
+      "category": "REFERENCE_FOLLOWUP",
+      "setup": ["El asistente acaba de describir el Armor X13."],
+      "message": "¿Tiene stock ese?",
+      "expected_state": {"target_product_id": "P-ARMOR-X13"},
+      "response_contract": {"must_contain_all": ["Armor X13"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Resolve the last salient product."
+    },
+    {
+      "id": "REF-WHICH-RECOMMENDED-01",
+      "category": "REFERENCE_FOLLOWUP",
+      "setup": ["El asistente recomienda Armor 22 por la prioridad de batería."],
+      "message": "¿Cuál era el que me recomendaste?",
+      "expected_state": {"recommended_product_id": "P-ARMOR-22-256G", "target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22"], "max_questions": 0, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Recall the recommendation without restarting discovery."
+    },
+    {
+      "id": "REF-PRICE-IT-01",
+      "category": "REFERENCE_FOLLOWUP",
+      "setup": ["Hablemos del Armor X12 Pro."],
+      "message": "¿Y cuánto cuesta ese?",
+      "expected_state": {"target_product_id": "P-ARMOR-X12Pro"},
+      "response_contract": {"must_contain_all": ["Armor X12 Pro", "S/"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Do not substitute another product due to stale memory."
+    },
+    {
+      "id": "OBJECTION-EXPENSIVE-01",
+      "category": "OBJECTION",
+      "setup": ["El asistente cotiza el Armor 22."],
+      "message": "Está caro.",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_not_contain": ["Está caro"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Address price resistance with verified value or a budget alternative."
+    },
+    {
+      "id": "OBJECTION-THINK-01",
+      "category": "OBJECTION",
+      "setup": ["El asistente recomienda Armor 22."],
+      "message": "Lo voy a pensar.",
+      "expected_state": {"recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_not_contain": ["Lo voy a pensar"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Respect the pause and offer concise help without pressure."
+    },
+    {
+      "id": "OBJECTION-OTHER-STORE-01",
+      "category": "OBJECTION",
+      "setup": ["El asistente recomienda Armor 22."],
+      "message": "Voy a comparar con otra tienda.",
+      "expected_state": {"recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_not_contain": ["Voy a comparar con otra tienda"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Preserve momentum with checkable comparison criteria; do not restart generic discovery."
+    },
+    {
+      "id": "OBJECTION-HEAVY-01",
+      "category": "OBJECTION",
+      "setup": ["Estamos evaluando el Armor 22."],
+      "message": "Me preocupa que sea muy pesado.",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Acknowledge the tradeoff with verified weight data, not empty empathy."
+    },
+    {
+      "id": "BUY-WEAK-INTEREST-01",
+      "category": "BUY_SIGNAL",
+      "setup": ["El asistente presenta el Armor X13."],
+      "message": "Me interesa.",
+      "expected_state": {"target_product_id": "P-ARMOR-X13"},
+      "response_contract": {"must_not_contain": ["Me interesa"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Use one low-friction progression step appropriate to a weak signal."
+    },
+    {
+      "id": "BUY-MEDIUM-CHOOSE-01",
+      "category": "BUY_SIGNAL",
+      "setup": ["El asistente recomienda Armor 22."],
+      "message": "Creo que me quedo con ese.",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G", "recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_not_contain": ["Creo que me quedo con ese"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Move to price/stock or purchase confirmation without rediscovery."
+    },
+    {
+      "id": "BUY-STRONG-01",
+      "category": "BUY_SIGNAL",
+      "setup": ["El asistente recomienda Armor 22 y confirma disponibilidad."],
+      "message": "Quiero comprarlo.",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_not_contain": ["Quiero comprarlo"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Progress to the minimum required reservation or handoff data."
+    },
+    {
+      "id": "BUY-STRONG-RESERVE-01",
+      "category": "BUY_SIGNAL",
+      "setup": ["El Armor X13 está disponible."],
+      "message": "Resérvame uno.",
+      "expected_state": {"target_product_id": "P-ARMOR-X13"},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Request only reservation-required data and avoid implying completion prematurely."
+    },
+    {
+      "id": "INTERRUPT-LOCATION-RESUME-01",
+      "category": "INTERRUPTION",
+      "setup": ["El asistente recomienda Armor 22.", "El usuario pregunta por el precio."],
+      "message": "Antes, ¿dónde están ubicados?",
+      "expected_state": {"recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Answer the interruption without erasing recommendation context."
+    },
+    {
+      "id": "INTERRUPT-WARRANTY-RESUME-01",
+      "category": "INTERRUPTION",
+      "setup": ["Estamos comparando Armor X13 y Armor 22."],
+      "message": "Una cosa: ¿cómo funciona la garantía?",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Answer verified policy and preserve the comparison set."
+    },
+    {
+      "id": "UNKNOWN-ACCESSORY-01",
+      "category": "UNKNOWN",
+      "setup": [],
+      "message": "¿Venden soportes para bicicleta?",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "State uncertainty or catalog limits rather than inventing availability."
+    },
+    {
+      "id": "UNKNOWN-AMBIGUOUS-01",
+      "category": "UNKNOWN",
+      "setup": [],
+      "message": "¿Y eso cómo sería?",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Ask one concise clarification; do not fabricate context."
+    },
+    {
+      "id": "INSTITUTIONAL-HOURS-01",
+      "category": "INSTITUTIONAL",
+      "setup": [],
+      "message": "¿Cuál es su horario de atención?",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Return verified hours without forcing product discovery."
+    },
+    {
+      "id": "INSTITUTIONAL-DELIVERY-01",
+      "category": "INSTITUTIONAL",
+      "setup": [],
+      "message": "¿Hacen envíos fuera de Lima?",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Use verified delivery scope and terms."
+    },
+    {
+      "id": "SWITCH-EXPLICIT-22-01",
+      "category": "SWITCH_MENTION",
+      "setup": ["Producto activo: Armor X13."],
+      "message": "Mejor hablemos del Armor 22.",
+      "expected_state": {"active_product_id": "P-ARMOR-22-256G", "change_product_explicit": true},
+      "response_contract": {"must_contain_all": ["Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "requires_n8n_trace": true,
+      "review_focus": "17A must emit the switch and 17 must apply it."
+    },
+    {
+      "id": "SWITCH-EXPLICIT-X13-01",
+      "category": "SWITCH_MENTION",
+      "setup": ["Producto activo: Armor 22."],
+      "message": "Quiero cambiar al Armor X13.",
+      "expected_state": {"active_product_id": "P-ARMOR-X13", "change_product_explicit": true},
+      "response_contract": {"must_contain_all": ["Armor X13"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "requires_n8n_trace": true,
+      "review_focus": "Positive switch control at the 06-to-17A boundary."
+    },
+    {
+      "id": "SWITCH-COMPARE-NOCHANGE-01",
+      "category": "SWITCH_MENTION",
+      "setup": ["Producto activo: Armor X13."],
+      "message": "Compáralo con el Armor 22.",
+      "expected_state": {"active_product_id": "P-ARMOR-X13", "change_product_explicit": false},
+      "response_contract": {"must_contain_all": ["Armor X13", "Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "requires_n8n_trace": true,
+      "review_focus": "A comparison mention must not silently switch active product."
+    },
+    {
+      "id": "SWITCH-PREFERENCE-NOCHANGE-01",
+      "category": "SWITCH_MENTION",
+      "setup": ["Producto activo: Armor X13."],
+      "message": "Prefiero la batería del Armor 22.",
+      "expected_state": {"active_product_id": "P-ARMOR-X13", "change_product_explicit": false},
+      "response_contract": {"must_not_contain": ["cambiamos al Armor 22", "seguimos con el Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "requires_n8n_trace": true,
+      "review_focus": "Attribute preference is evidence, not an explicit product switch."
+    },
+    {
+      "id": "SWITCH-SEEN-NOCHANGE-01",
+      "category": "SWITCH_MENTION",
+      "setup": ["Producto activo: Armor X13."],
+      "message": "También vi el Armor 22.",
+      "expected_state": {"active_product_id": "P-ARMOR-X13", "change_product_explicit": false},
+      "response_contract": {"must_not_contain": ["También vi el Armor 22", "cambiamos al Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "requires_n8n_trace": true,
+      "review_focus": "Do not mirror the user or promote a mere mention into a switch."
+    },
+    {
+      "id": "SWITCH-RESISTANT-NOCHANGE-01",
+      "category": "SWITCH_MENTION",
+      "setup": ["Producto activo: Armor X13."],
+      "message": "El Armor 22 me parece resistente.",
+      "expected_state": {"active_product_id": "P-ARMOR-X13", "change_product_explicit": false},
+      "response_contract": {"must_not_contain": ["El Armor 22 me parece resistente", "cambiamos al Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "requires_n8n_trace": true,
+      "review_focus": "Avoid generic SPIN advancement and exact user echo."
+    },
+    {
+      "id": "CONTEXT-PRICE-AFTER-USE-01",
+      "category": "CONTEXT",
+      "setup": ["Usuario necesita batería para reparto.", "Producto activo: Armor 22."],
+      "message": "¿Cuánto cuesta?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22", "S/"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Answer current intent without re-explaining the full use context."
+    },
+    {
+      "id": "CONTEXT-STOCK-AFTER-OBJECTION-01",
+      "category": "CONTEXT",
+      "setup": ["Producto activo: Armor X13.", "El usuario ya expresó preocupación por el precio."],
+      "message": "¿Y hay stock?",
+      "expected_state": {"target_product_id": "P-ARMOR-X13"},
+      "response_contract": {"must_contain_all": ["Armor X13"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Do not repeat or relitigate the price objection."
+    },
+    {
+      "id": "CONTEXT-NO-REPEAT-SPIN-01",
+      "category": "CONTEXT",
+      "setup": ["Usuario: trabajo afuera.", "Asistente ya preguntó por el principal problema.", "Usuario: la batería."],
+      "message": "También necesito que aguante caídas.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Accumulate criteria; do not ask again about use or main problem."
+    },
+    {
+      "id": "NATURAL-NO-FORCED-QUESTION-01",
+      "category": "NATURALNESS",
+      "setup": ["El asistente acaba de responder precio y stock del Armor 22."],
+      "message": "Gracias, eso era todo.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 0, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Close naturally; a question would reduce momentum and user control."
+    },
+    {
+      "id": "NATURAL-BRIEF-ACK-01",
+      "category": "NATURALNESS",
+      "setup": ["El asistente explicó la garantía."],
+      "message": "Ya entendí.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 0, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Do not expand a completed subtopic or force another sales question."
+    },
+    {
+      "id": "TRUTH-WATERPROOF-01",
+      "category": "TRUTH",
+      "setup": ["Estamos viendo el Armor 22."],
+      "message": "¿Es totalmente impermeable para siempre?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_not_contain": ["impermeable para siempre", "100% impermeable"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Correct the premise and cite only verified rating/conditions."
+    },
+    {
+      "id": "TRUTH-INDESTRUCTIBLE-01",
+      "category": "TRUTH",
+      "setup": ["Estamos viendo el Armor X13."],
+      "message": "¿Entonces es indestructible?",
+      "expected_state": {"target_product_id": "P-ARMOR-X13"},
+      "response_contract": {"must_not_contain": ["es indestructible", "sí, es indestructible"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Reject absolute guarantees and explain the verified protection."
+    },
+    {
+      "id": "TRUTH-BEST-CAMERA-01",
+      "category": "TRUTH",
+      "setup": ["Estamos viendo el Armor X12 Pro."],
+      "message": "¿Tiene la mejor cámara de todos?",
+      "expected_state": {"target_product_id": "P-ARMOR-X12Pro"},
+      "response_contract": {"must_not_contain": ["la mejor cámara"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Avoid unsupported ranking; give verifiable camera facts."
+    },
+    {
+      "id": "BENEFIT-BATTERY-01",
+      "category": "COMMERCIAL",
+      "setup": ["Usuario hace reparto todo el día.", "Producto activo: Armor 22."],
+      "message": "¿Por qué me serviría ese modelo?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22"], "must_not_contain": ["excelente opción", "ideal para ti"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Verified feature to practical effect to stated need."
+    },
+    {
+      "id": "BENEFIT-RESISTANCE-01",
+      "category": "COMMERCIAL",
+      "setup": ["Usuario trabaja en construcción.", "Producto activo: Armor X13."],
+      "message": "¿Qué ventaja tendría para mi trabajo?",
+      "expected_state": {"target_product_id": "P-ARMOR-X13"},
+      "response_contract": {"must_contain_all": ["Armor X13"], "must_not_contain": ["te servirá mucho", "es ideal"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Use verified features and a concrete work consequence."
+    },
+    {
+      "id": "NBA-DIRECT-NO-REDISCOVERY-01",
+      "category": "NBA_N_PLUS_1",
+      "setup": ["Uso, problema y presupuesto ya están claros.", "Producto activo: Armor X13."],
+      "message": "Dime el precio.",
+      "expected_state": {"target_product_id": "P-ARMOR-X13"},
+      "response_contract": {"must_contain_all": ["Armor X13", "S/"], "must_not_contain": ["¿Para qué lo usarías", "¿Cuál es tu presupuesto"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Current direct intent outranks stale discovery policy."
+    },
+    {
+      "id": "NBA-CLOSE-NO-QUESTION-01",
+      "category": "NBA_N_PLUS_1",
+      "setup": ["El usuario rechazó continuar la compra."],
+      "message": "No necesito nada más, gracias.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 0, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "No N+1 is the correct N+1."
+    },
+    {
+      "id": "COHERENCE-CRITERION-01",
+      "category": "COHERENCE",
+      "setup": ["Usuario prioriza cámara, no batería.", "Se comparan Armor X12 Pro y Armor X13."],
+      "message": "Entonces, ¿cuál encaja mejor conmigo?",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Recommendation reasoning must follow the latest explicit criterion."
+    },
+    {
+      "id": "COHERENCE-BUDGET-01",
+      "category": "COHERENCE",
+      "setup": ["Usuario fija un máximo de S/ 900.", "El modelo preferido excede ese límite según datos vigentes."],
+      "message": "¿Cuál sí entra en mi presupuesto?",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Do not recommend outside the cap; transparently say if none qualifies."
+    }
+  ]
+}

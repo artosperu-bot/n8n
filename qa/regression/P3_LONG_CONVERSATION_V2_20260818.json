@@ -1,0 +1,219 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "P3_LONG_CONVERSATION_V2_20260818",
+  "conversation": {
+    "fresh_session": true,
+    "ordered": true,
+    "turn_count": 20,
+    "capture_each_persisted_state": true,
+    "capture_each_next_turn_state": true,
+    "human_review_required": true
+  },
+  "review_dimensions": [
+    "TECHNICAL",
+    "CONTEXT",
+    "REFERENCE",
+    "TRUTH",
+    "COMMERCIAL",
+    "COHERENCE",
+    "NATURALNESS",
+    "SPIN",
+    "NEUROVENTAS",
+    "EMPATHY",
+    "NBA_N_PLUS_1",
+    "REAL_RESPONSE"
+  ],
+  "conversation_contract": {
+    "referential_errors": 0,
+    "stale_product_answers": 0,
+    "repeated_discovery_questions": 0,
+    "strong_buy_signal_progression_required": true,
+    "questions_are_not_required_every_turn": true,
+    "unsupported_claims": 0
+  },
+  "cases": [
+    {
+      "id": "LONG-V2-T01",
+      "turn": 1,
+      "category": "INTEREST",
+      "message": "Estoy buscando un celular resistente para el trabajo.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Open discovery with one discriminating question."
+    },
+    {
+      "id": "LONG-V2-T02",
+      "turn": 2,
+      "category": "WORK_USE",
+      "message": "Trabajo haciendo reparto y uso mapas casi todo el día.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Retain the work-use criterion without parroting."
+    },
+    {
+      "id": "LONG-V2-T03",
+      "turn": 3,
+      "category": "PROBLEM",
+      "message": "Mi problema principal es que la batería se acaba rápido.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Advance once; do not ask use or problem again later."
+    },
+    {
+      "id": "LONG-V2-T04",
+      "turn": 4,
+      "category": "BUDGET",
+      "message": "Podría gastar hasta S/ 1,500.",
+      "expected_state": {},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Use budget as a filter with current authoritative prices."
+    },
+    {
+      "id": "LONG-V2-T05",
+      "turn": 5,
+      "category": "COMPARISON",
+      "message": "Estoy viendo el Armor X13 y el Armor 22.",
+      "expected_state": {"active_product_id": "P-ARMOR-X13", "change_product_explicit": false},
+      "response_contract": {"must_contain_all": ["Armor X13", "Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "requires_n8n_trace": true,
+      "review_focus": "A dual mention creates a comparison set, not an implicit switch."
+    },
+    {
+      "id": "LONG-V2-T06",
+      "turn": 6,
+      "category": "CRITERION",
+      "message": "Para mí pesa más la batería que la cámara.",
+      "expected_state": {"active_product_id": "P-ARMOR-X13"},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Persist the decision criterion without switching product."
+    },
+    {
+      "id": "LONG-V2-T07",
+      "turn": 7,
+      "category": "RECOMMENDATION",
+      "message": "¿Cuál me recomiendas entre los dos?",
+      "expected_state": {"recommended_product_id": "P-ARMOR-22-256G", "active_product_id": "P-ARMOR-X13"},
+      "response_contract": {"must_contain_all": ["Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Name and justify the recommendation while preserving active and comparison state."
+    },
+    {
+      "id": "LONG-V2-T08",
+      "turn": 8,
+      "category": "REFERENCE_PRICE",
+      "message": "¿Cuánto cuesta el recomendado?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G", "recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22", "S/"], "must_not_contain": ["Armor X13 está"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Critical historical referential regression: resolve recommendation before SQL."
+    },
+    {
+      "id": "LONG-V2-T09",
+      "turn": 9,
+      "category": "INSTITUTIONAL_INTERRUPTION",
+      "message": "Antes de seguir, ¿dónde están ubicados?",
+      "expected_state": {"recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Answer location and preserve recommendation state."
+    },
+    {
+      "id": "LONG-V2-T10",
+      "turn": 10,
+      "category": "REFERENCE_STOCK",
+      "message": "¿Y tiene stock ese?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G", "recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Institutional interruption must not steal product salience."
+    },
+    {
+      "id": "LONG-V2-T11",
+      "turn": 11,
+      "category": "OBJECTION",
+      "message": "Está un poco caro.",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G", "recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Address the tradeoff without restarting discovery or inventing discounts."
+    },
+    {
+      "id": "LONG-V2-T12",
+      "turn": 12,
+      "category": "REFERENCE_OTHER",
+      "message": "¿Y el otro cuánto cuesta?",
+      "expected_state": {"target_product_id": "P-ARMOR-X13", "recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor X13", "S/"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Resolve the non-recommended member of the comparison set."
+    },
+    {
+      "id": "LONG-V2-T13",
+      "turn": 13,
+      "category": "PRODUCT_MENTION",
+      "message": "También vi el Armor 25T Pro.",
+      "expected_state": {"active_product_id": "P-ARMOR-X13", "recommended_product_id": "P-ARMOR-22-256G", "change_product_explicit": false},
+      "response_contract": {"must_not_contain": ["También vi el Armor 25T Pro", "cambiamos al Armor 25T Pro"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "requires_n8n_trace": true,
+      "review_focus": "A mention must not silently replace active or recommended state."
+    },
+    {
+      "id": "LONG-V2-T14",
+      "turn": 14,
+      "category": "COMPARISON_EXPANSION",
+      "message": "¿Qué diferencia tiene frente al recomendado?",
+      "expected_state": {"target_product_id": "P-ARMOR-25TPro-256GB", "recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 25T Pro", "Armor 22"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Resolve both referents and compare only verified facts."
+    },
+    {
+      "id": "LONG-V2-T15",
+      "turn": 15,
+      "category": "EXPLICIT_SWITCH",
+      "message": "Mejor hablemos del Armor 25T Pro.",
+      "expected_state": {"active_product_id": "P-ARMOR-25TPro-256GB", "change_product_explicit": true, "recommended_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {"must_contain_all": ["Armor 25T Pro"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "requires_n8n_trace": true,
+      "review_focus": "Explicit switch must be emitted by 17A and applied by 17 when access returns."
+    },
+    {
+      "id": "LONG-V2-T16",
+      "turn": 16,
+      "category": "DIRECT_PRICE_AFTER_SWITCH",
+      "message": "¿Cuánto cuesta?",
+      "expected_state": {"target_product_id": "P-ARMOR-25TPro-256GB", "active_product_id": "P-ARMOR-25TPro-256GB"},
+      "response_contract": {"must_contain_all": ["Armor 25T Pro", "S/"], "must_not_contain": ["Armor 22 está", "Armor X13 está"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "The direct answer must use the post-switch active product."
+    },
+    {
+      "id": "LONG-V2-T17",
+      "turn": 17,
+      "category": "BUY_SIGNAL_MEDIUM",
+      "message": "Creo que me quedo con ese.",
+      "expected_state": {"target_product_id": "P-ARMOR-25TPro-256GB", "active_product_id": "P-ARMOR-25TPro-256GB"},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Progress toward availability or purchase, never back to use/problem discovery."
+    },
+    {
+      "id": "LONG-V2-T18",
+      "turn": 18,
+      "category": "BUY_SIGNAL_STRONG",
+      "message": "Quiero comprarlo.",
+      "expected_state": {"target_product_id": "P-ARMOR-25TPro-256GB", "active_product_id": "P-ARMOR-25TPro-256GB"},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Move to required reservation or human handoff data."
+    },
+    {
+      "id": "LONG-V2-T19",
+      "turn": 19,
+      "category": "WARRANTY",
+      "message": "Antes de reservar, ¿qué garantía tiene?",
+      "expected_state": {"target_product_id": "P-ARMOR-25TPro-256GB", "active_product_id": "P-ARMOR-25TPro-256GB"},
+      "response_contract": {"must_contain_all": ["Armor 25T Pro"], "max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Provide verified terms and retain the purchase-stage state."
+    },
+    {
+      "id": "LONG-V2-T20",
+      "turn": 20,
+      "category": "CLOSE_HANDOFF",
+      "message": "Sí, sigamos con la compra.",
+      "expected_state": {"target_product_id": "P-ARMOR-25TPro-256GB", "active_product_id": "P-ARMOR-25TPro-256GB"},
+      "response_contract": {"max_questions": 1, "forbid_user_echo": true, "forbid_template_ack": true},
+      "review_focus": "Continue the reservation flow with no duplicated discovery or unsupported completion claim."
+    }
+  ]
+}

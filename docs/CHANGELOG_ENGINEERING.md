@@ -224,3 +224,20 @@ P3 remains IN PROGRESS. Credential rotation/revocation, execution-output redacti
 - Execution-ID persistence attempt failed at runtime and was fully rolled back; atomic persistence reverified.
 - Four SQL-bridge HTTP nodes confirmed with literal Authorization headers and no credential binding.
 - Stable-endpoint, credential migration and rollback design added.
+
+
+## 2026-08-18 — P3 commercial QA V3 and PRE-P4 preparation
+
+Fresh access verification found workflow `RSVEmajGYTi8f8HJ` inactive, with zero triggers and `availableInMCP=false`. The `06 → 17A` switch boundary was therefore frozen; no workflow, Supabase data/schema, credential, tunnel or production mutation was made.
+
+Read-only persisted evidence established a 50-message baseline with 44 question-ending responses, 9 template acknowledgement openings, 16 repeated confirmation questions and 6 repeated use questions. Historical session `P3V2_STRESS_15T_20260817_1925` demonstrates a referential target failure before SQL: Armor 22 remained recommended while the follow-up price request for “the recommended one” resolved to Armor X13. Exact node ownership remains unproven until trace access returns.
+
+Added:
+
+- a 58-case Commercial QA V3 containing all 20 mandatory naturalness prompts and 6 trace-gated switch/mention cases;
+- a 20-turn ordered Long Conversation V2 covering recommendation, referents, interruption, switch, objection, buy signal and warranty;
+- a standard-library deterministic evaluator plus 5 passing unit tests and a passing two-case fixture;
+- a sanitized evidence/owner audit;
+- a design-only PRE-P4 package with pilot phases, human handoff, stop metrics, rollback and 12-case preflight smoke coverage.
+
+These artifacts are verified for structure and evaluator behavior only. They do not represent fresh workflow execution results, a closed commercial defect, P4 start or production readiness.

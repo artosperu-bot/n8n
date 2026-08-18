@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "suite_id": "P3_COMMERCIAL_QA_EVALUATOR_SAMPLE",
+  "cases": [
+    {
+      "id": "SAMPLE-DIRECT-01",
+      "message": "¿Cuánto cuesta el Armor 22?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {
+        "must_contain_all": ["Armor 22", "S/"],
+        "max_questions": 1,
+        "forbid_user_echo": true,
+        "forbid_template_ack": true
+      }
+    },
+    {
+      "id": "SAMPLE-REFERENCE-01",
+      "message": "¿Cuánto cuesta el recomendado?",
+      "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+      "response_contract": {
+        "must_contain_all": ["Armor 22", "S/"],
+        "max_questions": 1,
+        "forbid_user_echo": true,
+        "forbid_template_ack": true
+      }
+    }
+  ]
+}

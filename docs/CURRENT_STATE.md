@@ -306,3 +306,20 @@ Production blockers are security/infrastructure only:
 3. transport-level execution inspection can expose credential material.
 
 Evidence: `qa/evidence/P3_*.md`, `qa/regression/P3_CERTIFICATION_20260817.md`, and `docs/P3_SECURITY_MIGRATION_DESIGN.md`.
+
+
+---
+
+## P3 commercial hardening evidence — 2026-08-18
+
+**Status: IN PROGRESS; NEW QA ARTIFACTS READY, NOT EXECUTION-CERTIFIED**
+
+- Workflow under QA: `RSVEmajGYTi8f8HJ`; inactive, zero triggers, and `availableInMCP=false` at the fresh access check.
+- The `06 → 17A` boundary is frozen until authorized n8n detail/trace access returns. No workflow fix or production mutation occurred.
+- Read-only 50-message baseline: 44 responses ended in a question (88%), 9 template acknowledgement openings, 16 repeated confirmation questions and 6 repeated use questions.
+- Historical session `P3V2_STRESS_15T_20260817_1925` confirms a referential failure before SQL: the recommendation remained Armor 22 while `¿Cuánto cuesta el recomendado?` resolved to Armor X13.
+- New artifacts: 58-case Commercial QA V3, 20-turn Long Conversation V2, deterministic evaluator with 5 passing unit tests, sanitized root audit, and design-only PRE-P4 gates.
+- Deterministic PASS never replaces required human review across technical, context, reference, truth, commercial, coherence, naturalness, SPIN, neuroventas, empathy, NBA/N+1 and real response dimensions.
+- P4 has not formally started. Production remains unchanged and not ready for promotion.
+
+Exact continuation point: restore MCP visibility for the exact workflow, capture the `06 / 17A / 17 / SQL / NBA / redactor` traces, then execute and human-review all 58 + 20 cases before considering any fix or pilot.

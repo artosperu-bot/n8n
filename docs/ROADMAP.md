@@ -116,3 +116,28 @@ Promotion blockers:
 2. replace the literal tunnel endpoint with a named stable endpoint and configuration abstraction;
 3. harden execution retention/redaction for transport objects;
 4. run operator-approved security smoke tests, then promotion review.
+
+
+## P3 commercial hardening checkpoint — 2026-08-18
+
+**IN PROGRESS; EXECUTION BLOCKED AT THE N8N TRACE BOUNDARY**
+
+Completed without workflow or production mutation:
+
+- refreshed sanitized 50-message commercial baseline;
+- isolated the first visible referential failure before SQL without guessing its exact node owner;
+- defined 58-case Commercial QA V3 and 20-turn Long Conversation V2;
+- added a tested deterministic evaluator while retaining mandatory human scoring;
+- produced a design-only PRE-P4 pilot, handoff, rollback, metric and 12-case smoke package.
+
+Next priorities:
+
+1. restore authorized MCP visibility for workflow `RSVEmajGYTi8f8HJ`;
+2. trace the `06 → 17A` boundary and downstream target resolution;
+3. execute 58 fresh QA cases and the ordered 20-turn conversation;
+4. fix only a trace-proven owner, then rerun the complete suite;
+5. reassess P3 readiness against security, quality and rollback gates.
+
+### PRE-P4 boundary
+
+PRE-P4 planning was explicitly authorized as preparation only. P4 is **not started**. No real-user pilot is permitted until every entry gate in `docs/PRE_P4_READINESS_20260818.md` is satisfied and an operator records an explicit GO decision.
