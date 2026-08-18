@@ -1,0 +1,478 @@
+{
+  "schema_version": "1.0",
+  "summary": {
+    "total_cases": 58,
+    "results_present": 58,
+    "deterministic_failures": 0,
+    "not_executed": 58,
+    "deterministic_passes": 0,
+    "human_reviews_required": 0,
+    "human_reviews_unavailable": 58
+  },
+  "cases": [
+    {
+      "id": "DIRECT-PRICE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "DIRECT-STOCK-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "DIRECT-LOCATION-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "DIRECT-WARRANTY-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "DIRECT-5G-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "DIRECT-CAMERA-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "PROBLEM-BATTERY-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "PROBLEM-DROPS-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "USE-WORK-OUTDOOR-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "USE-PHOTOS-SOCIAL-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "USE-DELIVERY-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "USE-CONSTRUCTION-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "BUDGET-MAX900-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "BUDGET-RANGE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "COMPARE-X13-22-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "COMPARE-BATTERY-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "RECOMMEND-WORK-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "RECOMMEND-CAMERA-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "REF-PRICE-RECOMMENDED-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "REF-STOCK-RECOMMENDED-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "REF-OTHER-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "REF-THIS-STOCK-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "REF-WHICH-RECOMMENDED-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "REF-PRICE-IT-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "OBJECTION-EXPENSIVE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "OBJECTION-THINK-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "OBJECTION-OTHER-STORE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "OBJECTION-HEAVY-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "BUY-WEAK-INTEREST-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "BUY-MEDIUM-CHOOSE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "BUY-STRONG-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "BUY-STRONG-RESERVE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "INTERRUPT-LOCATION-RESUME-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "INTERRUPT-WARRANTY-RESUME-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "UNKNOWN-ACCESSORY-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "UNKNOWN-AMBIGUOUS-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "INSTITUTIONAL-HOURS-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "INSTITUTIONAL-DELIVERY-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "SWITCH-EXPLICIT-22-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "SWITCH-EXPLICIT-X13-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "SWITCH-COMPARE-NOCHANGE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "SWITCH-PREFERENCE-NOCHANGE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "SWITCH-SEEN-NOCHANGE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "SWITCH-RESISTANT-NOCHANGE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "CONTEXT-PRICE-AFTER-USE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "CONTEXT-STOCK-AFTER-OBJECTION-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "CONTEXT-NO-REPEAT-SPIN-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "NATURAL-NO-FORCED-QUESTION-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "NATURAL-BRIEF-ACK-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "TRUTH-WATERPROOF-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "TRUTH-INDESTRUCTIBLE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "TRUTH-BEST-CAMERA-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "BENEFIT-BATTERY-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "BENEFIT-RESISTANCE-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "NBA-DIRECT-NO-REDISCOVERY-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "NBA-CLOSE-NO-QUESTION-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "COHERENCE-CRITERION-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "COHERENCE-BUDGET-01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    }
+  ]
+}

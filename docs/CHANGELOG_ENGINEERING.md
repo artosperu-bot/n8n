@@ -241,3 +241,18 @@ Added:
 - a design-only PRE-P4 package with pilot phases, human handoff, stop metrics, rollback and 12-case preflight smoke coverage.
 
 These artifacts are verified for structure and evaluator behavior only. They do not represent fresh workflow execution results, a closed commercial defect, P4 start or production readiness.
+
+
+## 2026-08-18 — QA V3 / Long V2 execution blocked by MCP gate
+
+Attempted to execute the prepared 58-case commercial suite and 20-turn ordered conversation against `RSVEmajGYTi8f8HJ`.
+
+Verified access result:
+
+- workflow search returns `availableInMCP=false`, inactive and zero triggers;
+- workflow detail, version history and execution search all return `Workflow is not available in MCP`;
+- read-only Supabase verification found no new QA results after the prior audited turn.
+
+To prevent incomplete runs from being reported as PASS or functional FAIL, the deterministic evaluator gained an explicit `NOT_EXECUTABLE_DUE_MCP → NOT_EVALUATED` branch and exit code `3`. The change followed red/green TDD; 6/6 tests pass, the ordinary passing fixture remains exit `0`, and the blocked suite returns exit `3`.
+
+Added machine-readable results for all 58 + 20 planned cases and a human-review gate report. Totals: 0 executed, 0 PASS, 0 functional FAIL, 78 NOT_EVALUATED. Human handoff 0/6 and PRE-P4 smoke 0/12 were not executable. No production or data mutation occurred, no root fix was applied, and P4 did not start.

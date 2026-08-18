@@ -123,3 +123,16 @@ Question rate is diagnostic, not a standalone objective: a useful question may b
 
 Before any pilot, record: candidate version, test report paths, unresolved risks, approved scope, phase volume, channel, operator, handoff owner, rollback version, decision time, and explicit `GO` or `NO-GO`.
 
+## Execution status — 2026-08-18
+
+Fresh execution was attempted against workflow `RSVEmajGYTi8f8HJ`, but the workflow remained `availableInMCP=false`, inactive and without connector-visible triggers. Detail, history and execution search were all rejected by the same MCP gate.
+
+- QA V3 executed: `0/58`
+- Long V2 executed: `0/20`
+- Human handoff executed: `0/6`
+- Preflight smoke executed: `0/12`
+- Live entry gates passed in this run: `0`
+- Pilot readiness: **NOT READY**
+- P4 formally started: **NO**
+
+This is an access result, not a functional failure or certification. The machine-readable records are marked `NOT_EXECUTABLE_DUE_MCP`; no expected value is represented as a real response.

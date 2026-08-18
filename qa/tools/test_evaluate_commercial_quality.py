@@ -139,6 +139,26 @@ class EvaluatorCliTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 1)
         self.assertEqual(report["cases"][0]["failures"][0]["code"], "MISSING_RESULT")
 
+    def test_mcp_blocked_result_is_incomplete_not_pass_or_functional_failure(self):
+        case = {
+            "id": "BLOCKED-01",
+            "message": "¿Cuánto cuesta el Armor 22?",
+            "expected_state": {"target_product_id": "P-ARMOR-22-256G"},
+            "response_contract": {"must_contain_all": ["Armor 22", "S/"]},
+        }
+        result = {
+            "case_id": "BLOCKED-01",
+            "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+            "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+        }
+        completed, report = self.run_evaluator(case, result)
+        self.assertEqual(completed.returncode, 3)
+        self.assertEqual(report["summary"]["not_executed"], 1)
+        self.assertEqual(report["summary"]["deterministic_failures"], 0)
+        self.assertEqual(report["cases"][0]["deterministic"], "NOT_EVALUATED")
+        self.assertEqual(report["cases"][0]["human_review"], "NOT_AVAILABLE")
+        self.assertEqual(report["cases"][0]["failures"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

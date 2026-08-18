@@ -1,0 +1,174 @@
+{
+  "schema_version": "1.0",
+  "summary": {
+    "total_cases": 20,
+    "results_present": 20,
+    "deterministic_failures": 0,
+    "not_executed": 20,
+    "deterministic_passes": 0,
+    "human_reviews_required": 0,
+    "human_reviews_unavailable": 20
+  },
+  "cases": [
+    {
+      "id": "LONG-V2-T01",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T02",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T03",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T04",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T05",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T06",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T07",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T08",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T09",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T10",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T11",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T12",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T13",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T14",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T15",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T16",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T17",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T18",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T19",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    },
+    {
+      "id": "LONG-V2-T20",
+      "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+      "blocker": "WORKFLOW_NOT_AVAILABLE_IN_MCP",
+      "deterministic": "NOT_EVALUATED",
+      "failures": [],
+      "human_review": "NOT_AVAILABLE"
+    }
+  ]
+}

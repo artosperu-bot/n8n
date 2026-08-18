@@ -47,6 +47,15 @@ def failure(code: str, **details: Any) -> dict[str, Any]:
 def evaluate_case(case: dict[str, Any], result: dict[str, Any] | None) -> dict[str, Any]:
     failures: list[dict[str, Any]] = []
     case_id = case["id"]
+    if result is not None and result.get("execution_status") == "NOT_EXECUTABLE_DUE_MCP":
+        return {
+            "id": case_id,
+            "execution_status": "NOT_EXECUTABLE_DUE_MCP",
+            "blocker": result.get("blocker", "WORKFLOW_NOT_AVAILABLE_IN_MCP"),
+            "deterministic": "NOT_EVALUATED",
+            "failures": [],
+            "human_review": "NOT_AVAILABLE",
+        }
     if result is None:
         failures.append(failure("MISSING_RESULT", case_id=case_id))
     else:
@@ -122,14 +131,19 @@ def main() -> int:
         by_case = {record.get("case_id"): record for record in results}
         evaluated = [evaluate_case(case, by_case.get(case["id"])) for case in cases]
         failure_count = sum(case["deterministic"] == "FAIL" for case in evaluated)
+        not_executed_count = sum(
+            case["deterministic"] == "NOT_EVALUATED" for case in evaluated
+        )
         report = {
             "schema_version": "1.0",
             "summary": {
                 "total_cases": len(cases),
                 "results_present": sum(case["id"] in by_case for case in cases),
-                "deterministic_passes": len(cases) - failure_count,
                 "deterministic_failures": failure_count,
-                "human_reviews_required": len(cases),
+                "not_executed": not_executed_count,
+                "deterministic_passes": len(cases) - failure_count - not_executed_count,
+                "human_reviews_required": len(cases) - not_executed_count,
+                "human_reviews_unavailable": not_executed_count,
             },
             "cases": evaluated,
         }
@@ -138,7 +152,11 @@ def main() -> int:
             json.dumps(report, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
-        return 1 if failure_count else 0
+        if failure_count:
+            return 1
+        if not_executed_count:
+            return 3
+        return 0
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
         print(f"input error: {error}", file=sys.stderr)
         return 2

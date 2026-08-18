@@ -141,3 +141,20 @@ Next priorities:
 ### PRE-P4 boundary
 
 PRE-P4 planning was explicitly authorized as preparation only. P4 is **not started**. No real-user pilot is permitted until every entry gate in `docs/PRE_P4_READINESS_20260818.md` is satisfied and an operator records an explicit GO decision.
+
+
+## P3 live-execution gate — 2026-08-18
+
+The prepared 58-case QA V3 and 20-turn Long V2 suites could not begin because the exact workflow remains hidden from MCP and exposes neither an authorized input schema nor a trigger. Detail, history and execution discovery are all blocked; no fresh rows appeared in Supabase.
+
+Recorded outcome:
+
+- executed and certified: 0;
+- executed but trace-pending: 0;
+- not executable due MCP: 78;
+- preflight smoke executed: 0/12;
+- human handoff executed: 0/6;
+- pilot readiness: NOT READY;
+- P4 started: NO.
+
+Only remaining next step: an operator exposes `RSVEmajGYTi8f8HJ` to MCP without activating or publishing it. Resume the existing suites immediately afterward; do not design replacements.

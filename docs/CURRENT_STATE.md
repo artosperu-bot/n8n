@@ -323,3 +323,23 @@ Evidence: `qa/evidence/P3_*.md`, `qa/regression/P3_CERTIFICATION_20260817.md`, a
 - P4 has not formally started. Production remains unchanged and not ready for promotion.
 
 Exact continuation point: restore MCP visibility for the exact workflow, capture the `06 / 17A / 17 / SQL / NBA / redactor` traces, then execute and human-review all 58 + 20 cases before considering any fix or pilot.
+
+
+---
+
+## P3 QA V3 execution gate — 2026-08-18
+
+**Status: BLOCKED; ALL REMAINING LIVE QA IS MCP/OPERATOR DEPENDENT**
+
+Fresh execution access checks against `RSVEmajGYTi8f8HJ` confirmed:
+
+- `availableInMCP=false`, `active=false`, `triggerCount=0`;
+- workflow details, history and execution search all rejected by the same MCP availability gate;
+- no connector-visible input schema or trigger exists;
+- Supabase contains no new QA result after the previously audited turn at `2026-08-18 19:22:01.652414+00`.
+
+Machine-readable execution-gate outputs now contain 58 Commercial QA V3 records and 20 Long V2 records, all explicitly marked `NOT_EXECUTABLE_DUE_MCP`. The evaluator returns exit code `3` for incomplete execution, with 0 deterministic PASS, 0 functional FAIL and 78 NOT_EVALUATED. Human scoring is unavailable because no real response exists.
+
+The evaluator change was developed red/green and its full suite passes 6/6. The normal passing fixture still returns exit `0`.
+
+No workflow, Supabase data/schema, production, credential, endpoint, activation or publication mutation occurred. PRE-P4 remains NOT READY and P4 remains not started.
