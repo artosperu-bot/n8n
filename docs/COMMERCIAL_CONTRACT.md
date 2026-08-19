@@ -71,6 +71,32 @@ A current explicit price request must not be replaced by a historical comparison
 
 Pending discovery must not override the explicit question.
 
+## Budget semantics
+
+`BUDGET_CONSTRAINT`, `PRICE_OBJECTION`, and `SPIN_CONTRIBUTION` are separate commercial concepts and must not be treated as interchangeable.
+
+### Budget constraint
+
+Statements such as a maximum amount, price ceiling, spending range or amount the customer can spend must:
+
+- be extracted and persisted as budget;
+- restrict/filter viable commercial options;
+- influence recommendation and NBA;
+- **not** automatically create `TRATAR_OBJECION`;
+- **not** automatically create SPIN Situation, Problem, Implication or Need.
+
+### Price objection
+
+A price objection requires objection semantics such as the price being too high, too expensive, outside the customer's budget, or the customer not wanting/can't pay that amount. A genuine objection may coexist with a budget constraint; neither signal should erase the other.
+
+### Budget + SPIN in one turn
+
+If the same turn contains a genuine use/problem/need fact and a budget, preserve both independently. Remove/ignore the budget clause when evaluating the SPIN candidate; do not convert the budget itself into a SPIN contribution.
+
+### Direct budget-fit question
+
+A question equivalent to `¿Cuál sí entra en mi presupuesto?` is a direct commercial request. Answer/filter using the persisted budget and authoritative current prices first. If multiple verified options qualify, one useful decision criterion may follow; do not reopen generic discovery before answering.
+
 ## Comparison contract
 
 When comparing products:
@@ -101,6 +127,13 @@ UNKNOWN must remain UNKNOWN. Unsupported assumptions cannot be converted into us
 ## N+1 quality
 
 N+1 should be the smallest useful next commercial step. It must be rejected when stale, redundant, already satisfied, or in conflict with current explicit intent.
+
+For budget turns:
+
+- budget known + use/criterion genuinely missing → ask at most one useful discriminator;
+- budget + use + candidates known → filter/recommend within budget;
+- direct budget-fit request → answer it first;
+- genuine objection → handle objection while retaining any explicit budget.
 
 ## Commercial QA dimensions
 
