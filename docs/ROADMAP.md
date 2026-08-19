@@ -158,3 +158,57 @@ Recorded outcome:
 - P4 started: NO.
 
 Only remaining next step: an operator exposes `RSVEmajGYTi8f8HJ` to MCP without activating or publishing it. Resume the existing suites immediately afterward; do not design replacements.
+
+
+## P3 war-room closure checkpoint — 2026-08-18 late
+
+**BLOCKED — ONE FUNCTIONAL ROOT REMAINS**
+
+Open root:
+
+`BUDGET_CONSTRAINT_MISROUTED_AS_SPIN_OR_PRICE_OBJECTION`
+
+Confirmed from late persisted QA:
+
+- budget extraction/persistence works (`presupuesto_activo=900/1500` in affected sessions);
+- pure budget can still become `TRATAR_OBJECION`;
+- budget after a real problem can still be persisted as SPIN `IMPLICATION`;
+- `¿Cuál sí entra en mi presupuesto?` can reopen criterion discovery instead of answering/filtering first.
+
+First physically proven owner for the SPIN branch: `06 Resolver Turno y Estado`. The exact current-draft physical writer of deterministic strategy `VALIDAR_Y_AISLAR_PRESUPUESTO` remains unverified because the current draft source is not available through the present n8n tool surface.
+
+Prepared without live mutation:
+
+- `qa/patches/P3_BUDGET_ROUTING_GUARD_NODE06.js`;
+- `qa/tools/test_budget_routing_guard.js`;
+- static TDD RED → GREEN for budget/objection/SPIN separation;
+- B1–B7 static contract GREEN plus B8–B10 budget-guard no-op GREEN;
+- promotion package, scorecard and machine-readable delta result.
+
+This static result is **not** live certification. Live post-fix B1–B10 remains `0/10` because the QA draft has not been edited/executed.
+
+### Exact closure sequence
+
+1. recover current-draft edit/execution access;
+2. re-read current node 06 and exact deterministic objection writer;
+3. integrate the narrow budget guard without replacing the whole node;
+4. save a new QA-only draft, no production publish;
+5. execute B1–B10 and inspect real responses/persistence;
+6. execute the 13 critical neighbors and Long V2 T03–T08 budget chain;
+7. run 12-case smoke;
+8. if no CRITICAL/MAJOR functional defect remains, create clean QA RC and record parent/diff/rollback.
+
+### Change-impact rule
+
+If integration remains narrow and budget-gated, and B1–B10 + critical regression are GREEN, run the affected QA V3 subset rather than ritual full 58. If integration requires broad shared semantic-routing changes, rerun full 58.
+
+Preserved unless delta proves regression:
+
+- semantic switch 11/11 GREEN;
+- Long V2 20/20 regression gate, with the budget-quality exception as the current root;
+- A other-store PROVISIONAL GREEN;
+- B ACK/CLOSE PROVISIONAL GREEN;
+- C latest referential path GREEN;
+- P0/P1/P2.1 closed.
+
+Current promotion decision: **NO-GO**. RC: **NOT CREATED**. Production: **UNCHANGED**.
