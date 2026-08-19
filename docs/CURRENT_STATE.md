@@ -289,7 +289,7 @@ Closed functional roots:
 - 3799 truthful UNKNOWN capability N+1;
 - recommendation without sufficient criteria;
 - institutional precedence over generic capability classification;
-- supported capability inside a recommendation rationale.
+- supported sensitive capabilities are appended to, rather than replace, the canonical recommendation rationale.
 
 Commercial matrix:
 
@@ -343,3 +343,71 @@ Machine-readable execution-gate outputs now contain 58 Commercial QA V3 records 
 The evaluator change was developed red/green and its full suite passes 6/6. The normal passing fixture still returns exit `0`.
 
 No workflow, Supabase data/schema, production, credential, endpoint, activation or publication mutation occurred. PRE-P4 remains NOT READY and P4 remains not started.
+
+
+---
+
+## P3 war-room budget routing — 2026-08-18 late
+
+**Status: BLOCKED — FUNCTIONAL ROOT**
+
+Current QA target:
+
+- workflow `RSVEmajGYTi8f8HJ`;
+- known QA draft `5f85527f-06ca-4ece-ac05-609de68b4754`;
+- production mutation: NO.
+
+Only known open functional root:
+
+`BUDGET_CONSTRAINT_MISROUTED_AS_SPIN_OR_PRICE_OBJECTION`
+
+### Confirmed evidence
+
+Read-only late Supabase rows prove extraction/persistence is not the root:
+
+- pure budget turns persist `presupuesto_activo=900` yet can become `TRATAR_OBJECION` / `HANDLE_OBJECTION`;
+- budget after a real battery problem persists `presupuesto_activo=1500` yet the budget sentence is also stored as SPIN `IMPLICATION`;
+- `¿Cuál sí entra en mi presupuesto?` can reopen criterion discovery instead of answering/filtering first.
+
+The closest available workflow source physically proves `06 Resolver Turno y Estado` as the first broken boundary for the SPIN branch: it can accept a budget sentence as a grounded SPIN candidate and then assign `APORTAR_DATO_SPIN`. The exact current-draft node that emits deterministic strategy `VALIDAR_Y_AISLAR_PRESUPUESTO` for the pure-budget objection branch remains **UNVERIFIED** because current-draft source/detail is not accessible.
+
+### Prepared correction
+
+A narrow general guard is stored at:
+
+`qa/patches/P3_BUDGET_ROUTING_GUARD_NODE06.js`
+
+Contract:
+
+- `BUDGET_CONSTRAINT`, `PRICE_OBJECTION`, and `SPIN_CONTRIBUTION` are independent;
+- budget ceiling/range alone cannot create SPIN or objection;
+- explicit price objection can coexist with budget;
+- mixed budget + true SPIN keeps the real SPIN fact while removing the budget clause from the SPIN candidate;
+- direct budget-fit questions route to budget filtering/recommendation before generic discovery.
+
+TDD was performed RED → GREEN offline. Static tests cover B1–B7 plus mixed budget/use, and prove the budget guard is a no-op for B8 referent, B9 buy and B10 ACK turns.
+
+### Critical honesty boundary
+
+The guard has **not been applied to the live QA draft** because the n8n edit/execution surface is unavailable. Therefore:
+
+- live post-fix B1–B10: **0/10 executed**;
+- post-fix human review: unavailable;
+- post-fix critical regression: not executed;
+- Long V2 T03–T08 budget chain: not executed;
+- smoke: 0/12;
+- handoff: evidence gap only because no handoff path was changed;
+- clean QA RC: **NOT CREATED**.
+
+Preserved unless the future delta proves regression:
+
+- semantic switch 11/11 GREEN;
+- Long V2 20/20 regression gate, with current budget-quality issue isolated as the open root;
+- A other-store PROVISIONAL GREEN;
+- B ACK/CLOSE PROVISIONAL GREEN;
+- C latest available referential path GREEN;
+- P0/P1/P2.1 closed.
+
+### Exact next action
+
+Recover current QA draft edit/execution access; re-read current node 06 and the deterministic budget-objection writer; integrate the prepared narrow guard; then execute B1–B10, 13 critical neighbors, Long V2 T03–T08, and 12-case smoke. Create a clean QA RC only if no CRITICAL or MAJOR functional defect remains.
