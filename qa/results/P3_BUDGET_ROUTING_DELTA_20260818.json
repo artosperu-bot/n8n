@@ -1,0 +1,38 @@
+{
+  "workflow_id": "RSVEmajGYTi8f8HJ",
+  "qa_draft": "5f85527f-06ca-4ece-ac05-609de68b4754",
+  "root": "BUDGET_CONSTRAINT_MISROUTED_AS_SPIN_OR_PRICE_OBJECTION",
+  "live_patch_applied": false,
+  "tdd": {
+    "red": "PASS: test failed before implementation with MODULE_NOT_FOUND",
+    "green": "PASS: guard and test syntax valid; tests complete successfully"
+  },
+  "static_contract": {
+    "B1": "PASS",
+    "B2": "PASS",
+    "B3": "PASS",
+    "B4": "PASS_NO_FAKE_BUDGET_SPIN",
+    "B5": "PASS_ROUTE_CONTRACT",
+    "B6": "PASS_OBJECTION_PRESERVED",
+    "B7": "PASS_BUDGET_AND_OBJECTION_RETAINED",
+    "B8": "PASS_BUDGET_GUARD_NOOP_ONLY",
+    "B9": "PASS_BUDGET_GUARD_NOOP_ONLY",
+    "B10": "PASS_BUDGET_GUARD_NOOP_ONLY"
+  },
+  "live_post_fix": {
+    "executed": 0,
+    "total": 10,
+    "status": "NOT_EXECUTED_CURRENT_DRAFT_TOOLING_UNAVAILABLE"
+  },
+  "human_review_post_fix": "NOT_AVAILABLE",
+  "critical_regression_post_fix": "NOT_EXECUTED",
+  "long_v2_budget_chain_post_fix": "NOT_EXECUTED",
+  "handoff_post_fix": "EVIDENCE_GAP",
+  "smoke_post_fix": "0/12_NOT_EXECUTED",
+  "full_58_decision": "DEFER_UNTIL_LIVE_INTEGRATION; narrow guard does not automatically require full 58 if delta+critical gates pass",
+  "known_critical_defects": 0,
+  "known_major_defects": 1,
+  "rc_created": false,
+  "p3_status": "BLOCKED_FUNCTIONAL_ROOT",
+  "production_mutated": false
+}
