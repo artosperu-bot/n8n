@@ -238,7 +238,7 @@ Added:
 - a 20-turn ordered Long Conversation V2 covering recommendation, referents, interruption, switch, objection, buy signal and warranty;
 - a standard-library deterministic evaluator plus 5 passing unit tests and a passing two-case fixture;
 - a sanitized evidence/owner audit;
-- a design-only PRE-P4 package with pilot phases, human handoff, stop metrics, rollback and 12-case preflight smoke coverage.
+- a design-only PRE-P4 package with pilot phases, human handoff, rollback, metric and 12-case preflight smoke coverage.
 
 These artifacts are verified for structure and evaluator behavior only. They do not represent fresh workflow execution results, a closed commercial defect, P4 start or production readiness.
 
@@ -256,3 +256,71 @@ Verified access result:
 To prevent incomplete runs from being reported as PASS or functional FAIL, the deterministic evaluator gained an explicit `NOT_EXECUTABLE_DUE_MCP → NOT_EVALUATED` branch and exit code `3`. The change followed red/green TDD; 6/6 tests pass, the ordinary passing fixture remains exit `0`, and the blocked suite returns exit `3`.
 
 Added machine-readable results for all 58 + 20 planned cases and a human-review gate report. Totals: 0 executed, 0 PASS, 0 functional FAIL, 78 NOT_EVALUATED. Human handoff 0/6 and PRE-P4 smoke 0/12 were not executable. No production or data mutation occurred, no root fix was applied, and P4 did not start.
+
+
+## 2026-08-18 — P3 budget-routing war-room root isolation and prepared patch
+
+The war-room request narrowed P3 to one functional root:
+
+`BUDGET_CONSTRAINT_MISROUTED_AS_SPIN_OR_PRICE_OBJECTION`
+
+One n8n tool-surface attempt was made as required; the n8n namespace remained unavailable. Work therefore continued on the independent paths using current GitHub memory, read-only Supabase evidence, and the closest available workflow source.
+
+### Root evidence
+
+Late persisted QA proves budget extraction/persistence already works:
+
+- pure budget values are stored in `presupuesto_activo` but can still be classified `TRATAR_OBJECION` with deterministic strategy `VALIDAR_Y_AISLAR_PRESUPUESTO`;
+- budget supplied after a real battery problem can be stored as SPIN `IMPLICATION` and route to `APORTAR_DATO_SPIN`;
+- direct `¿Cuál sí entra en mi presupuesto?` can reopen generic criterion discovery.
+
+The closest available workflow source proves `06 Resolver Turno y Estado` as the first physical broken boundary for the SPIN branch: grounded LLM SPIN candidates are accepted without excluding budget facts, and accepted SPIN can clear other intents and become `APORTAR_DATO_SPIN`.
+
+The exact current-draft node that produces deterministic strategy `VALIDAR_Y_AISLAR_PRESUPUESTO` is not source-visible in this session and remains **UNVERIFIED**. No node name was fabricated.
+
+### Prepared fix and TDD
+
+A narrow, current-turn-budget-gated guard was prepared at:
+
+`qa/patches/P3_BUDGET_ROUTING_GUARD_NODE06.js`
+
+It separates:
+
+- `BUDGET_CONSTRAINT`;
+- `PRICE_OBJECTION`;
+- `SPIN_CONTRIBUTION`.
+
+It also preserves mixed genuine SPIN + budget turns, real price objections, direct budget-fit routing, and is a no-op for referent/buy/ACK neighbor turns.
+
+TDD result:
+
+- RED: test failed before implementation because the guard module did not exist;
+- GREEN: guard/test syntax PASS;
+- B1–B7 static contract PASS;
+- mixed budget/use preservation PASS;
+- B8–B10 budget-guard no-op PASS.
+
+Artifacts added:
+
+- `qa/patches/P3_BUDGET_ROUTING_GUARD_NODE06.js`;
+- `qa/tools/test_budget_routing_guard.js`;
+- `qa/results/P3_BUDGET_ROUTING_DELTA_20260818.json`;
+- `qa/evidence/P3_BUDGET_ROUTING_FIX_20260818.md`;
+- `qa/evidence/P3_FINAL_FUNCTIONAL_SCORECARD_20260818.md`;
+- `qa/evidence/P3_PROMOTION_REVIEW_PACKAGE_20260818.md`.
+
+### Critical boundary
+
+No live QA draft edit occurred. No post-fix live B1–B10 run occurred. No real post-fix human review, impacted regression, Long V2 T03–T08 mini-chain or 12-case smoke occurred.
+
+Therefore:
+
+- live B1–B10 = 0/10 post-fix;
+- known CRITICAL defects newly demonstrated = 0;
+- known MAJOR defects = 1 (budget routing root);
+- RC = NOT CREATED;
+- promotion package = prepared/staged, current GO/NO-GO = NO-GO;
+- production = UNCHANGED;
+- P4 = NOT STARTED.
+
+Exact continuation is current-draft integration of the prepared guard, then B1–B10, critical neighbors, Long V2 budget chain, smoke, and clean QA RC only if no CRITICAL/MAJOR functional defect remains.
