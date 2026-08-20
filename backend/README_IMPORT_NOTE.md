@@ -1,0 +1,1 @@
+Temporary bootstrap marker for STECH backend import. Full backend files are added in subsequent commits on this feature branch. No production n8n workflow is modified.
