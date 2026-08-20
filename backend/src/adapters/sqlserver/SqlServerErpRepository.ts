@@ -10,10 +10,7 @@ type Options = {
   password: string;
   encrypt: boolean;
   trustServerCertificate: boolean;
-  quoteProcedure: string;
-  budgetProcedure: string;
-  productParameter: string;
-  budgetParameter: string;
+  catalogProcedure: string;
   driverLoader?: () => Promise<Driver>;
 };
 
@@ -56,7 +53,7 @@ export class SqlServerErpRepository implements ErpRepository {
 
   #map(raw: any): ProductQuote | null {
     if (!raw) return null;
-    const product = String(raw.product ?? raw.producto ?? raw.nombre ?? '').trim();
+    const product = String(raw.product ?? raw.producto ?? raw.nombre ?? raw.nombre_corto ?? '').trim();
     if (!product) return null;
     return {
       product,
@@ -68,19 +65,29 @@ export class SqlServerErpRepository implements ErpRepository {
     };
   }
 
-  async getProductQuote(product: string): Promise<ProductQuote | null> {
+  async #executeCatalog(textSearch: string | null, maxResults: number): Promise<ProductQuote[]> {
     const { sql, pool } = await this.#pool();
     const request = pool.request();
-    request.input(this.#options.productParameter, sql.NVarChar(200), product);
-    const result = await request.execute(this.#options.quoteProcedure);
-    return this.#map(result?.recordset?.[0]);
+    request.input('TextoBusqueda', sql.NVarChar(200), textSearch);
+    request.input('CategoriaCodigo', sql.NVarChar(50), null);
+    request.input('SubcategoriaCodigo', sql.NVarChar(50), null);
+    request.input('SoloConStock', sql.Bit, 0);
+    request.input('MaxResultados', sql.Int, maxResults);
+    const result = await request.execute(this.#options.catalogProcedure);
+    return (result?.recordset ?? [])
+      .map((row: any) => this.#map(row))
+      .filter((row: ProductQuote | null): row is ProductQuote => row !== null);
+  }
+
+  async getProductQuote(product: string): Promise<ProductQuote | null> {
+    const rows = await this.#executeCatalog(product, 20);
+    return rows[0] ?? null;
   }
 
   async listProductsWithinBudget(maxBudget: number): Promise<ProductQuote[]> {
-    const { sql, pool } = await this.#pool();
-    const request = pool.request();
-    request.input(this.#options.budgetParameter, sql.Int, Math.trunc(maxBudget));
-    const result = await request.execute(this.#options.budgetProcedure);
-    return (result?.recordset ?? []).map((row: any) => this.#map(row)).filter((row: ProductQuote | null): row is ProductQuote => row !== null);
+    const rows = await this.#executeCatalog(null, 100);
+    return rows
+      .filter(row => row.price != null && row.price <= maxBudget)
+      .sort((a, b) => (a.price ?? Number.MAX_SAFE_INTEGER) - (b.price ?? Number.MAX_SAFE_INTEGER));
   }
 }
