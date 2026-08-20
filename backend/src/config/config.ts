@@ -22,10 +22,7 @@ export type AppConfig = {
   sqlServerPassword?: string;
   sqlServerEncrypt: boolean;
   sqlServerTrustServerCertificate: boolean;
-  sqlQuoteProcedure: string;
-  sqlBudgetProcedure: string;
-  sqlProductParameter: string;
-  sqlBudgetParameter: string;
+  sqlCatalogProcedure: string;
   sqlBridgeUrl?: string;
   sqlBridgeToken?: string;
   sqlQuoteAction: string;
@@ -69,10 +66,7 @@ export function loadConfig(env: EnvLike = process.env): AppConfig {
     sqlServerPassword: env.SQL_SERVER_PASSWORD,
     sqlServerEncrypt: bool(env.SQL_SERVER_ENCRYPT, false),
     sqlServerTrustServerCertificate: bool(env.SQL_SERVER_TRUST_CERT, true),
-    sqlQuoteProcedure: env.SQL_QUOTE_PROCEDURE ?? 'REEMPLAZAR_PROCEDIMIENTO_COTIZACION',
-    sqlBudgetProcedure: env.SQL_BUDGET_PROCEDURE ?? 'REEMPLAZAR_PROCEDIMIENTO_PRESUPUESTO',
-    sqlProductParameter: env.SQL_PRODUCT_PARAMETER ?? 'product',
-    sqlBudgetParameter: env.SQL_BUDGET_PARAMETER ?? 'maxBudget',
+    sqlCatalogProcedure: env.SQL_CATALOG_PROCEDURE ?? env.SQL_QUOTE_PROCEDURE ?? 'dbo.sp_BuscarProductosVenta',
     sqlBridgeUrl: env.SQL_BRIDGE_URL,
     sqlBridgeToken: env.SQL_BRIDGE_TOKEN,
     sqlQuoteAction: env.SQL_QUOTE_ACTION ?? 'product_quote',
