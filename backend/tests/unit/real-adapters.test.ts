@@ -1,3 +1,46 @@
-import test from 'node:test';import assert from 'node:assert/strict';import { SqlBridgeErpRepository } from '../../src/adapters/sqlbridge/SqlBridgeErpRepository.ts';import { OpenAIProvider } from '../../src/adapters/openai/OpenAIProvider.ts';
-test('SQL bridge adapter sends configured action and maps authoritative quote',async()=>{let body:any;const fetcher:typeof fetch=async(_url,init)=>{body=JSON.parse(String(init?.body));return Response.json({product:'Armor 22',productCode:'P000049',price:1299,stock:7,currency:'PEN'});};const erp=new SqlBridgeErpRepository({url:'https://sql.test/query',token:'secret',quoteAction:'quote_v2',budgetAction:'budget_v2',fetcher});const q=await erp.getProductQuote('Armor 22');assert.equal(body.action,'quote_v2');assert.equal(q?.source,'SQL_BRIDGE');assert.equal(q?.price,1299);});
-test('OpenAI adapter sends deterministic evidence through Responses API',async()=>{let body:any;const fetcher:typeof fetch=async(_url,init)=>{body=JSON.parse(String(init?.body));return Response.json({output:[{type:'message',content:[{type:'output_text',text:'Respuesta final'}]}]});};const llm=new OpenAIProvider({apiKey:'key',model:'gpt-test',fetcher});const text=await llm.write({message:'precio?',intent:'PRICE',state:{queryTarget:'Armor 22'},deterministicAnswer:'Armor 22: S/ 1299.'});assert.equal(text,'Respuesta final');assert.match(body.input,/S\/ 1299/);assert.match(body.instructions,/no inventes/i);});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { SqlBridgeErpRepository } from '../../src/adapters/sqlbridge/SqlBridgeErpRepository.ts';
+import { OpenAIProvider } from '../../src/adapters/openai/OpenAIProvider.ts';
+
+test('SQL bridge adapter sends canonical EXEC query and maps authoritative quote', async () => {
+  let body: any;
+  let auth: string | undefined;
+  const fetcher: typeof fetch = async (_url, init) => {
+    body = JSON.parse(String(init?.body));
+    auth = (init?.headers as Record<string, string> | undefined)?.authorization;
+    return Response.json({
+      ok: true,
+      statusCode: 200,
+      rows: [{ product: 'Armor 22', productCode: 'P000049', price: 1299, stock: 7, currency: 'PEN' }],
+      error: null,
+    });
+  };
+
+  const erp = new SqlBridgeErpRepository({
+    url: 'https://sql.test/query',
+    token: 'secret',
+    catalogProcedure: 'dbo.sp_BuscarProductosVenta',
+    fetcher,
+  });
+
+  const q = await erp.getProductQuote('Armor 22');
+  assert.match(body.query, /^EXEC dbo\.sp_BuscarProductosVenta /);
+  assert.match(body.query, /@TextoBusqueda=N'Armor 22'/);
+  assert.equal(auth, 'Bearer secret');
+  assert.equal(q?.source, 'SQL_BRIDGE');
+  assert.equal(q?.price, 1299);
+});
+
+test('OpenAI adapter sends deterministic evidence through Responses API', async () => {
+  let body: any;
+  const fetcher: typeof fetch = async (_url, init) => {
+    body = JSON.parse(String(init?.body));
+    return Response.json({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'Respuesta final' }] }] });
+  };
+  const llm = new OpenAIProvider({ apiKey: 'key', model: 'gpt-test', fetcher });
+  const text = await llm.write({ message: 'precio?', intent: 'PRICE', state: { queryTarget: 'Armor 22' }, deterministicAnswer: 'Armor 22: S/ 1299.' });
+  assert.equal(text, 'Respuesta final');
+  assert.match(body.input, /S\/ 1299/);
+  assert.match(body.instructions, /no inventes/i);
+});
