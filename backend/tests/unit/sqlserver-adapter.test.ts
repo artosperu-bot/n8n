@@ -49,3 +49,12 @@ test('budget reuses catalog procedure and filters authoritative price in backend
   ]);
   assert.deepEqual(result.map(x=>x.product),['Armor X13','Armor 22']);
 });
+
+test('mssql CommonJS module loaded through ESM default export is supported', async()=>{
+  const calls:any[]=[];
+  const actualDriver=driver([{producto:'Armor 22',precio:1299,stock:2}],calls);
+  const erp=new SqlServerErpRepository({server:'PC020',port:1433,database:'DB_ST',user:'stech_app',password:'secret',encrypt:false,trustServerCertificate:true,catalogProcedure:'dbo.sp_BuscarProductosVenta',driverLoader:async()=>({default:actualDriver}) as any});
+  const q=await erp.getProductQuote('Armor 22');
+  assert.equal(q?.price,1299);
+  assert.equal(calls[0].proc,'dbo.sp_BuscarProductosVenta');
+});
