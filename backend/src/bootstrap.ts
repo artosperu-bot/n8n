@@ -33,10 +33,7 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
         password: need(config.sqlServerPassword, 'SQL_SERVER_PASSWORD'),
         encrypt: config.sqlServerEncrypt,
         trustServerCertificate: config.sqlServerTrustServerCertificate,
-        quoteProcedure: need(config.sqlQuoteProcedure, 'SQL_QUOTE_PROCEDURE'),
-        budgetProcedure: need(config.sqlBudgetProcedure, 'SQL_BUDGET_PROCEDURE'),
-        productParameter: config.sqlProductParameter,
-        budgetParameter: config.sqlBudgetParameter,
+        catalogProcedure: config.sqlCatalogProcedure,
       })
     : config.erpMode === 'sql-bridge'
       ? new SqlBridgeErpRepository({ url: need(config.sqlBridgeUrl,'SQL_BRIDGE_URL'), token: config.sqlBridgeToken, quoteAction: config.sqlQuoteAction, budgetAction: config.sqlBudgetAction })
