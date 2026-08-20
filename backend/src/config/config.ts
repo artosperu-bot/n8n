@@ -11,9 +11,9 @@ export type AppConfig = {
   openAiModel: string;
   supabaseUrl?: string;
   supabaseServiceRoleKey?: string;
-  supabaseStateTable: string;
-  supabaseSessionIdColumn: string;
-  supabaseStateColumn: string;
+  supabaseSessionTable: string;
+  supabaseContextTable: string;
+  supabaseConversationTable: string;
   supabaseRagRpc: string;
   sqlServerHost?: string;
   sqlServerPort: number;
@@ -55,9 +55,9 @@ export function loadConfig(env: EnvLike = process.env): AppConfig {
     openAiModel: env.OPENAI_MODEL ?? 'REEMPLAZAR_MODELO_OPENAI',
     supabaseUrl: env.SUPABASE_URL,
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
-    supabaseStateTable: env.SUPABASE_STATE_TABLE ?? 'ia_sesiones',
-    supabaseSessionIdColumn: env.SUPABASE_SESSION_ID_COLUMN ?? 'session_id',
-    supabaseStateColumn: env.SUPABASE_STATE_COLUMN ?? 'estado_backend',
+    supabaseSessionTable: env.SUPABASE_SESSION_TABLE ?? 'ia_sesiones',
+    supabaseContextTable: env.SUPABASE_CONTEXT_TABLE ?? 'ia_contexto',
+    supabaseConversationTable: env.SUPABASE_CONVERSATION_TABLE ?? 'ia_conversaciones',
     supabaseRagRpc: env.SUPABASE_RAG_RPC ?? 'match_documents',
     sqlServerHost: env.SQL_SERVER_HOST,
     sqlServerPort: Number(env.SQL_SERVER_PORT ?? 1433),
