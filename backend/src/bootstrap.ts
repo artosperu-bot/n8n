@@ -21,7 +21,13 @@ function need(value: string | undefined, name: string): string {
 export function buildRuntime(env: Record<string,string|undefined> = process.env) {
   const config: AppConfig = loadConfig(env);
   const conversations = config.persistenceMode === 'supabase'
-    ? new SupabaseConversationRepository({ url: need(config.supabaseUrl,'SUPABASE_URL'), key: need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY'), stateTable: config.supabaseStateTable, sessionIdColumn: config.supabaseSessionIdColumn, stateColumn: config.supabaseStateColumn })
+    ? new SupabaseConversationRepository({
+        url: need(config.supabaseUrl,'SUPABASE_URL'),
+        key: need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY'),
+        sessionTable: config.supabaseSessionTable,
+        contextTable: config.supabaseContextTable,
+        conversationTable: config.supabaseConversationTable,
+      })
     : new MemoryConversationRepository();
 
   const erp = config.erpMode === 'sqlserver'
