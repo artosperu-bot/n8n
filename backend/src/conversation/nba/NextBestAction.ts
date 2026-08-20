@@ -1,0 +1,1 @@
+export function nextBestAction(intent:string):string|null{switch(intent){case'PRICE':return'OFFER_STOCK';case'STOCK':return'PURCHASE';case'PURCHASE':return'HANDOFF_OR_ORDER';case'BUDGET_CONSTRAINT':return'USE_OR_CRITERION';case'RECOMMEND_WITHIN_BUDGET':return'OFFER_PRICE_STOCK';case'WARRANTY':return null;default:return null;}}

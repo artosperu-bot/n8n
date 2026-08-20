@@ -1,0 +1,3 @@
+{
+  "name":"stech-backend","version":"0.2.0","private":true,"type":"module","description":"STECH modular conversational backend","engines":{"node":">=22.16"},"scripts":{"dev":"node --env-file-if-exists=.env --experimental-strip-types --watch src/server.ts","start":"node --env-file-if-exists=.env --experimental-strip-types src/server.ts","build":"node --experimental-strip-types scripts/build-check.ts","test":"node --experimental-strip-types scripts/run-tests.ts","chat":"node --env-file-if-exists=.env --experimental-strip-types scripts/chat-cli.ts","smoke":"node --experimental-strip-types scripts/smoke-test.ts"},"dependencies":{"mssql":"^12.7.0"}
+}
