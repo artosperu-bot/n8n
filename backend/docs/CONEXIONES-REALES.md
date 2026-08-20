@@ -29,30 +29,35 @@ SQL_SERVER_USER=...
 SQL_SERVER_PASSWORD=...
 SQL_SERVER_ENCRYPT=false
 SQL_SERVER_TRUST_CERT=true
+SQL_CATALOG_PROCEDURE=dbo.sp_BuscarProductosVenta
 ```
 
-El adapter usa un pool de `mssql`/Tedious. Además necesita dos procedimientos almacenados (o wrappers) porque el backend no debe inventar el esquema de tu ERP:
+El backend usa un pool `mssql`/Tedious y reutiliza el procedimiento autoritativo que ya usa STECH:
 
-```env
-SQL_QUOTE_PROCEDURE=dbo.<procedimiento_cotizacion>
-SQL_BUDGET_PROCEDURE=dbo.<procedimiento_presupuesto>
-SQL_PRODUCT_PARAMETER=product
-SQL_BUDGET_PARAMETER=maxBudget
+```sql
+EXEC dbo.sp_BuscarProductosVenta
+  @TextoBusqueda = ...,
+  @CategoriaCodigo = NULL,
+  @SubcategoriaCodigo = NULL,
+  @SoloConStock = 0,
+  @MaxResultados = ...;
 ```
 
-### Contrato de salida esperado
+Para una cotización/producto, `@TextoBusqueda` recibe el producto o código resuelto y `@MaxResultados=20`.
 
-Cotización: una fila. Presupuesto: cero o más filas.
+Para una consulta por presupuesto, se reutiliza el mismo SP con `@TextoBusqueda=NULL` y `@MaxResultados=100`; después el backend filtra únicamente filas con precio autoritativo `precio <= presupuesto`. No existe ni se requiere `@maxBudget` en SQL Server.
+
+### Contrato de salida aceptado
 
 El mapper acepta estos aliases:
 
-- producto: `product`, `producto` o `nombre`
+- producto: `product`, `producto`, `nombre` o `nombre_corto`
 - código: `productCode`, `producto_codigo` o `codigo`
 - precio: `price` o `precio`
 - stock: `stock`
 - moneda: `currency` o `moneda` (si falta, PEN)
 
-## 3. n8n obligatorio como capa de eventos
+## 3. n8n como capa de eventos
 
 Configurar:
 
@@ -72,19 +77,19 @@ Eventos actuales:
 
 Con `N8N_STRICT=false`, una caída temporal de n8n no destruye el turno ya procesado por el backend. El resultado del delivery queda observable en `debug.automation`.
 
-## 4. Qué información falta para conectar el entorno real
+## 4. Información que falta para conexión real
 
-No necesito que envíes contraseñas al repositorio. Para completar la conexión necesitamos definir en el servidor donde correrá el backend:
+No enviar contraseñas al repositorio. Solo faltan en el runtime:
 
 1. SQL Server host/IP y puerto.
 2. Base de datos.
-3. Usuario SQL de aplicación con permisos mínimos necesarios.
+3. Usuario SQL de aplicación con permisos mínimos.
 4. Password como secreto de runtime.
-5. Nombre real de SP de cotización y parámetro.
-6. Nombre real de SP de filtro por presupuesto y parámetro.
-7. OpenAI API key como secreto de runtime.
-8. Modelo OpenAI habilitado para la cuenta.
-9. URL/token del webhook n8n dedicado al backend.
+5. OpenAI API key como secreto de runtime.
+6. Modelo OpenAI habilitado.
+7. URL/token del webhook n8n dedicado al backend.
+
+El procedimiento SQL ya está definido: `dbo.sp_BuscarProductosVenta`.
 
 ## 5. Verificación
 
