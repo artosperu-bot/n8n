@@ -17,7 +17,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
   readonly #contextTable: string;
   readonly #conversationTable: string;
   readonly #fetcher: typeof fetch;
-  readonly #pendingUser = new Map<string, string>();
+  readonly #pendingTurnId = new Map<string, string>();
   readonly #lastState = new Map<string, ConversationState>();
 
   constructor(options: Options) {
@@ -93,32 +93,48 @@ export class SupabaseConversationRepository implements ConversationRepository {
 
   async appendMessage(sessionId: string, role: 'user' | 'assistant', content: string): Promise<void> {
     await this.#ensureSession(sessionId);
+
     if (role === 'user') {
-      this.#pendingUser.set(sessionId, content);
+      const body = [{
+        session_id: sessionId,
+        mensaje_cliente: content,
+        respuesta_bot: null,
+        modelo: 'stech-backend',
+        fecha: new Date().toISOString(),
+      }];
+      const r = await this.#fetcher(`${this.#url}/rest/v1/${this.#conversationTable}`, {
+        method: 'POST',
+        headers: this.#headers({ Prefer: 'return=representation' }),
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`Supabase conversation user write HTTP ${r.status}`);
+      const rows: any[] = await r.json();
+      const id = String(rows[0]?.id ?? '');
+      if (!id) throw new Error('Supabase conversation insert returned no id');
+      this.#pendingTurnId.set(sessionId, id);
       return;
     }
 
-    const user = this.#pendingUser.get(sessionId);
-    if (!user) throw new Error(`Supabase conversation turn missing pending user message for ${sessionId}`);
+    const turnId = this.#pendingTurnId.get(sessionId);
+    if (!turnId) throw new Error(`Supabase conversation turn missing pending user row for ${sessionId}`);
     const state = this.#lastState.get(sessionId);
-    const body = [{
-      session_id: sessionId,
-      mensaje_cliente: user,
+    const body = {
       respuesta_bot: content,
       intencion: state?.lastIntent ?? null,
       producto_detectado: state?.queryTarget ?? state?.activeProduct ?? null,
       presupuesto_detectado: state?.budget ?? null,
       cambio_producto_explicito: state?.explicitSwitch ?? false,
-      modelo: 'stech-backend',
-      fecha: new Date().toISOString(),
-    }];
-    const r = await this.#fetcher(`${this.#url}/rest/v1/${this.#conversationTable}`, {
-      method: 'POST',
-      headers: this.#headers(),
-      body: JSON.stringify(body),
-    });
-    if (!r.ok) throw new Error(`Supabase conversation write HTTP ${r.status}`);
-    this.#pendingUser.delete(sessionId);
+    };
+    const r = await this.#fetcher(
+      `${this.#url}/rest/v1/${this.#conversationTable}?id=eq.${encodeURIComponent(turnId)}`,
+      {
+        method: 'PATCH',
+        headers: this.#headers(),
+        body: JSON.stringify(body),
+      },
+    );
+    if (!r.ok) throw new Error(`Supabase conversation assistant write HTTP ${r.status}`);
+    this.#pendingTurnId.delete(sessionId);
   }
 
   async getMessages(sessionId: string) {
@@ -149,7 +165,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       );
       if (!r.ok) throw new Error(`Supabase reset HTTP ${r.status}`);
     }
-    this.#pendingUser.delete(sessionId);
+    this.#pendingTurnId.delete(sessionId);
     this.#lastState.delete(sessionId);
   }
 }
