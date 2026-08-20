@@ -27,7 +27,8 @@ export class SqlServerErpRepository implements ErpRepository {
   async #pool(): Promise<any> {
     if (!this.#poolPromise) {
       this.#poolPromise = (async () => {
-        const sql = await this.#driverLoader();
+        const loaded = await this.#driverLoader();
+        const sql = loaded?.default ?? loaded;
         const pool = new sql.ConnectionPool({
           server: this.#options.server,
           port: this.#options.port,
