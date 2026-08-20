@@ -36,7 +36,11 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
         catalogProcedure: config.sqlCatalogProcedure,
       })
     : config.erpMode === 'sql-bridge'
-      ? new SqlBridgeErpRepository({ url: need(config.sqlBridgeUrl,'SQL_BRIDGE_URL'), token: config.sqlBridgeToken, quoteAction: config.sqlQuoteAction, budgetAction: config.sqlBudgetAction })
+      ? new SqlBridgeErpRepository({
+          url: need(config.sqlBridgeUrl,'SQL_BRIDGE_URL'),
+          token: config.sqlBridgeToken,
+          catalogProcedure: config.sqlCatalogProcedure,
+        })
       : new FakeErpRepository();
 
   const rag = config.ragMode === 'supabase'
