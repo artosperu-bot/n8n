@@ -57,7 +57,7 @@ test('unknown requested product recovers with verified catalog alternatives inst
   const r = await engine.processTurn({sessionId:'s-unknown',message:'Busco el Armor 30 para construcción'});
   assert.doesNotMatch(r.answer,/no tengo ese dato confirmado todavía/i);
   assert.match(r.answer,/Armor X12 Pro|Armor X13|Armor 22|Armor 25T Pro/);
-  assert.equal(r.state.lastNba,'OFFER_ALTERNATIVES');
+  assert.equal(r.state.lastNba,'OFFER_ALTERNATIVE');
 });
 
 test('direct image request remains a deterministic URL-only fast path', async () => {
