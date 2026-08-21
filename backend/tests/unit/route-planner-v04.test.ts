@@ -24,16 +24,17 @@ test('compound price+images preserves both SQL tools',()=>{
   assert.deepEqual(r.sqlTools,['dbo.sp_BuscarProductosVenta','dbo.sp_BuscarImagenesProductoVenta']);
 });
 
-test('purchase and human requests route to assisted handoff and never reserve',()=>{
-  for(const primary of ['PURCHASE','HUMAN'] as const){
-    const r=planRoute(p(primary),{hasProduct:true});
-    assert.equal(r.route,'ASSISTED_HANDOFF');
-    assert.equal(r.sqlTools.includes('dbo.sp_IA_RegistrarReserva24h_Idempotente'),false);
-  }
+test('personal purchase collects reservation data while human and multi-unit purchase hand off',()=>{
+  const purchase=planRoute(p('PURCHASE'),{hasProduct:true,quantity:1});
+  assert.equal(purchase.route,'RESERVATION_DATA');
+  assert.equal(purchase.sqlTools.includes('dbo.sp_IA_RegistrarReserva24h_Idempotente'),false,'initial purchase must not execute reservation before required data exists');
+  assert.equal(planRoute(p('PURCHASE'),{hasProduct:true,quantity:2}).route,'ASSISTED_HANDOFF');
+  assert.equal(planRoute(p('HUMAN'),{hasProduct:true}).route,'ASSISTED_HANDOFF');
 });
 
 test('missing identity or protected order credentials asks clarification',()=>{
   assert.equal(planRoute(p('IMAGES'),{hasProduct:false}).route,'CLARIFICATION');
+  assert.equal(planRoute(p('PURCHASE'),{hasProduct:false}).route,'CLARIFICATION');
   assert.equal(planRoute(p('ORDER_STATUS'),{hasOrderCredentials:false}).route,'CLARIFICATION');
 });
 
