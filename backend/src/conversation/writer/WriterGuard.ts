@@ -41,7 +41,7 @@ function institutionalMoneySupported(input:LlmWriteInput,answer:string):boolean 
   const values=monetaryValues(answer);
   if(!values.length)return true;
   const institutional=(input.rag??[]).filter(x=>x.domain==='INSTITUTIONAL').map(x=>x.text).join('\n');
-  const facts=(input.verifiedFacts??[]).join('\n');
+  const facts=(input.verifiedFacts??[]).map(x=>`${x.key}=${x.value}`).join('\n');
   const authority=`${institutional}\n${facts}`;
   const supported=new Set(monetaryValues(authority));
   return values.every(v=>supported.has(v));
@@ -58,7 +58,7 @@ function factCategory(segment:string):string|null {
   if(/\bpantalla\b|\brefresco\b/.test(t))return 'PANTALLA';
   return null;
 }
-function duplicateFact(answer:string,input:LlmWriteInput):boolean {
+function duplicateFact(answer:string):boolean {
   const segments=answer.split(/\n+|(?<=[.!])\s+/).map(x=>x.trim()).filter(Boolean);
   const seen=new Set<string>();
   const unitRx=/\b(\d+(?:[.,]\d+)?)\s*(kg|g|mah|w|gb|mp|hz|mm|cm|m)\b/gi;
@@ -72,6 +72,30 @@ function duplicateFact(answer:string,input:LlmWriteInput):boolean {
     }
   }
   return false;
+}
+function cleanPresentation(answer:string):string {
+  return answer
+    .split('\n')
+    .map(line=>line.replace(/^\s*(?:[-*]\s*)?\*{0,2}(?:Conclusi[oó]n|Datos clave|Consecuencia pr[aá]ctica|Recomendaci[oó]n|Postura|Trade-?off)\*{0,2}\s*:\s*/i,''))
+    .join('\n')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+}
+function unsupportedFabInference(input:LlmWriteInput,answer:string):string|null {
+  const text=fold(answer);
+  const ev=evidenceText(input);
+  if(/\b(todo el dia|toda la jornada|jornada completa|cubre (?:una|la) jornada|suficiente para (?:un|una) jornada)\b/.test(text)
+    && !/\b(autonomia|duracion)\b[^\n.]{0,40}\b\d+(?:[.,]\d+)?\s*(?:h|horas)\b|\btodo el dia\b|\bjornada\b/.test(ev))return 'UNSUPPORTED_AUTONOMY_INFERENCE';
+  if(/\b(sin lags?|sin trabas|fluidez|fluido|fluida)\b/.test(text)
+    && !/\b(benchmark|antutu|geekbench|fluidez|lag|prueba de rendimiento|rendimiento medido)\b/.test(ev))return 'UNSUPPORTED_PERFORMANCE_INFERENCE';
+  if(/\b(gps|localizacion|ubicacion)\b[^\n.]{0,55}\b(mas estable|estable|precision|preciso|mantener fijad[oa])\b|\b(mas estable|precision|preciso)\b[^\n.]{0,55}\b(gps|localizacion|ubicacion)\b/.test(text)
+    && !/\b(precision|accuracy|rms|estable|estabilidad|error de posicion)\b/.test(ev))return 'UNSUPPORTED_GPS_INFERENCE';
+  if(/\b(graba|video)\b[^\n.]{0,55}\b(buen|mejor|alta calidad|detalle|detallado)\b|\b(buen|mejor)\s+video\b/.test(text)
+    && !/\bvideo\b[^\n.]{0,80}\b(720p|1080p|2k|4k|fps|estabilizacion|eis|ois|bitrate|calidad)\b/.test(ev))return 'UNSUPPORTED_VIDEO_INFERENCE';
+  if(/\b(miles de fotos|horas de video|miles de imagenes)\b/.test(text)
+    && !/\b(miles de fotos|horas de video|cantidad de fotos|duracion de video)\b/.test(ev))return 'UNSUPPORTED_STORAGE_ESTIMATE';
+  if(/\bwhatsapp\b/.test(text)&&!/(\bwhatsapp\b|\bandroid\b|\bgoogle play\b|\bplay store\b)/.test(ev))return 'UNSUPPORTED_APP_COMPATIBILITY';
+  return null;
 }
 
 function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | null {
@@ -96,6 +120,9 @@ function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | nu
   const speculative=/\b(?:probablemente|seguramente|posiblemente|quiz[aá]s|tal\s+vez)\b/i;
   if(speculative.test(answer))return 'UNSUPPORTED_SPECULATION';
 
+  const fabViolation=unsupportedFabInference(input,answer);
+  if(fabViolation)return fabViolation;
+
   const lowLightClaim=/\b(?:mejor|superior|mucho\s+mejor|mayor)\b[^\n.]{0,55}\b(?:baja|poca)\s+luz\b|\b(?:baja|poca)\s+luz\b[^\n.]{0,55}\b(?:mejor|superior)\b/i;
   if(lowLightClaim.test(answer)){
     const ev=evidenceText(input);
@@ -107,7 +134,7 @@ function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | nu
     const productIds=new Set((input.rag??[]).map(x=>String(x.productId??'').trim()).filter(Boolean));
     if(productIds.size<2)return 'UNSUPPORTED_SUPERLATIVE';
   }
-  if(duplicateFact(answer,input))return 'DUPLICATE_FACT';
+  if(duplicateFact(answer))return 'DUPLICATE_FACT';
   return null;
 }
 
@@ -123,8 +150,9 @@ function stripTrailingQuestion(answer:string):string {
   return boundary>=0?before.slice(0,boundary+1).trim():'';
 }
 function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
-  if(String(input.decision?.nextBestAction??'').toUpperCase()!=='ANSWER_ONLY')return fallbackAnswer;
-  return stripTrailingQuestion(fallbackAnswer)||'No tengo ese dato confirmado.';
+  const cleaned=cleanPresentation(fallbackAnswer);
+  if(String(input.decision?.nextBestAction??'').toUpperCase()!=='ANSWER_ONLY')return cleaned;
+  return stripTrailingQuestion(cleaned)||'No tengo ese dato confirmado.';
 }
 
 export async function safeWrite(llm: LlmProvider, input: LlmWriteInput, fallbackAnswer: string): Promise<WriterGuardResult> {
@@ -134,9 +162,10 @@ export async function safeWrite(llm: LlmProvider, input: LlmWriteInput, fallback
       verifiedFacts: input.verifiedFacts ?? normalizeEvidence({ intent:input.intent, quote:input.quote, rag:input.rag }),
     };
     const result = await llm.write(writeInput);
-    const violation = guardGeneratedAnswer(writeInput, result.text);
+    const cleaned=cleanPresentation(result.text);
+    const violation = guardGeneratedAnswer(writeInput, cleaned);
     if (violation === 'NBA_ANSWER_ONLY_QUESTION') {
-      const salvaged=stripTrailingQuestion(result.text);
+      const salvaged=stripTrailingQuestion(cleaned);
       if(salvaged && !guardGeneratedAnswer(writeInput,salvaged)) {
         return { answer:salvaged, model:result.model, llmResult:result, fallback:{delivered:true} };
       }
@@ -149,7 +178,7 @@ export async function safeWrite(llm: LlmProvider, input: LlmWriteInput, fallback
         fallback: { delivered: false, error: violation },
       };
     }
-    return { answer: result.text, model: result.model, llmResult: result, fallback: { delivered: true } };
+    return { answer: cleaned, model: result.model, llmResult: result, fallback: { delivered: true } };
   } catch (error) {
     return {
       answer: safeFallback(input,fallbackAnswer),
