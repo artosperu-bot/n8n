@@ -41,16 +41,25 @@ export function renderMarkdown(report: QaReport): string {
     `- Cached input tokens: ${report.usage.cachedInputTokens}`,
     `- Avg round-trip ms: ${report.latency.averageRoundTripMs}`,
     `- Avg LLM ms: ${report.latency.averageLlmMs}`,
-    '',
-    '## Scenarios',
   ];
+
+  if(report.dimensions){
+    lines.push('','## Quality dimensions');
+    for(const [key,value] of Object.entries(report.dimensions))lines.push(`- ${key}: ${value.pass}/${value.total}`);
+  }
+  if(report.rootCauses&&Object.keys(report.rootCauses).length){
+    lines.push('','## Root causes');
+    for(const [key,value] of Object.entries(report.rootCauses).sort((a,b)=>Number(b[1])-Number(a[1])))lines.push(`- ${key}: ${value}`);
+  }
+  lines.push('', '## Scenarios');
 
   for (const scenario of report.scenarios) {
     lines.push('', `### ${scenario.status} — ${scenario.id}: ${scenario.title}`, `Supabase session: \`${scenario.sessionId}\``);
     for (const turn of scenario.turns) {
       lines.push(`- Turn ${turn.turn} [${turn.status}] — ${turn.message}`);
+      if(turn.oracle)lines.push(`  - Oracle: ${turn.oracle.authoritativeDomain}${turn.oracle.expectedProductName?` / ${turn.oracle.expectedProductName}`:''}`);
       for (const finding of turn.findings) {
-        lines.push(`  - ${finding.level} ${finding.code}: ${finding.message}`);
+        lines.push(`  - ${finding.level} ${finding.code}${finding.rootCause?` [${finding.rootCause}]`:''}: ${finding.message}`);
       }
     }
   }
