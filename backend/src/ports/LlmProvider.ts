@@ -14,6 +14,8 @@ export type LlmWriteInput = {
   verifiedFacts?: VerifiedFact[];
   deterministicAnswer?: string | null;
   decision?: TurnDecision | null;
+  /** Canonical products the writer is allowed to present as real in this turn. */
+  allowedProducts?: string[];
 };
 
 export type LlmDecisionInput = {
