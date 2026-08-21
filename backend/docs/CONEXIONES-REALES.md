@@ -46,6 +46,8 @@ Contrato real utilizado:
 - `ia_conversaciones`: cada turno comienza insertando `mensaje_cliente` con `respuesta_bot=NULL`; al terminar se actualiza la misma fila con respuesta, intención, producto, presupuesto y modelo LLM. Las pruebas QA guardan `message_id`, `request_id` y `tipo_conversacion='QA_LIVE'`.
 - `ia_metricas_tokens`: una fila por llamada LLM con sesión, turno, ruta/intención, modelo, tokens y duración.
 
+`ia_conversaciones.request_id` es globalmente UNIQUE. Por eso Live QA usa el `messageId` completo de cada turno como `request_id`; el `runId` agrupa la corrida en el reporte, pero nunca se reutiliza como `request_id` entre turnos.
+
 Esto preserva el mensaje del cliente incluso si una dependencia posterior falla antes de producir respuesta. La telemetría es **best-effort**: si falla únicamente la escritura en `ia_metricas_tokens`, el turno comercial continúa, queda observable en `debug.telemetry` y Live QA lo clasifica como YELLOW; medir tokens nunca debe bloquear una venta.
 
 ## 4. RAG
@@ -79,11 +81,21 @@ Terminal 1 mantiene el backend real:
 npm start
 ```
 
-Terminal 2 ejecuta la batería completa a través del HTTP real:
+Terminal 2 ejecuta por defecto **journeys conversacionales reales** de 6–10 turnos por sesión:
 
 ```powershell
 npm run qa:live
 ```
+
+Suites disponibles:
+
+```powershell
+npm run qa:live          # journeys largos de ventas (suite principal)
+npm run qa:live:core     # micro-regresiones técnicas rápidas
+npm run qa:live:all      # journeys + core
+```
+
+Los journeys principales incluyen: trabajador de construcción, comparación Armor X13 vs Armor 22, compra personal con presupuesto/objeción, compra institucional para un equipo, políticas previas a compra, estrés de referencias y seguridad ante producto no reconocido.
 
 Configuración opcional:
 
@@ -94,7 +106,7 @@ QA_STRICT=false
 
 `QA_STRICT=false` ejecuta todos los escenarios aunque encuentre RED. `QA_STRICT=true` conserva la ejecución completa pero devuelve exit code 1 cuando existen escenarios RED.
 
-Cada corrida genera un `runId` `qa-YYYYMMDD-HHmmss-xxxx`; cada escenario tiene una sesión distinta y cada turno un `messageId` determinístico. Los reportes locales quedan en `backend/qa-results/<runId>.json` y `.md`; esa carpeta está ignorada por git.
+Cada corrida genera un `runId` `qa-YYYYMMDD-HHmmss-xxxx`; cada journey tiene una sesión distinta y cada turno un `messageId/request_id` determinístico y único. Los reportes locales quedan en `backend/qa-results/<runId>.json` y `.md`; esa carpeta está ignorada por git.
 
 El runner evalúa por separado:
 
