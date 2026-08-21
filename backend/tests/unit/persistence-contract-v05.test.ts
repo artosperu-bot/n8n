@@ -2,6 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OpenAIProvider } from '../../src/adapters/openai/OpenAIProvider.ts';
 import { SupabaseConversationRepository } from '../../src/adapters/supabase/SupabaseConversationRepository.ts';
+import { HybridConversationEngine } from '../../src/conversation/HybridConversationEngine.ts';
+import { FakeErpRepository } from '../../src/adapters/fake/FakeErpRepository.ts';
+import { FakeRagRepository } from '../../src/adapters/fake/FakeRagRepository.ts';
+import { FakeLlmProvider } from '../../src/adapters/fake/FakeLlmProvider.ts';
+import { NoopAutomationBus } from '../../src/adapters/fake/NoopAutomationBus.ts';
+import { NoopTelemetryRepository } from '../../src/adapters/fake/NoopTelemetryRepository.ts';
 import { validateTurnDecision } from '../../src/conversation/decision/DecisionValidator.ts';
 import type { TurnDecision } from '../../src/ports/LlmProvider.ts';
 
@@ -52,4 +58,53 @@ test('Supabase repository exposes atomic turn persistence instead of split conte
   const repo = new SupabaseConversationRepository({ url: 'https://example.supabase.co', key: 'TEST_ONLY', fetcher: (async () => Response.json({})) as typeof fetch });
   assert.equal(typeof (repo as any).beginTurn, 'function');
   assert.equal(typeof (repo as any).completeTurn, 'function');
+});
+
+test('atomic persistence never overflows ia_conversaciones.spin_aporte varchar(30)', async () => {
+  let persistBody: any = null;
+  const fetcher: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/rest/v1/ia_sesiones')) return Response.json([]);
+    if (url.includes('/rpc/ia_adquirir_turno')) return Response.json({ ok:true, acquired:true, reason:'ACQUIRED' });
+    if (url.includes('/rpc/ia_persistir_turno_atomico')) {
+      persistBody = JSON.parse(String(init?.body ?? '{}'));
+      return Response.json({ ok:true, status:'SAVED', conversation_id:'00000000-0000-0000-0000-000000000001', context_version:1 });
+    }
+    if (url.includes('/rpc/ia_liberar_turno')) return Response.json({ ok:true, released:true, reason:'OK' });
+    return Response.json({});
+  };
+  const repo = new SupabaseConversationRepository({ url:'https://example.supabase.co', key:'TEST_ONLY', fetcher });
+  await repo.beginTurn('s-spin','m-spin','m-spin');
+  await repo.completeTurn('s-spin','Trabajo en construcción','Respuesta',{
+    sessionId:'s-spin', contextVersion:0, turnCount:1,
+    lastIntent:'RECOMMEND', lastRoute:'RAG_PRODUCT', lastNba:'ASK_BUDGET',
+    spinFacts:['situacion:trabajo_en_construccion','problema:caidas_frecuentes','necesidad:resistencia_y_bateria'],
+    priorities:['resistencia','bateria'], comparisonProducts:[],
+  } as any,{ model:'gpt-5-mini-2025-08-07' });
+  const value = String(persistBody?.p_conversacion?.spin_aporte ?? '');
+  assert.ok(value.length <= 30, `spin_aporte overflow: ${value.length} chars: ${value}`);
+});
+
+test('hybrid engine marks acquired turn failed when processing throws before persistence', async () => {
+  let failCalled = false;
+  const conversations: any = {
+    async beginTurn() {},
+    async completeTurn() { throw new Error('forced persistence failure'); },
+    async failTurn() { failCalled = true; },
+    async getState() { return { turnCount:0, comparisonProducts:[], spinFacts:[], priorities:[] }; },
+    async saveState() {},
+    async appendMessage() {},
+    async getMessages() { return []; },
+    async reset() {},
+  };
+  const engine = new HybridConversationEngine({
+    conversations,
+    telemetry:new NoopTelemetryRepository(),
+    erp:new FakeErpRepository(),
+    rag:new FakeRagRepository(),
+    llm:new FakeLlmProvider(),
+    automation:new NoopAutomationBus(),
+  });
+  await assert.rejects(() => engine.processTurn({sessionId:'s-fail',message:'Hola',messageId:'m-fail'}), /forced persistence failure/);
+  assert.equal(failCalled,true);
 });
