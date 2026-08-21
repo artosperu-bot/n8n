@@ -2,6 +2,7 @@ import type { CatalogResolution, CategoryOption, OrderLookup, ProductImage, Prod
 
 export interface ErpRepository {
   getProductQuote(product:string):Promise<ProductQuote|null>;
+  searchProducts?(text:string,maxResults?:number):Promise<ProductQuote[]>;
   listProductsWithinBudget(maxBudget:number):Promise<ProductQuote[]>;
   getProductImages?(product:string,maxImages?:number):Promise<ProductImage[]>;
   resolveCatalogContext?(text:string):Promise<CatalogResolution[]>;
