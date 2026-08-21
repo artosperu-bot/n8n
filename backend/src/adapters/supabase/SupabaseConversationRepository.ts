@@ -37,6 +37,10 @@ function compactSpinContribution(state:ConversationState):string|null {
   const raw=String(state.lastSpinContribution ?? cleanStrings(state.spinFacts).at(-1) ?? '').trim();
   return raw ? raw.slice(0,30) : null;
 }
+function recommendationCandidates(state:ConversationState):string[]{
+  const traced=state.lastDecisionTrace?.recommendation?.eligibleCandidates?.map(x=>x.product)??[];
+  return cleanStrings(traced.length?traced:state.comparisonProducts);
+}
 function canonicalContext(state:ConversationState) {
   const flat={
     ...state,
@@ -46,6 +50,7 @@ function canonicalContext(state:ConversationState) {
   };
   return {
     ...flat,
+    debug_trace:state.lastDecisionTrace ?? null,
     producto_activo: state.activeProduct ? {
       producto_id:state.activeProductId ?? null,
       producto_codigo:state.activeProductCode ?? null,
@@ -91,7 +96,6 @@ export class SupabaseConversationRepository implements ConversationRepository {
   readonly #runtimeOwner = `stech-backend-${crypto.randomUUID()}`;
   readonly #activeLease = new Map<string, ActiveLease>();
 
-  // Legacy split-write state is kept only for the old ConversationEngine/tests.
   readonly #pendingTurnId = new Map<string, string>();
   readonly #pendingMessageId = new Map<string, string | null>();
   readonly #pendingRequestId = new Map<string, string | null>();
@@ -175,6 +179,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const status=productStatus(state);
     const requiresClarification=state.lastRoute==='CLARIFICATION' || status==='AMBIGUO' || Boolean(state.explicitSwitch && !state.lastResolvedProductId);
     const context=canonicalContext(state);
+    const candidateNames=recommendationCandidates(state);
     const metricsDetail=[{
       model:meta.model ?? null,
       input_tokens:meta.inputTokens ?? null,
@@ -213,7 +218,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       estado_resolucion_producto:status,
       origen_resolucion_producto:origin,
       confianza_producto:state.lastProductResolutionConfidence ?? 0,
-      productos_candidatos:cleanStrings(state.comparisonProducts),
+      productos_candidatos:candidateNames,
       alcance_consulta:state.lastRoute ?? null,
       requiere_aclaracion:requiresClarification,
       producto_objetivo_turno:{
@@ -254,7 +259,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       producto_activo_id:state.activeProductId ?? null,
       producto_activo_confianza:state.activeProductId ? (state.lastProductResolutionConfidence ?? 1) : 0,
       producto_activo_origen:origin,
-      productos_candidatos:cleanStrings(state.comparisonProducts),
+      productos_candidatos:candidateNames,
       alcance_consulta:state.lastRoute ?? null,
       atributo_activo:null,
       requiere_aclaracion:requiresClarification,
@@ -286,18 +291,18 @@ export class SupabaseConversationRepository implements ConversationRepository {
     this.#activeLease.delete(sessionId);
   }
 
-  // Legacy methods remain for compatibility with the older engine; HybridConversationEngine uses beginTurn/completeTurn.
   async saveState(sessionId: string, state: ConversationState): Promise<void> {
     await this.#ensureSession(sessionId);
     const normalized = { ...state, sessionId };
-    const body = [{ session_id:sessionId, canal:sessionId.startsWith('qa-')?'qa_live':'backend', contexto:normalized,
+    const legacyContext={...normalized,debug_trace:normalized.lastDecisionTrace??null};
+    const body = [{ session_id:sessionId, canal:sessionId.startsWith('qa-')?'qa_live':'backend', contexto:legacyContext,
       ultima_intencion:normalized.lastIntent??null, ultima_accion:normalized.lastNba??null, ultima_ruta:normalized.lastRoute??null,
       ultimo_mensaje_cliente:normalized.lastUserMessage??null, ultima_respuesta_bot:normalized.lastAssistantMessage??null,
       actividad_activa:normalized.useCase??normalized.sector??null, problema_activo:normalized.problem??null,
       presupuesto_activo:normalized.budget??null, cantidad_activa:normalized.quantity??null, objecion_activa:normalized.objection??null,
       senal_compra:normalized.purchaseSignal??false, accion_pendiente:normalized.lastNba??null, etapa_conversacion:normalized.commercialStage??'INICIAL',
       producto_activo_id:normalized.activeProductId??null, producto_activo_confianza:normalized.activeProductId?(normalized.lastProductResolutionConfidence??1):0,
-      producto_activo_origen:productOrigin(normalized), productos_candidatos:normalized.comparisonProducts??[], alcance_consulta:normalized.lastRoute??null,
+      producto_activo_origen:productOrigin(normalized), productos_candidatos:recommendationCandidates(normalized), alcance_consulta:normalized.lastRoute??null,
       requiere_aclaracion:normalized.lastRoute==='CLARIFICATION', derivacion_activa:normalized.handoffActive??false,
       bloquear_respuesta_automatica:normalized.blockAutomaticReply??false, motivo_derivacion:normalized.handoffReason??null,
       ultimo_message_id:this.#pendingMessageId.get(sessionId)??null, ultimo_request_id:this.#pendingRequestId.get(sessionId)??null,
