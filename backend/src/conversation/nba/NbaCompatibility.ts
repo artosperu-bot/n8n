@@ -1,0 +1,44 @@
+import type { ConversationState } from '../../domain/types.ts';
+
+const FACTUAL = new Set([
+  'PRODUCT_INFO','ATTRIBUTE','CAPABILITY','PRICE_AVAILABILITY','PRICE','STOCK',
+  'IMAGES','IMAGE','POLICY','WARRANTY','ORDER_STATUS',
+]);
+
+const ALLOWED: Record<string, Set<string>> = {
+  GREETING:new Set(['ASK_MISSING_FACT','ANSWER_ONLY']),
+  EVALUATE_USE:new Set(['ASK_MISSING_FACT','RECOMMEND','SOFT_CLOSE']),
+  BUDGET_CONSTRAINT:new Set(['ASK_MISSING_FACT','RECOMMEND','SOFT_CLOSE','ANSWER_ONLY']),
+  RECOMMEND:new Set(['RECOMMEND','SOFT_CLOSE','ANSWER_ONLY']),
+  RECOMMEND_WITHIN_BUDGET:new Set(['RECOMMEND','SOFT_CLOSE','ANSWER_ONLY']),
+  COMPARE:new Set(['COMPARE','RECOMMEND','SOFT_CLOSE','ANSWER_ONLY']),
+  OBJECTION:new Set(['OFFER_ALTERNATIVE','RECOMMEND','SOFT_CLOSE']),
+  HANDLE_PRICE_OBJECTION:new Set(['OFFER_ALTERNATIVE','RECOMMEND','SOFT_CLOSE']),
+  CATALOG:new Set(['OFFER_ALTERNATIVE','ANSWER_ONLY','ASK_MISSING_FACT']),
+  CATEGORIES:new Set(['OFFER_ALTERNATIVE','ANSWER_ONLY','ASK_MISSING_FACT']),
+  SUBCATEGORIES:new Set(['OFFER_ALTERNATIVE','ANSWER_ONLY','ASK_MISSING_FACT']),
+  OTHER:new Set(['ANSWER_ONLY','ASK_MISSING_FACT','OFFER_ALTERNATIVE','COMPARE','RECOMMEND','SOFT_CLOSE']),
+};
+
+export function isNbaCompatible(intent:string, action:string|null|undefined, state:ConversationState={}):boolean {
+  if (!action) return false;
+  const i=String(intent??'').toUpperCase();
+  const a=String(action??'').toUpperCase();
+  if (state.purchaseSignal===true) return a==='ASSISTED_HANDOFF';
+  if (['PURCHASE','HUMAN','QUOTE'].includes(i)) return a==='ASSISTED_HANDOFF';
+  if (FACTUAL.has(i)) return a==='ANSWER_ONLY'||a==='SOFT_CLOSE';
+  return ALLOWED[i]?.has(a) ?? ALLOWED.OTHER.has(a);
+}
+
+export function compatibleNba(
+  intent:string,
+  state:ConversationState,
+  proposed:string|null,
+  fallback:string|null,
+):string|null {
+  if (state.purchaseSignal===true || ['PURCHASE','HUMAN','QUOTE'].includes(String(intent).toUpperCase())) return 'ASSISTED_HANDOFF';
+  if (isNbaCompatible(intent,proposed,state)) return proposed;
+  if (isNbaCompatible(intent,fallback,state)) return fallback;
+  if (FACTUAL.has(String(intent).toUpperCase())) return 'ANSWER_ONLY';
+  return null;
+}
