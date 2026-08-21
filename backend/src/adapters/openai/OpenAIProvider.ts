@@ -33,7 +33,11 @@ export class OpenAIProvider implements LlmProvider {
       objection: s.objection ?? null,
       nextBestAction: s.lastNba ?? null,
     };
-    const evidence = (input.rag ?? []).slice(0, 4).map(x => x.text.replace(/\s+/g, ' ').slice(0, 650)).join('\n');
+    const evidence = (input.rag ?? [])
+      .slice(0, 4)
+      .map(x => x.text.replace(/\s+/g, ' ').slice(0, 650))
+      .join('\n');
+
     const instructions = [
       'Eres un vendedor consultivo de STECH PERÚ por chat, no un asistente genérico.',
       'Escribe español peruano natural, breve y comercial: normalmente 1 a 3 frases y máximo una pregunta útil.',
@@ -48,13 +52,13 @@ export class OpenAIProvider implements LlmProvider {
       'Evita listas largas, formularios y menús. En cierre pide un solo dato por turno.',
       'La evidencia suministrada es la única fuente factual.'
     ].join(' ');
-    const body: Record<string, unknown> = {
+
+    const body = {
       model: this.#model,
       max_output_tokens: 320,
       instructions,
       input: `CLIENTE:\n${input.message}\n\nINTENCION:${input.intent}\nCONTEXTO_COMERCIAL:${JSON.stringify(compactState)}\nEVIDENCIA_DETERMINISTICA:${input.deterministicAnswer ?? 'SIN_DATO'}\nEVIDENCIA_VERIFICADA:\n${evidence || 'SIN_DATO'}`,
     };
-    if (/^gpt-5/i.test(this.#model)) body.reasoning = { effort: 'minimal' };
 
     const response = await this.#fetcher(`${this.#baseUrl}/responses`, {
       method: 'POST',
