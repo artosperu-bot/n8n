@@ -1,11 +1,20 @@
 import type { ProductQuote, RagEvidence } from '../../src/domain/types.ts';
 import { normalizeEvidence } from '../../src/conversation/evidence/EvidenceNormalizer.ts';
 
+function ragKey(row:RagEvidence):string {
+  const section=String(row.section??(row.domain==='INSTITUTIONAL'?'INSTITUCIONAL':'RAG')).trim().toUpperCase();
+  return section||'RAG';
+}
+
 export function oracleFacts(intent:string,quote:ProductQuote|null,rag:RagEvidence[]) {
-  const facts=normalizeEvidence({intent,quote,rag});
+  const compact=normalizeEvidence({intent,quote,rag:[]});
+  const allowedFacts=[
+    ...compact.map(f=>`${f.key}=${f.value}`),
+    ...rag.map(row=>`${ragKey(row)}=${String(row.text??'').trim()}`).filter(x=>!x.endsWith('=')),
+  ];
   return {
-    allowedFacts:facts.map(f=>`${f.key}=${f.value}`),
-    sourceRefs:[...new Set(facts.map(f=>f.source))],
+    allowedFacts:[...new Set(allowedFacts)],
+    sourceRefs:[...new Set([...compact.map(f=>f.source),...rag.map(r=>r.source).filter(Boolean)])],
   };
 }
 
