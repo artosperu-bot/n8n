@@ -33,6 +33,10 @@ function productStatus(state:ConversationState):string|null {
 function cleanStrings(values:string[]|undefined):string[] {
   return (values ?? []).filter(v=>typeof v==='string' && v.trim() && v !== '[object Object]').map(v=>v.trim());
 }
+function compactSpinContribution(state:ConversationState):string|null {
+  const raw=String(state.lastSpinContribution ?? cleanStrings(state.spinFacts).at(-1) ?? '').trim();
+  return raw ? raw.slice(0,30) : null;
+}
 function canonicalContext(state:ConversationState) {
   const flat={
     ...state,
@@ -133,6 +137,23 @@ export class SupabaseConversationRepository implements ConversationRepository {
     this.#activeLease.set(sessionId,{owner:this.#runtimeOwner,messageId,requestId});
   }
 
+  async failTurn(sessionId:string,messageId:string,error:string):Promise<void> {
+    const lease=this.#activeLease.get(sessionId);
+    if(!lease || lease.messageId!==messageId) return;
+    const now=new Date().toISOString();
+    const queueUrl=`${this.#url}/rest/v1/ia_turn_queue?session_id=eq.${encodeURIComponent(sessionId)}&message_id=eq.${encodeURIComponent(messageId)}&owner=eq.${encodeURIComponent(lease.owner)}&status=eq.PROCESSING`;
+    const queue=await this.#fetcher(queueUrl,{
+      method:'PATCH',
+      headers:this.#headers(),
+      body:JSON.stringify({status:'FAILED',finished_at:now,updated_at:now,last_error:String(error||'TURN_FAILED').slice(0,1000)}),
+    });
+    const lockUrl=`${this.#url}/rest/v1/ia_session_locks?session_id=eq.${encodeURIComponent(sessionId)}&owner=eq.${encodeURIComponent(lease.owner)}`;
+    const lock=await this.#fetcher(lockUrl,{method:'DELETE',headers:this.#headers()});
+    this.#activeLease.delete(sessionId);
+    if(!queue.ok) throw new Error(`Supabase failed-turn queue cleanup HTTP ${queue.status}`);
+    if(!lock.ok) throw new Error(`Supabase failed-turn lock cleanup HTTP ${lock.status}`);
+  }
+
   async getState(sessionId: string): Promise<ConversationState> {
     const q = new URL(`${this.#url}/rest/v1/${this.#contextTable}`);
     q.searchParams.set('session_id', `eq.${sessionId}`);
@@ -202,7 +223,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
         selectedProduct:state.selectedProduct ?? null,
         recommendedProduct:state.recommendedProduct ?? null,
       },
-      spin_aporte:cleanStrings(state.spinFacts).slice(-3).join('|') || null,
+      spin_aporte:compactSpinContribution(state),
       spin_fase_actual:spinPhase(state),
       actividad_detectada:state.useCase ?? state.sector ?? null,
       problemas_detectados:state.problem ? [state.problem] : [],
