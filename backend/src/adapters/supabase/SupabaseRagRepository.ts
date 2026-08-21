@@ -1,6 +1,8 @@
 import type { RagRepository } from '../../ports/RagRepository.ts';
 import type { RagEvidence } from '../../domain/types.ts';
 import { fold } from '../../shared/text.ts';
+import { resolveInstitutionalTopic } from '../../conversation/institutional/InstitutionalTopicResolver.ts';
+export { resolveInstitutionalTopic } from '../../conversation/institutional/InstitutionalTopicResolver.ts';
 
 type Options = { url: string; key: string; rpc?: string; fetcher?: typeof fetch; ttlMs?: number };
 type Product = { producto_id: string; nombre?: string; nombre_corto?: string; modelo?: string; producto_codigo?: string };
@@ -8,34 +10,10 @@ type ProductDoc = { producto_id?: string; content?: string; metadata?: Record<st
 type Institutional = Record<string, any>;
 type Cache = { loadedAt: number; products: Product[]; docs: ProductDoc[]; institutional: Institutional[] };
 
-type InstitutionalTopic = { category: string; subcategory?: string };
-
 const STOP = new Set(['que','cual','como','tiene','para','del','de','el','la','los','las','una','uno','con','por']);
 function tokens(value: string): string[] { return [...new Set(fold(value).split(/[^a-z0-9]+/).filter(x => x.length >= 3 && !STOP.has(x)))]; }
 function validText(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
 function searchable(value: unknown): string { return fold(typeof value === 'string' ? value : JSON.stringify(value ?? '')); }
-
-export function resolveInstitutionalTopic(query: string): InstitutionalTopic | null {
-  const t = fold(query);
-  if (/\bcontra\s*entrega\b|\bcontraentrega\b/.test(t)) return { category:'pagos', subcategory:'contraentrega' };
-  if (/\b(medios?|formas?)\s+de\s+pago\b|\byape\b|\bplin\b|\btransferencia\b|\btarjeta\b/.test(t)) return { category:'pagos', subcategory:'medios_pago' };
-  if (/\brecoj[oaer]*\b|\brecoger\b/.test(t)) return { category:'entrega', subcategory:'recojo_tienda' };
-  if (/\bhorario\b/.test(t)) return { category:'ubicacion', subcategory:'horario' };
-  if (/\b(donde queda|direccion|ubicacion|tienda fisica)\b/.test(t)) return { category:'ubicacion', subcategory:'direccion' };
-  if (/\breembolso\b/.test(t)) return { category:'postventa', subcategory:'reembolsos' };
-  if (/\bgarantia\b/.test(t)) {
-    if (/\b(cambian|cambio|falla|fallo)\b/.test(t)) return { category:'garantia', subcategory:'evaluacion_y_resultado' };
-    return { category:'postventa', subcategory:'garantia_general' };
-  }
-  if (/\b(cambio|cambios|devolucion|devoluciones)\b/.test(t)) return { category:'postventa', subcategory:'cambios_devoluciones' };
-  if (/\b(separar|separacion|reserva|reservar)\b/.test(t)) return { category:'pedidos', subcategory:'reserva_separacion' };
-  if (/\benvio\b|\benvios\b|\blima\b|\bprovincia\b/.test(t)) {
-    if (/\bgratis|gratuito\b/.test(t)) return { category:'envios', subcategory:'envio_gratuito' };
-    if (/\b(cuanto|demora|plazo|tiempo|dias?|horas?|lima|provincia)\b/.test(t)) return { category:'envios', subcategory:'plazo_variable' };
-    return { category:'envios', subcategory:'disponibilidad' };
-  }
-  return null;
-}
 
 export class SupabaseRagRepository implements RagRepository {
   readonly #url: string;
