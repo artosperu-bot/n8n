@@ -4,6 +4,21 @@ import type { QaFinding, QaTurnObservation } from '../types.ts';
 function same(a:unknown,b:unknown):boolean{return String(a??'').trim().toLocaleLowerCase('es')===String(b??'').trim().toLocaleLowerCase('es');}
 function numbers(text:string):string[]{return [...new Set((text.match(/\b\d+(?:[.,]\d+)?\b/g)??[]).map(x=>x.replace(',','.')))];}
 function containsNumber(text:string,value:string):boolean{return text.replace(/(?<=\d)[,.](?=\d{3}(?:\D|$))/g,'').includes(value.replace(/\.00$/,''));}
+function canonicalNba(value:unknown):string|null{
+  const raw=String(value??'').trim().toUpperCase();
+  const aliases:Record<string,string>={OFFER_ALTERNATIVES:'OFFER_ALTERNATIVE'};
+  return raw?(aliases[raw]??raw):null;
+}
+function assertedNumbers(text:string):string[]{
+  const out:string[]=[];
+  for(const match of text.matchAll(/\b\d+(?:[.,]\d+)?\b/g)){
+    const index=match.index??0;
+    const prefix=text.slice(Math.max(0,index-48),index).toLocaleLowerCase('es');
+    const negated=/(?:\bno\s+(?:tiene|es|soporta|incluye|trae|cuenta\s+con)|\bsin)\s+[^\d]{0,16}$/.test(prefix);
+    if(!negated)out.push(match[0].replace(',','.'));
+  }
+  return [...new Set(out)];
+}
 
 export function evaluatePersistence(observation:QaTurnObservation,previousVersion:number|null):QaFinding[]{
   const findings:QaFinding[]=[];
@@ -45,7 +60,7 @@ export function evaluateOracle(card:OracleCard,observation:QaTurnObservation):Qa
     const actual=state[key];
     if(actual!==wanted)findings.push({level:'RED',code:'ORACLE_STATE_MISMATCH',message:`${key}: oracle=${String(wanted)} actual=${String(actual)}`,rootCause:'STATE'});
   }
-  if(card.expectedNbaClass&&state.lastNba!==card.expectedNbaClass)findings.push({level:'RED',code:'ORACLE_NBA_MISMATCH',message:`N+1 oracle=${card.expectedNbaClass} actual=${String(state.lastNba)}`,rootCause:'NBA'});
+  if(card.expectedNbaClass&&canonicalNba(state.lastNba)!==canonicalNba(card.expectedNbaClass))findings.push({level:'RED',code:'ORACLE_NBA_MISMATCH',message:`N+1 oracle=${card.expectedNbaClass} actual=${String(state.lastNba)}`,rootCause:'NBA'});
   if(card.requiresHandoff&&state.handoffActive!==true)findings.push({level:'RED',code:'ORACLE_HANDOFF_MISSING',message:'La señal de compra/humano no activó handoff.',rootCause:'HANDOFF'});
 
   const facts=card.allowedFacts.join('\n');
@@ -67,7 +82,7 @@ export function evaluateOracle(card:OracleCard,observation:QaTurnObservation):Qa
   if(['PRODUCT_RAG','INSTITUTIONAL_RAG'].includes(card.authoritativeDomain)&&facts){
     const productNums=new Set(numbers(card.expectedProductName??''));
     const allowedNums=new Set(numbers(facts));
-    const unsupported=numbers(answer).filter(n=>!productNums.has(n)&&!allowedNums.has(n));
+    const unsupported=assertedNumbers(answer).filter(n=>!productNums.has(n)&&!allowedNums.has(n));
     if(unsupported.length)findings.push({level:'RED',code:'ORACLE_UNSUPPORTED_NUMERIC_FACT',message:`Afirmaciones numéricas no respaldadas por Oracle: ${unsupported.join(', ')}`,rootCause:card.authoritativeDomain==='PRODUCT_RAG'?'PRODUCT_RAG':'INSTITUTIONAL_RAG'});
   }
 
