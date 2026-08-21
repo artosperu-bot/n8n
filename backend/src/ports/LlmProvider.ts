@@ -1,4 +1,4 @@
-import type { ConversationState, ProductQuote, RagEvidence } from '../domain/types.ts';
+import type { ConversationState, ProductQuote, RagEvidence, VerifiedFact } from '../domain/types.ts';
 
 export type RecentDialogueMessage = {
   role: 'user' | 'assistant';
@@ -11,6 +11,7 @@ export type LlmWriteInput = {
   state: ConversationState;
   quote?: ProductQuote | null;
   rag?: RagEvidence[];
+  verifiedFacts?: VerifiedFact[];
   deterministicAnswer?: string | null;
   decision?: TurnDecision | null;
 };
