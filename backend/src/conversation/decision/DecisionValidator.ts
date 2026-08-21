@@ -39,10 +39,11 @@ export function validateTurnDecision(decision: TurnDecision, state: Conversation
   let targetProduct = canonical(decision.targetProduct, universe);
   let selectedProduct = canonical(decision.selectedProduct, universe);
 
-  // SQL/catalog identity is allowed to fill a missing semantic target, but never to choose
-  // between several candidates. Ambiguity remains a conversation decision.
+  // SQL/catalog identity may fill a missing semantic target only when there is one
+  // unambiguous candidate. It never chooses between multiple candidates.
   if (!targetProduct && catalogCandidates.length === 1) targetProduct = canonical(catalogCandidates[0], universe);
 
+  // A stale recommendation/model guess can never override a later explicit selection.
   if (referenceType === 'SELECTION' && recentSelection) {
     targetProduct = recentSelection;
     selectedProduct = recentSelection;
@@ -50,7 +51,8 @@ export function validateTurnDecision(decision: TurnDecision, state: Conversation
 
   const explicitSwitch = decision.explicitSwitch === true && Boolean(selectedProduct);
   const primaryIntent = String(decision.primaryIntent || 'OTHER');
-  const purchaseLike = ['PURCHASE','HUMAN'].includes(primaryIntent) || state.purchaseSignal === true;
+  // Current intent wins over stale purchase history. Strong purchase/human turns always hand off.
+  const purchaseLike = ['PURCHASE','HUMAN'].includes(primaryIntent);
   const nextBestAction = purchaseLike ? 'ASSISTED_HANDOFF' : decision.nextBestAction;
 
   return {
