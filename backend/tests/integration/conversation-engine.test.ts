@@ -36,21 +36,25 @@ test('budget turn persists budget without creating price objection',async()=>{
   assert.equal(r.state.budget,1500);assert.equal(r.debug.priceObjection,false);assert.equal(r.debug.intent,'BUDGET_CONSTRAINT');
 });
 
-test('direct budget-fit request recommends an in-budget product',async()=>{
+test('direct budget-fit request recommends an authoritative in-budget product without hardcoding a model',async()=>{
   const e=engine();await e.processTurn({sessionId:'s3',message:'Tengo máximo S/ 1,500.'});
   const r=await e.processTurn({sessionId:'s3',message:'¿Cuál entra en mi presupuesto?'});
-  assert.equal(r.debug.intent,'RECOMMEND_WITHIN_BUDGET');assert.equal(r.state.recommendedProduct,'Armor 22');assert.match(r.answer,/Armor 22/);
+  assert.equal(r.debug.intent,'RECOMMEND_WITHIN_BUDGET');
+  assert.ok(r.state.recommendedProduct);
+  const q=await new FakeErpRepository().getProductQuote(r.state.recommendedProduct!);
+  assert.ok(q?.price != null && q.price<=1500);
+  assert.match(r.answer,new RegExp(r.state.recommendedProduct!.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
 });
 
-test('records LLM usage only on a turn that needs generation',async()=>{
+test('records LLM usage only on a turn that needs closed-book generation',async()=>{
   const metrics:any[]=[];
   const e=new ConversationEngine({conversations:new MemoryConversationRepository(),telemetry:{async recordLlmUsage(m:any){metrics.push(m);}},erp:new FakeErpRepository(),rag:new FakeRagRepository(),llm:new FakeLlmProvider(),automation:new NoopAutomationBus()});
-  const r=await e.processTurn({sessionId:'qa-live-telemetry-case',message:'Trabajo en campo y necesito un equipo confiable',messageId:'qa-run-001:TEL-001:t01'});
+  const r=await e.processTurn({sessionId:'qa-live-telemetry-case',message:'Dame información del Armor X13',messageId:'qa-run-001:TEL-001:t01'});
   assert.equal(metrics.length,1);assert.equal(metrics[0].messageId,'qa-run-001:TEL-001:t01');assert.equal(r.debug.llm?.model,'fake-test-llm');
 });
 
-test('telemetry failure does not destroy a generated commercial turn',async()=>{
+test('telemetry failure does not destroy a generated product turn',async()=>{
   const e=new ConversationEngine({conversations:new MemoryConversationRepository(),telemetry:{async recordLlmUsage(){throw new Error('metrics down');}},erp:new FakeErpRepository(),rag:new FakeRagRepository(),llm:new FakeLlmProvider(),automation:new NoopAutomationBus()});
-  const r=await e.processTurn({sessionId:'s-telemetry-fail',message:'Trabajo en campo y necesito algo resistente'});
+  const r=await e.processTurn({sessionId:'s-telemetry-fail',message:'Dame información del Armor X13'});
   assert.ok(r.answer.length>0);assert.equal(r.debug.telemetry?.delivered,false);assert.match(r.debug.telemetry?.error??'',/metrics down/);
 });
