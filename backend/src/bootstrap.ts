@@ -10,6 +10,7 @@ import { N8nAutomationBus } from './adapters/n8n/N8nAutomationBus.ts';
 import { SqlBridgeErpRepository } from './adapters/sqlbridge/SqlBridgeErpRepository.ts';
 import { SqlServerErpRepository } from './adapters/sqlserver/SqlServerErpRepository.ts';
 import { OpenAIProvider } from './adapters/openai/OpenAIProvider.ts';
+import { OpenAIEmbeddingProvider } from './adapters/openai/OpenAIEmbeddingProvider.ts';
 import { SupabaseConversationRepository } from './adapters/supabase/SupabaseConversationRepository.ts';
 import { SupabaseRagRepository } from './adapters/supabase/SupabaseRagRepository.ts';
 import { SupabaseTelemetryRepository } from './adapters/supabase/SupabaseTelemetryRepository.ts';
@@ -60,8 +61,20 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
         })
       : new FakeErpRepository();
 
+  const embeddingProvider = config.ragMode === 'supabase'
+    ? new OpenAIEmbeddingProvider({
+        apiKey: need(config.openAiApiKey,'OPENAI_API_KEY'),
+        model: config.openAiEmbeddingModel,
+      })
+    : null;
+
   const rag = config.ragMode === 'supabase'
-    ? new SupabaseRagRepository({ url: need(config.supabaseUrl,'SUPABASE_URL'), key: need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY'), rpc: config.supabaseRagRpc })
+    ? new SupabaseRagRepository({
+        url: need(config.supabaseUrl,'SUPABASE_URL'),
+        key: need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY'),
+        rpc: config.supabaseRagRpc,
+        embeddingProvider: embeddingProvider!,
+      })
     : config.ragMode === 'fake' ? new FakeRagRepository() : new DisabledRagRepository();
 
   const baseLlm = config.llmMode === 'openai'
