@@ -10,6 +10,14 @@ type Options = {
   fetcher?: typeof fetch;
 };
 
+function spinPhase(state: ConversationState): string | null {
+  if (state.purchaseSignal) return 'NECESIDAD_SOLUCION';
+  if (state.problem) return 'PROBLEMA';
+  if ((state.priorities?.length ?? 0) > 0) return 'NECESIDAD_SOLUCION';
+  if (state.useCase || state.sector) return 'SITUACION';
+  return null;
+}
+
 export class SupabaseConversationRepository implements ConversationRepository {
   readonly #url: string;
   readonly #key: string;
@@ -63,7 +71,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       contexto: normalized,
       ultima_intencion: normalized.lastIntent ?? null,
       ultima_accion: normalized.lastNba ?? null,
-      ultima_ruta: normalized.lastIntent ?? null,
+      ultima_ruta: normalized.lastRoute ?? null,
       ultimo_mensaje_cliente: normalized.lastUserMessage ?? null,
       ultima_respuesta_bot: normalized.lastAssistantMessage ?? null,
       actividad_activa: normalized.useCase ?? normalized.sector ?? null,
@@ -73,11 +81,21 @@ export class SupabaseConversationRepository implements ConversationRepository {
       objecion_activa: normalized.objection ?? null,
       senal_compra: normalized.purchaseSignal ?? false,
       accion_pendiente: normalized.lastNba ?? null,
+      etapa_conversacion: normalized.commercialStage ?? 'INICIAL',
+      producto_activo_id: normalized.activeProductId ?? null,
+      producto_activo_confianza: normalized.activeProductId ? (normalized.lastProductResolutionConfidence ?? 1) : 0,
+      producto_activo_origen: normalized.lastProductResolutionOrigin ?? 'STECH_BACKEND',
+      productos_candidatos: normalized.comparisonProducts ?? [],
+      alcance_consulta: normalized.lastRoute ?? null,
+      requiere_aclaracion: normalized.lastRoute === 'CLARIFICATION',
+      derivacion_activa: normalized.handoffActive ?? false,
+      bloquear_respuesta_automatica: normalized.blockAutomaticReply ?? false,
+      motivo_derivacion: normalized.handoffReason ?? null,
+      contrato_version: 'STECH_TURN_V04',
       ultimo_message_id: this.#pendingMessageId.get(sessionId) ?? null,
       ultimo_request_id: this.#pendingRequestId.get(sessionId) ?? null,
       ultimo_turno_fecha: new Date().toISOString(),
-      producto_activo_origen: 'STECH_BACKEND',
-      updated_by: 'stech_backend',
+      updated_by: 'stech_backend_v04',
       updated_at: new Date().toISOString(),
     }];
     const r = await this.#fetcher(`${this.#url}/rest/v1/${this.#contextTable}?on_conflict=session_id`, {
@@ -118,12 +136,61 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const turnId = this.#pendingTurnId.get(sessionId);
     if (!turnId) throw new Error(`Supabase conversation turn missing pending user row for ${sessionId}`);
     const state = this.#lastState.get(sessionId);
+    const objective = state?.lastNba ?? null;
     const body = {
       respuesta_bot: content,
       intencion: state?.lastIntent ?? null,
-      producto_detectado: state?.queryTarget ?? state?.activeProduct ?? null,
+      categoria: state?.secondaryIntents?.[0] ?? null,
+      ruta: state?.lastRoute ?? null,
+      objetivo: objective,
+      producto_detectado: state?.queryTarget ?? state?.selectedProduct ?? state?.recommendedProduct ?? state?.activeProduct ?? null,
+      cantidad_detectada: state?.quantity ?? null,
       presupuesto_detectado: state?.budget ?? null,
+      requiere_sql: state?.requiresSql ?? false,
+      requiere_rag: state?.requiresRag ?? false,
+      sql_tool_sugerido: state?.lastSqlTools?.[0] ?? null,
+      sql_tool_disponible: Boolean(state?.lastSqlTools?.length),
+      etapa_comercial: state?.commercialStage ?? null,
+      objecion_principal: state?.objection ?? null,
+      estrategia_recomendada: state?.commercialStrategy ?? null,
+      siguiente_accion: state?.lastNba ?? null,
+      perfil_cliente: state?.customerType ?? null,
+      derivar_humano: state?.handoffActive ?? false,
       cambio_producto_explicito: state?.explicitSwitch ?? false,
+      producto_id_resuelto: state?.lastResolvedProductId ?? null,
+      producto_codigo_resuelto: state?.lastResolvedProductCode ?? null,
+      estado_resolucion_producto: state?.lastResolvedProductId ? 'RESUELTO' : null,
+      origen_resolucion_producto: state?.lastProductResolutionOrigin ?? null,
+      confianza_producto: state?.lastProductResolutionConfidence ?? null,
+      productos_candidatos: state?.comparisonProducts ?? [],
+      alcance_consulta: state?.lastRoute ?? null,
+      requiere_aclaracion: state?.lastRoute === 'CLARIFICATION',
+      producto_objetivo_turno: {
+        queryTarget: state?.queryTarget ?? null,
+        activeProduct: state?.activeProduct ?? null,
+        salientProduct: state?.salientProduct ?? null,
+        selectedProduct: state?.selectedProduct ?? null,
+        recommendedProduct: state?.recommendedProduct ?? null,
+      },
+      spin_aporte: state?.spinFacts?.slice(-3).join('|') || null,
+      spin_fase_actual: state ? spinPhase(state) : null,
+      actividad_detectada: state?.useCase ?? state?.sector ?? null,
+      problemas_detectados: state?.problem ? [state.problem] : [],
+      prioridades_detectadas: state?.priorities ?? [],
+      accion_pendiente_turno: state?.lastNba ? { accion: state.lastNba } : null,
+      contexto_comercial_snapshot: state ? {
+        customerType: state.customerType ?? null,
+        sector: state.sector ?? null,
+        useCase: state.useCase ?? null,
+        problem: state.problem ?? null,
+        priorities: state.priorities ?? [],
+        budget: state.budget ?? null,
+        quantity: state.quantity ?? null,
+        invoiceRequired: state.invoiceRequired ?? null,
+        purchaseSignal: state.purchaseSignal ?? false,
+        handoffActive: state.handoffActive ?? false,
+      } : null,
+      objecion_detectada: state?.objection ? { tipo: state.objection } : null,
       ...(meta.model ? { modelo: meta.model } : {}),
     };
     const r = await this.#fetcher(`${this.#url}/rest/v1/${this.#conversationTable}?id=eq.${encodeURIComponent(turnId)}`, {
