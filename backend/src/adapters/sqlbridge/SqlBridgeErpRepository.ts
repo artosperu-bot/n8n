@@ -21,13 +21,25 @@ function looksDateLike(text:string):boolean{
   const t=fold(text);
   return /\b(?:dia|fecha|llega|llegue|entrega|entregar|agosto|septiembre|octubre|noviembre|diciembre|enero|febrero|marzo|abril|mayo|junio|julio)\b[^.!?]{0,25}\b\d{1,2}\b/.test(t);
 }
+function looksQuantityLike(text:string,model:string):boolean{
+  const t=fold(text),m=model.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return new RegExp(`\\b${m}\\s*(?:unidades?|equipos?|celulares?|uds?)\\b|\\b(?:cantidad|qty)\\s*[:=]?\\s*${m}\\b`,'i').test(t);
+}
+function numericModelReference(query:string,model:string):boolean{
+  if(/[a-z]/i.test(model))return true;
+  if(looksDateLike(query)||looksQuantityLike(query,model))return false;
+  const t=fold(query),q=tokens(query),m=model.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  if(!q.includes(model))return false;
+  if(q.length<=5)return true;
+  return new RegExp(`\\b(?:el|modelo|armor|quiero|prefiero|elijo|vs|contra)\\s+(?:modelo\\s+)?${m}\\b|\\b${m}\\s+(?:quiero|prefiero|elijo|es\\s+mejor|vs|contra)\\b`,'i').test(t);
+}
 function typoScore(query:string,product:string):number{
   const q=tokens(query),p=tokens(product);
   let score=0;
   const modelTokens=p.filter(x=>/\d/.test(x));
   for(const model of modelTokens){
     if(!q.includes(model))continue;
-    score+=/[a-z]/.test(model)?3:2;
+    score+=/[a-z]/.test(model)?3:(numericModelReference(query,model)?3:2);
   }
   const family=p.filter(x=>!/[0-9]/.test(x)&&x.length>=4);
   if(family.some(word=>q.some(candidate=>candidate===word||candidate.length>=4&&editDistance(candidate,word)<=1)))score+=1;
