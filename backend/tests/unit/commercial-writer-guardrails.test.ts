@@ -29,3 +29,18 @@ test('allows a direct benefit-oriented recommendation without robotic filler',as
   assert.equal(r.fallback.delivered,true);
   assert.match(r.answer,/trabajo en campo/i);
 });
+
+test('ANSWER_ONLY keeps the grounded answer and removes an appended follow-up question',async()=>{
+  const r=await safeWrite(llm('El Armor 22 tiene lector de huella lateral. ¿Quieres que te confirme también el precio?'),{
+    message:'tiene huella?',
+    intent:'CAPABILITY',
+    state:{activeProduct:'Armor 22'},
+    decision:{nextBestAction:'ANSWER_ONLY'},
+    allowedProducts:['Armor 22'],
+    rag:[{text:'Lector de huella lateral: Sí',source:'TEST',productId:'P-ARMOR-22-256G',section:'SEGURIDAD',domain:'PRODUCT'}],
+    deterministicAnswer:'Responde solo la característica consultada.',
+  } as any,'Puedo ayudarte a evaluar Armor 22; prefiero no afirmar una característica que no tenga confirmada.');
+  assert.equal(r.answer,'El Armor 22 tiene lector de huella lateral.');
+  assert.equal(r.fallback.delivered,true);
+  assert.equal(r.fallback.error,undefined);
+});
