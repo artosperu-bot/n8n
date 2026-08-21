@@ -248,16 +248,38 @@ export class HybridConversationEngine {
         spinFacts:facts.spinFacts,
       };
 
-      const deterministicDecision=fallbackDecision(input.message,baseState);
+      let deterministicDecision=fallbackDecision(input.message,baseState);
+      if(budgetTurn.budget&&!budgetTurn.priceObjection){
+        const hasDecisionContext=Boolean(baseState.useCase||baseState.problem||(baseState.priorities?.length??0)>0);
+        const budgetIntent=hasDecisionContext?'RECOMMEND_WITHIN_BUDGET':'BUDGET_CONSTRAINT';
+        deterministicDecision={
+          ...deterministicDecision,
+          primaryIntent:budgetIntent,
+          nextBestAction:nextBestAction(budgetIntent,baseState),
+          needsSql:budgetIntent==='RECOMMEND_WITHIN_BUDGET',
+          needsProductRag:budgetIntent==='RECOMMEND_WITHIN_BUDGET',
+          confidence:0.99,
+        };
+      }
       let planner:LlmDecisionResult|null=null;
       let plannerFailure:string|undefined;
       try{if(this.#deps.llm.decide)planner=await this.#deps.llm.decide({message:input.message,state:baseState});}
       catch(error){plannerFailure=error instanceof Error?error.message:String(error);}
 
       const rawDecision=planner?.decision??deterministicDecision;
-      const deterministicOverride=['POLICY','WARRANTY','PRICE','STOCK','CAPABILITY','IMAGE'].includes(deterministicDecision.primaryIntent);
-      const guardedDecision=rawDecision.primaryIntent==='OTHER'&&deterministicOverride
-        ?{...rawDecision,primaryIntent:deterministicDecision.primaryIntent,targetProduct:deterministicDecision.targetProduct,referenceType:deterministicDecision.referenceType}
+      const deterministicOverride=['POLICY','WARRANTY','PRICE','STOCK','CAPABILITY','IMAGE','PURCHASE','BUDGET_CONSTRAINT','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent);
+      const cameraImageConflict=['IMAGE','IMAGES'].includes(String(rawDecision.primaryIntent).toUpperCase())
+        && deterministicDecision.primaryIntent!=='IMAGE'
+        && deterministicDecision.attributes.includes('CAMARA');
+      const guardedDecision=(rawDecision.primaryIntent==='OTHER'&&deterministicOverride)||cameraImageConflict
+        ?{...rawDecision,
+          primaryIntent:deterministicDecision.primaryIntent,
+          targetProduct:deterministicDecision.targetProduct,
+          referenceType:deterministicDecision.referenceType,
+          selectedProduct:deterministicDecision.selectedProduct,
+          mentionedProducts:deterministicDecision.mentionedProducts,
+          attributes:deterministicDecision.attributes,
+          nextBestAction:deterministicDecision.nextBestAction}
         :rawDecision;
       const initialCandidates=await this.#searchCandidates(input.message,guardedDecision.targetProduct);
       const decision=validateTurnDecision(guardedDecision,baseState,unique(initialCandidates.map(productName)),deterministicDecision);
