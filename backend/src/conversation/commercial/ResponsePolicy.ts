@@ -25,7 +25,8 @@ export function imageResponse(images: ProductImage[]): string {
 }
 
 export function institutionalResponse(evidence: RagEvidence[]): string | null {
-  const row = evidence.find(x => x.source.startsWith('SUPABASE_INSTITUCIONAL:'));
+  const row = evidence.find(x => x.domain === 'INSTITUTIONAL')
+    ?? evidence.find(x => /INSTITUCIONAL|POLICY/i.test(x.source));
   if (!row?.text) return null;
   const text = row.text.trim().replace(/\s+/g, ' ');
   const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
