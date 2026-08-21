@@ -8,25 +8,10 @@ type ProductDoc = { producto_id?: string; content?: string; metadata?: Record<st
 type Institutional = Record<string, any>;
 type Cache = { loadedAt: number; products: Product[]; docs: ProductDoc[]; institutional: Institutional[] };
 
-const STOP = new Set(['que','cual','cuales','como','tiene','tienen','para','del','de','el','la','los','las','un','una','y','o','me','mi','es','son','en','con','por','se']);
-const SECTION_HINTS: Array<[RegExp, string]> = [
-  [/\b(bateria|autonomia|carga)\b/, 'BATERIA'],
-  [/\b(camara|foto|video|vision nocturna)\b/, 'CAMARA'],
-  [/\b(resistente|resistencia|ip68|ip69k|caida|golpe)\b/, 'RESISTENCIA'],
-  [/\b(nfc|wifi|bluetooth|usb|infrarrojo)\b/, 'CONECTIVIDAD'],
-  [/\b(5g|4g|red|bandas|volte)\b/, 'REDES'],
-  [/\b(ram|memoria|almacenamiento|microsd)\b/, 'MEMORIA'],
-  [/\b(procesador|rendimiento|cpu|gpu)\b/, 'RENDIMIENTO'],
-  [/\b(pantalla|hz|resolucion)\b/, 'PANTALLA'],
-  [/\b(peso|grosor|dimensiones|color)\b/, 'FISICO'],
-];
-const POLICY_HINT = /\b(envio|envios|provincia|lima|recojo|recoger|tienda|direccion|horario|contraentrega|pago|pagos|yape|plin|transferencia|tarjeta|factura|boleta|garantia|cambio|devolucion|reembolso|reserva|separar|privacidad|reclamo)\b/;
-
-function tokens(value: string): string[] {
-  return [...new Set(fold(value).split(/[^a-z0-9]+/).filter(x => x.length >= 3 && !STOP.has(x)))];
-}
-function searchable(value: unknown): string { return fold(typeof value === 'string' ? value : JSON.stringify(value ?? '')); }
+const STOP = new Set(['que','cual','como','tiene','para','del','de','el','la','los','las','una','uno','con','por']);
+function tokens(value: string): string[] { return [...new Set(fold(value).split(/[^a-z0-9]+/).filter(x => x.length >= 3 && !STOP.has(x)))]; }
 function validText(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
+function searchable(value: unknown): string { return fold(typeof value === 'string' ? value : JSON.stringify(value ?? '')); }
 
 export class SupabaseRagRepository implements RagRepository {
   readonly #url: string;
@@ -45,9 +30,9 @@ export class SupabaseRagRepository implements RagRepository {
   #headers() { return { apikey: this.#key, authorization: `Bearer ${this.#key}` }; }
 
   async #get(path: string): Promise<any[]> {
-    const r = await this.#fetcher(`${this.#url}/rest/v1/${path}`, { headers: this.#headers() });
-    if (!r.ok) throw new Error(`Supabase knowledge HTTP ${r.status}`);
-    const rows = await r.json();
+    const response = await this.#fetcher(`${this.#url}/rest/v1/${path}`, { headers: this.#headers() });
+    if (!response.ok) throw new Error(`Supabase knowledge HTTP ${response.status}`);
+    const rows = await response.json();
     return Array.isArray(rows) ? rows : [];
   }
 
@@ -56,7 +41,7 @@ export class SupabaseRagRepository implements RagRepository {
     const [products, docs, institutional] = await Promise.all([
       this.#get('catalogo_productos?activo=eq.true&select=producto_id,nombre,nombre_corto,modelo,producto_codigo'),
       this.#get('documents?select=producto_id,content,metadata'),
-      this.#get('rag_institucional?activo=eq.true&select=categoria,subcategoria,titulo,pregunta_canonica,preguntas_ejemplo,sinonimos,keywords,respuesta_base,accion_siguiente,requiere_asesor,afirmable,prioridad,content'),
+      this.#get('rag_institucional?activo=eq.true&select=categoria,subcategoria,titulo,pregunta_canonica,preguntas_ejemplo,sinonimos,keywords,respuesta_base,accion_siguiente,requiere_dato,dato_requerido,requiere_asesor,afirmable,prioridad,content'),
     ]);
     this.#cache = { loadedAt: Date.now(), products, docs, institutional };
     return this.#cache;
@@ -65,39 +50,58 @@ export class SupabaseRagRepository implements RagRepository {
   #resolveProduct(products: Product[], product?: string | null): string | null {
     if (!product) return null;
     const p = fold(product);
-    const hit = products.find(x => [x.nombre_corto,x.modelo,x.nombre,x.producto_codigo].some(v => v && (p.includes(fold(v)) || fold(v).includes(p))));
-    return hit?.producto_id ?? null;
+    return products.find(x => [x.producto_id,x.nombre_corto,x.modelo,x.nombre,x.producto_codigo].some(v => v && (p === fold(v) || p.includes(fold(v)) || fold(v).includes(p))))?.producto_id ?? null;
+  }
+
+  async searchProduct(query: string, productId: string, sections: string[] = [], limit = 8): Promise<RagEvidence[]> {
+    const pid = productId.trim();
+    if (!pid) throw new Error('productId is required for product RAG');
+    const cache = await this.#load();
+    const wanted = new Set(sections.map(section => fold(section)));
+    const qTokens = tokens(query);
+    const scored: Array<{ score: number; evidence: RagEvidence }> = [];
+
+    for (const row of cache.docs) {
+      if (row.producto_id !== pid) continue;
+      const section = String(row.metadata?.seccion ?? 'GENERAL');
+      if (wanted.size && !wanted.has(fold(section))) continue;
+      const content = validText(row.content);
+      if (!content) continue;
+      const hay = searchable([content, row.metadata]);
+      let score = qTokens.reduce((n, token) => n + (hay.includes(token) ? 2 : 0), 0);
+      if (wanted.has(fold(section))) score += 20;
+      score += 10;
+      scored.push({ score, evidence: { text: content, source: `SUPABASE_DOCUMENTS:${section}`, score, productId: pid, section, domain: 'PRODUCT' } });
+    }
+
+    return scored.sort((a,b) => b.score - a.score).slice(0, Math.max(1, Math.min(12, limit))).map(x => x.evidence);
+  }
+
+  async searchInstitutional(query: string, limit = 4): Promise<RagEvidence[]> {
+    const cache = await this.#load();
+    const qTokens = tokens(query);
+    const scored: Array<{ score: number; evidence: RagEvidence }> = [];
+
+    for (const row of cache.institutional) {
+      if (row.afirmable === false) continue;
+      const base = validText(row.respuesta_base) || validText(row.content);
+      if (!base) continue;
+      const hay = searchable([row.categoria,row.subcategoria,row.titulo,row.pregunta_canonica,row.preguntas_ejemplo,row.sinonimos,row.keywords,base]);
+      let score = qTokens.reduce((n, token) => n + (hay.includes(token) ? 3 : 0), 0);
+      score += Math.min(5, Number(row.prioridad ?? 0) / 20);
+      if (score <= 0) continue;
+      scored.push({ score, evidence: { text: base, source: `SUPABASE_INSTITUCIONAL:${String(row.categoria ?? 'general')}`, score, domain: 'INSTITUTIONAL' } });
+    }
+
+    return scored.sort((a,b) => b.score - a.score).slice(0, Math.max(1, Math.min(8, limit))).map(x => x.evidence);
   }
 
   async search(query: string, product?: string | null): Promise<RagEvidence[]> {
     const cache = await this.#load();
-    const q = fold(query);
-    const qTokens = tokens(query);
-    const productId = this.#resolveProduct(cache.products, product);
-    const sectionHint = SECTION_HINTS.find(([rx]) => rx.test(q))?.[1] ?? null;
-    const policy = POLICY_HINT.test(q);
-    const scored: Array<{ score: number; evidence: RagEvidence }> = [];
-
-    for (const row of cache.docs) {
-      if (productId && row.producto_id !== productId) continue;
-      const meta = row.metadata ?? {};
-      const hay = searchable([row.content, meta]);
-      let score = qTokens.reduce((n, token) => n + (hay.includes(token) ? 2 : 0), 0);
-      if (sectionHint && fold(String(meta.seccion ?? '')) === fold(sectionHint)) score += 18;
-      if (productId && row.producto_id === productId) score += 8;
-      const text = validText(row.content);
-      if (text && score > 0) scored.push({ score, evidence: { text, source: `SUPABASE_DOCUMENTS:${String(meta.seccion ?? 'GENERAL')}`, score } });
+    if (product) {
+      const productId = this.#resolveProduct(cache.products, product);
+      return productId ? this.searchProduct(query, productId) : [];
     }
-
-    for (const row of cache.institutional) {
-      const hay = searchable([row.categoria,row.subcategoria,row.titulo,row.pregunta_canonica,row.preguntas_ejemplo,row.sinonimos,row.keywords,row.respuesta_base,row.content]);
-      let score = qTokens.reduce((n, token) => n + (hay.includes(token) ? 3 : 0), 0);
-      if (policy) score += 12;
-      if (Number(row.prioridad ?? 0) > 0) score += Math.min(5, Number(row.prioridad) / 20);
-      const text = validText(row.respuesta_base) || validText(row.content);
-      if (text && score > 0 && row.afirmable !== false) scored.push({ score, evidence: { text, source: `SUPABASE_INSTITUCIONAL:${String(row.categoria ?? 'general')}`, score } });
-    }
-
-    return scored.sort((a,b) => b.score - a.score).slice(0, 4).map(x => x.evidence);
+    return this.searchInstitutional(query);
   }
 }
