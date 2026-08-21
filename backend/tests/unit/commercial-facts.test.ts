@@ -34,3 +34,12 @@ test('recognizes strong purchase signals without returning to discovery', () => 
     assert.equal(extractCommercialFacts(message, {}).purchaseSignal, true, message);
   }
 });
+
+test('delivery is persisted as a use case so recommendation can infer battery resistance and connectivity needs',()=>{
+  const f=extractCommercialFacts('hago delivery todo el dia, quiero algo q aguante golpes',{});
+  assert.equal(f.useCase,'delivery');
+  assert.ok(f.priorities?.includes('resistencia'));
+  const next=extractCommercialFacts('tambien uso gps siempre y datos todo el tiempo',{useCase:f.useCase,priorities:f.priorities});
+  assert.equal(next.useCase,'delivery');
+  assert.ok(next.priorities?.includes('conectividad'));
+});
