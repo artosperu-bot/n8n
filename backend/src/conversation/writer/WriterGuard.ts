@@ -1,5 +1,6 @@
 import type { LlmProvider, LlmResult, LlmWriteInput } from '../../ports/LlmProvider.ts';
 import { normalizeEvidence } from '../evidence/EvidenceNormalizer.ts';
+import { fold } from '../../shared/text.ts';
 
 export type WriterGuardResult = {
   answer: string;
@@ -7,6 +8,29 @@ export type WriterGuardResult = {
   llmResult: LlmResult | null;
   fallback: { delivered: boolean; error?: string };
 };
+
+function familyModel(product:string):{prefix:string;model:string}|null {
+  const parts=fold(product).split(/[^a-z0-9]+/).filter(Boolean);
+  const modelIndex=parts.findIndex(x=>/\d/.test(x));
+  if(modelIndex<=0)return null;
+  return {prefix:parts.slice(0,modelIndex).join(' '),model:parts[modelIndex]};
+}
+function escapes(value:string):string{return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+function mentionsProductOutsideAllowlist(answer:string,allowed:string[]):boolean {
+  if(!allowed.length)return false;
+  const signatures=allowed.map(familyModel).filter((x):x is {prefix:string;model:string}=>Boolean(x));
+  if(!signatures.length)return false;
+  const byPrefix=new Map<string,Set<string>>();
+  for(const row of signatures){
+    const models=byPrefix.get(row.prefix)??new Set<string>();models.add(row.model);byPrefix.set(row.prefix,models);
+  }
+  const text=fold(answer);
+  for(const [prefix,models] of byPrefix){
+    const pattern=new RegExp(`\\b${escapes(prefix).replace(/\\ /g,'\\s+')}\\s+([a-z0-9-]*\\d[a-z0-9-]*)\\b`,'g');
+    for(const match of text.matchAll(pattern))if(!models.has(match[1]))return true;
+  }
+  return false;
+}
 
 function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | null {
   const intent = String(input.intent ?? '').toUpperCase();
@@ -21,6 +45,9 @@ function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | nu
 
   const roboticMeta=/\b(?:cat[aá]logo\s+verificado|evidencia\s+verificada|seg[uú]n\s+(?:mi|el)\s+sistema(?:\s+interno)?|seg[uú]n\s+el\s+rag|querytarget|\bintent\b)\b/i;
   if(roboticMeta.test(answer))return 'ROBOTIC_META_LANGUAGE';
+
+  if(String(input.decision?.nextBestAction??'').toUpperCase()==='ANSWER_ONLY'&&/[¿?]/.test(answer))return 'NBA_ANSWER_ONLY_QUESTION';
+  if(mentionsProductOutsideAllowlist(answer,input.allowedProducts??[]))return 'PRODUCT_OUTSIDE_ALLOWLIST';
 
   const superlative=/\b(?:el|la)\s+m[aá]s\s+(?:resistente|potente|r[aá]pido|econ[oó]mico)|\b(?:la|el)\s+mejor\s+(?:opci[oó]n|bater[ií]a|c[aá]mara|rendimiento|resistencia)\b/i;
   if(superlative.test(answer)){
