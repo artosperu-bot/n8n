@@ -8,12 +8,34 @@ const INTENTS = new Set([
   'IMAGES','IMAGE','POLICY','WARRANTY','OBJECTION','HANDLE_PRICE_OBJECTION','PURCHASE',
   'HUMAN','QUOTE','CATALOG','CATEGORIES','SUBCATEGORIES','ORDER_STATUS','OTHER',
 ]);
+
 const NBAS = new Set([
-  'ASK_NEED','CONTINUE_BY_NEED','ASK_USE','CONNECT_TO_USE','WAIT_FOR_NEXT_QUESTION',
-  'ASK_BUDGET','RECOMMEND_BY_NEED','EXPLAIN_FIT','RECOMMEND_BY_PRIORITY','ASK_PRIORITY',
-  'ADVANCE_IF_INTEREST','WAIT_FOR_PRODUCT_QUESTION','RETURN_TO_PRODUCT','ADDRESS_OBJECTION',
-  'ASSISTED_HANDOFF','GUIDE_SELECTION','DISCOVER_ONE_FACT','OFFER_ALTERNATIVES','CLARIFY_OR_HANDOFF',
+  'ANSWER_ONLY','ASK_MISSING_FACT','OFFER_ALTERNATIVE','COMPARE','RECOMMEND','SOFT_CLOSE','ASSISTED_HANDOFF',
 ]);
+
+// Normalize legacy planner vocabulary into the bounded N+1 contract. This is a
+// compatibility guard only: nothing downstream receives the legacy action names.
+const NBA_ALIASES: Record<string,string> = {
+  ASK_NEED:'ASK_MISSING_FACT',
+  ASK_USE:'ASK_MISSING_FACT',
+  ASK_BUDGET:'ASK_MISSING_FACT',
+  ASK_PRIORITY:'ASK_MISSING_FACT',
+  DISCOVER_ONE_FACT:'ASK_MISSING_FACT',
+  CLARIFY_OR_HANDOFF:'ASK_MISSING_FACT',
+  CONTINUE_BY_NEED:'ANSWER_ONLY',
+  CONNECT_TO_USE:'ANSWER_ONLY',
+  WAIT_FOR_NEXT_QUESTION:'ANSWER_ONLY',
+  WAIT_FOR_PRODUCT_QUESTION:'ANSWER_ONLY',
+  RETURN_TO_PRODUCT:'ANSWER_ONLY',
+  ADVANCE_IF_INTEREST:'SOFT_CLOSE',
+  RECOMMEND_BY_NEED:'RECOMMEND',
+  RECOMMEND_BY_PRIORITY:'RECOMMEND',
+  EXPLAIN_FIT:'SOFT_CLOSE',
+  ADDRESS_OBJECTION:'OFFER_ALTERNATIVE',
+  OFFER_ALTERNATIVES:'OFFER_ALTERNATIVE',
+  GUIDE_SELECTION:'OFFER_ALTERNATIVE',
+};
+
 const STAGES = new Set(['INICIAL','DESCUBRIMIENTO','CONSIDERACION','EVALUACION','OBJECION','CIERRE','CIERRE_ASISTIDO']);
 
 function unique(values: Array<string | null | undefined>): string[] {
@@ -31,7 +53,8 @@ function canonicalIntent(value: string | null | undefined): string | null {
 }
 function canonicalNba(value: string | null | undefined): string | null {
   const v = String(value ?? '').trim().toUpperCase();
-  return NBAS.has(v) ? v : null;
+  const normalized = NBA_ALIASES[v] ?? v;
+  return NBAS.has(normalized) ? normalized : null;
 }
 function canonicalStage(value: string | null | undefined): string | null {
   const v = String(value ?? '').trim().toUpperCase();
@@ -123,7 +146,7 @@ export function validateTurnDecision(
   }
 
   const explicitSwitch = decision.explicitSwitch === true && Boolean(selectedProduct);
-  const purchaseLike = ['PURCHASE','HUMAN'].includes(primaryIntent);
+  const purchaseLike = ['PURCHASE','HUMAN','QUOTE'].includes(primaryIntent) || state.purchaseSignal === true;
   const proposedNba = canonicalNba(decision.nextBestAction);
   const fallbackNba = canonicalNba(fallbackDecision?.nextBestAction);
   const nextBestAction = purchaseLike ? 'ASSISTED_HANDOFF' : (proposedNba ?? fallbackNba);
