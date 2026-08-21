@@ -1,37 +1,69 @@
 import type { ConversationState } from '../../domain/types.ts';
 
+/**
+ * Bounded commercial next-best-action catalog.
+ *
+ * The action is intentionally coarse: it tells the writer what kind of move is
+ * allowed next without forcing a scripted phrase. Facts still come from SQL/RAG
+ * authorities; this layer only controls conversational progression.
+ */
 export function nextBestAction(intent: string, state: ConversationState = {}): string | null {
+  // A strong purchase signal is terminal for discovery: never ask the customer
+  // to re-explain needs once they already decided to advance.
+  if (state.purchaseSignal) return 'ASSISTED_HANDOFF';
+
   switch (intent) {
-    case 'GREETING': return 'ASK_NEED';
-    case 'PRODUCT_INFO': return state.useCase ? 'CONTINUE_BY_NEED' : 'ASK_USE';
+    case 'GREETING':
+      return 'ASK_MISSING_FACT';
+
+    // Complete factual questions should be answered directly. The writer may
+    // still be warm/commercial, but it must not manufacture a follow-up question.
+    case 'PRODUCT_INFO':
     case 'ATTRIBUTE':
-    case 'CAPABILITY': return state.useCase || state.problem ? 'CONNECT_TO_USE' : 'WAIT_FOR_NEXT_QUESTION';
-    case 'EVALUATE_USE':
-      if (!state.problem && !state.useCase) return 'ASK_USE';
-      if (state.budget == null) return 'ASK_BUDGET';
-      if (!state.recommendedProduct && !state.activeProduct) return 'RECOMMEND_BY_NEED';
-      return 'EXPLAIN_FIT';
-    case 'BUDGET_CONSTRAINT':
-      return state.problem || state.useCase || (state.priorities?.length ?? 0) > 0 ? 'RECOMMEND_BY_NEED' : 'ASK_NEED';
-    case 'RECOMMEND':
-    case 'RECOMMEND_WITHIN_BUDGET': return 'EXPLAIN_FIT';
-    case 'COMPARE': return (state.priorities ?? []).length ? 'RECOMMEND_BY_PRIORITY' : 'ASK_PRIORITY';
+    case 'CAPABILITY':
     case 'PRICE_AVAILABILITY':
     case 'PRICE':
-    case 'STOCK': return 'ADVANCE_IF_INTEREST';
+    case 'STOCK':
     case 'IMAGES':
-    case 'IMAGE': return 'WAIT_FOR_PRODUCT_QUESTION';
+    case 'IMAGE':
     case 'POLICY':
-    case 'WARRANTY': return state.activeProduct || state.recommendedProduct ? 'RETURN_TO_PRODUCT' : 'WAIT_FOR_NEXT_QUESTION';
+    case 'WARRANTY':
+    case 'ORDER_STATUS':
+      return 'ANSWER_ONLY';
+
+    case 'EVALUATE_USE':
+      if (!state.problem && !state.useCase) return 'ASK_MISSING_FACT';
+      if (state.budget == null && !state.recommendedProduct && !state.activeProduct) return 'ASK_MISSING_FACT';
+      if (!state.recommendedProduct && !state.activeProduct) return 'RECOMMEND';
+      return 'SOFT_CLOSE';
+
+    case 'BUDGET_CONSTRAINT':
+      return state.problem || state.useCase || (state.priorities?.length ?? 0) > 0
+        ? 'RECOMMEND'
+        : 'ASK_MISSING_FACT';
+
+    case 'RECOMMEND':
+    case 'RECOMMEND_WITHIN_BUDGET':
+      return 'SOFT_CLOSE';
+
+    case 'COMPARE':
+      return (state.priorities?.length ?? 0) > 0 ? 'RECOMMEND' : 'COMPARE';
+
     case 'OBJECTION':
-    case 'HANDLE_PRICE_OBJECTION': return 'ADDRESS_OBJECTION';
+    case 'HANDLE_PRICE_OBJECTION':
+      return 'OFFER_ALTERNATIVE';
+
     case 'PURCHASE':
     case 'HUMAN':
-    case 'QUOTE': return 'ASSISTED_HANDOFF';
+    case 'QUOTE':
+      return 'ASSISTED_HANDOFF';
+
     case 'CATALOG':
     case 'CATEGORIES':
-    case 'SUBCATEGORIES': return 'GUIDE_SELECTION';
-    case 'ORDER_STATUS': return null;
-    default: return 'DISCOVER_ONE_FACT';
+    case 'SUBCATEGORIES':
+      return 'OFFER_ALTERNATIVE';
+
+    default:
+      return 'ASK_MISSING_FACT';
   }
 }
