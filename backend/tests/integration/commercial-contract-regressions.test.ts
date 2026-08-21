@@ -93,3 +93,17 @@ test('after unknown product alternatives, ambiguous price continues with recomme
   assert.match(second.answer,/S\/\s*\d+/);
   assert.doesNotMatch(second.answer,/Armor 30.*no aparece|No encuentro Armor 30/i);
 });
+
+test('strong institutional pre-router wins when semantic planner returns OTHER', async () => {
+  const writer=new FakeLlmProvider();
+  const llm:LlmProvider={
+    async decide(){ return result(baseDecision({ primaryIntent:'OTHER', nextBestAction:'DISCOVER_ONE_FACT' })); },
+    write(input:LlmWriteInput){ return writer.write(input); },
+  };
+  const r=await new HybridConversationEngine(deps(llm)).processTurn({
+    sessionId:'s-institutional-prerouter', message:'hasta q hora atienden?', messageId:'m-institutional-prerouter',
+  });
+  assert.equal(r.debug.intent,'POLICY');
+  assert.equal(r.debug.route,'RAG_INSTITUTIONAL');
+  assert.equal(r.state.requiresRag,true);
+});
