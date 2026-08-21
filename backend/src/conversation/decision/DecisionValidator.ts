@@ -134,6 +134,12 @@ export function validateTurnDecision(
   const fallbackNba = canonicalNba(fallbackDecision?.nextBestAction);
   const nextBestAction = purchaseLike ? 'ASSISTED_HANDOFF' : (proposedNba ?? fallbackNba);
 
+  let comparisonProducts = unique((decision.comparisonProducts?.length ? decision.comparisonProducts : state.comparisonProducts ?? []).map(p => canonical(p, universe)));
+  const active = canonical(state.activeProduct, universe);
+  if (active && currentMentions.length === 1 && !explicitSwitch && fold(active) !== fold(currentMentions[0])) {
+    comparisonProducts = unique([active, currentMentions[0], ...comparisonProducts]).slice(0,2);
+  }
+
   return {
     ...decision,
     primaryIntent,
@@ -143,7 +149,7 @@ export function validateTurnDecision(
     referenceType,
     explicitSwitch,
     selectedProduct,
-    comparisonProducts: unique((decision.comparisonProducts?.length ? decision.comparisonProducts : state.comparisonProducts ?? []).map(p => canonical(p, universe))),
+    comparisonProducts,
     attributes: unique((decision.attributes ?? []).map(x => String(x).toUpperCase())),
     priorities: unique(decision.priorities ?? []),
     commercialStage: canonicalStage(decision.commercialStage) ?? canonicalStage(fallbackDecision?.commercialStage),
