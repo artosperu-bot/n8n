@@ -82,19 +82,50 @@ export function validateTurnDecision(
     ...(decision.comparisonProducts ?? []),
   ]);
 
-  const primaryIntent = canonicalIntent(decision.primaryIntent)
-    ?? canonicalIntent(fallbackDecision?.primaryIntent)
+  const fallbackIntent = canonicalIntent(fallbackDecision?.primaryIntent);
+  const fallbackReference = canonicalReference(fallbackDecision?.referenceType, null);
+  const fallbackTarget = canonical(fallbackDecision?.targetProduct, universe);
+  const currentMentions = unique((decision.mentionedProducts ?? []).map(p => canonical(p, universe)))
+    .filter(p => catalogCandidates.some(c => fold(c) === fold(p)));
+
+  let primaryIntent = canonicalIntent(decision.primaryIntent)
+    ?? fallbackIntent
     ?? 'OTHER';
-  const referenceType = canonicalReference(decision.referenceType, fallbackDecision?.referenceType);
+
+  // A single current product mention is not, by itself, a comparison. If deterministic parsing
+  // sees no comparison signal, do not let semantic overreach turn the message into COMPARE.
+  if (primaryIntent === 'COMPARE' && fallbackIntent !== 'COMPARE' && currentMentions.length < 2) {
+    primaryIntent = fallbackIntent ?? 'OTHER';
+  }
+
+  let referenceType = canonicalReference(decision.referenceType, fallbackDecision?.referenceType);
   const recentSelection = canonical(state.selectedProduct ?? state.salientProduct, universe);
   let targetProduct = canonical(decision.targetProduct, universe);
   let selectedProduct = canonical(decision.selectedProduct, universe);
+
+  // A named current product found by the authoritative catalog becomes the turn target without
+  // implying a switch of active product.
+  if (currentMentions.length === 1) {
+    targetProduct = currentMentions[0];
+    if (!decision.explicitSwitch) referenceType = 'NAMED_QUERY_TARGET';
+  }
 
   if (!targetProduct && catalogCandidates.length === 1) targetProduct = canonical(catalogCandidates[0], universe);
 
   if (referenceType === 'SELECTION_REFERENT' && recentSelection) {
     targetProduct = recentSelection;
     selectedProduct = recentSelection;
+  }
+
+  // After an unresolved product was answered with a verified recommendation, an ambiguous
+  // follow-up must continue from that recommendation instead of resurrecting the stale unknown.
+  if (!state.activeProduct && fallbackReference === 'RECOMMENDED_FALLBACK' && fallbackTarget) {
+    targetProduct = fallbackTarget;
+    referenceType = 'RECOMMENDED_FALLBACK';
+  }
+
+  if (referenceType === 'ACTIVE_PRODUCT_FALLBACK' && !state.activeProduct && fallbackReference) {
+    referenceType = fallbackReference;
   }
 
   const explicitSwitch = decision.explicitSwitch === true && Boolean(selectedProduct);
