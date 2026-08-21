@@ -8,10 +8,34 @@ type ProductDoc = { producto_id?: string; content?: string; metadata?: Record<st
 type Institutional = Record<string, any>;
 type Cache = { loadedAt: number; products: Product[]; docs: ProductDoc[]; institutional: Institutional[] };
 
+type InstitutionalTopic = { category: string; subcategory?: string };
+
 const STOP = new Set(['que','cual','como','tiene','para','del','de','el','la','los','las','una','uno','con','por']);
 function tokens(value: string): string[] { return [...new Set(fold(value).split(/[^a-z0-9]+/).filter(x => x.length >= 3 && !STOP.has(x)))]; }
 function validText(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
 function searchable(value: unknown): string { return fold(typeof value === 'string' ? value : JSON.stringify(value ?? '')); }
+
+export function resolveInstitutionalTopic(query: string): InstitutionalTopic | null {
+  const t = fold(query);
+  if (/\bcontra\s*entrega\b|\bcontraentrega\b/.test(t)) return { category:'pagos', subcategory:'contraentrega' };
+  if (/\b(medios?|formas?)\s+de\s+pago\b|\byape\b|\bplin\b|\btransferencia\b|\btarjeta\b/.test(t)) return { category:'pagos', subcategory:'medios_pago' };
+  if (/\brecoj[oaer]*\b|\brecoger\b/.test(t)) return { category:'entrega', subcategory:'recojo_tienda' };
+  if (/\bhorario\b/.test(t)) return { category:'ubicacion', subcategory:'horario' };
+  if (/\b(donde queda|direccion|ubicacion|tienda fisica)\b/.test(t)) return { category:'ubicacion', subcategory:'direccion' };
+  if (/\breembolso\b/.test(t)) return { category:'postventa', subcategory:'reembolsos' };
+  if (/\bgarantia\b/.test(t)) {
+    if (/\b(cambian|cambio|falla|fallo)\b/.test(t)) return { category:'garantia', subcategory:'evaluacion_y_resultado' };
+    return { category:'postventa', subcategory:'garantia_general' };
+  }
+  if (/\b(cambio|cambios|devolucion|devoluciones)\b/.test(t)) return { category:'postventa', subcategory:'cambios_devoluciones' };
+  if (/\b(separar|separacion|reserva|reservar)\b/.test(t)) return { category:'pedidos', subcategory:'reserva_separacion' };
+  if (/\benvio\b|\benvios\b|\blima\b|\bprovincia\b/.test(t)) {
+    if (/\bgratis|gratuito\b/.test(t)) return { category:'envios', subcategory:'envio_gratuito' };
+    if (/\b(cuanto|demora|plazo|tiempo|dias?|horas?|lima|provincia)\b/.test(t)) return { category:'envios', subcategory:'plazo_variable' };
+    return { category:'envios', subcategory:'disponibilidad' };
+  }
+  return null;
+}
 
 export class SupabaseRagRepository implements RagRepository {
   readonly #url: string;
@@ -80,17 +104,28 @@ export class SupabaseRagRepository implements RagRepository {
   async searchInstitutional(query: string, limit = 4): Promise<RagEvidence[]> {
     const cache = await this.#load();
     const qTokens = tokens(query);
-    const scored: Array<{ score: number; evidence: RagEvidence }> = [];
+    const topic = resolveInstitutionalTopic(query);
+    let pool = cache.institutional.filter(row => row.afirmable !== false);
+    if (topic) {
+      const exact = pool.filter(row => fold(row.categoria) === fold(topic.category) && (!topic.subcategory || fold(row.subcategoria) === fold(topic.subcategory)));
+      if (exact.length) pool = exact;
+      else {
+        const byCategory = pool.filter(row => fold(row.categoria) === fold(topic.category));
+        if (byCategory.length) pool = byCategory;
+      }
+    }
 
-    for (const row of cache.institutional) {
-      if (row.afirmable === false) continue;
+    const scored: Array<{ score: number; evidence: RagEvidence }> = [];
+    for (const row of pool) {
       const base = validText(row.respuesta_base) || validText(row.content);
       if (!base) continue;
       const hay = searchable([row.categoria,row.subcategoria,row.titulo,row.pregunta_canonica,row.preguntas_ejemplo,row.sinonimos,row.keywords,base]);
       let score = qTokens.reduce((n, token) => n + (hay.includes(token) ? 3 : 0), 0);
       score += Math.min(5, Number(row.prioridad ?? 0) / 20);
+      if (topic && fold(row.categoria) === fold(topic.category)) score += 50;
+      if (topic?.subcategory && fold(row.subcategoria) === fold(topic.subcategory)) score += 100;
       if (score <= 0) continue;
-      scored.push({ score, evidence: { text: base, source: `SUPABASE_INSTITUCIONAL:${String(row.categoria ?? 'general')}`, score, domain: 'INSTITUTIONAL' } });
+      scored.push({ score, evidence: { text: base, source: `SUPABASE_INSTITUCIONAL:${String(row.categoria ?? 'general')}:${String(row.subcategoria ?? 'general')}`, score, domain: 'INSTITUTIONAL' } });
     }
 
     return scored.sort((a,b) => b.score - a.score).slice(0, Math.max(1, Math.min(8, limit))).map(x => x.evidence);
