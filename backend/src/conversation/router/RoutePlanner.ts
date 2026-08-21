@@ -31,7 +31,7 @@ export function planRoute(intent: IntentPlan, context: RouteContext = {}): Route
   if (intent.primary === 'CATEGORIES') return { route: 'SQL_PRODUCTS', sqlTools: [SQL.categories], needsProductRag: false, needsInstitutionalRag: false, intents };
   if (intent.primary === 'SUBCATEGORIES') return { route: 'SQL_PRODUCTS', sqlTools: [SQL.subcategories], needsProductRag: false, needsInstitutionalRag: false, intents };
   if (intent.primary === 'CATALOG') return { route: 'SQL_PRODUCTS', sqlTools: [SQL.catalog], needsProductRag: false, needsInstitutionalRag: false, intents };
-  if (intent.primary === 'POLICY') return { route: 'RAG_INSTITUTIONAL', sqlTools: [], needsProductRag: false, needsInstitutionalRag: true, intents };
+  if (intent.primary === 'POLICY' || intent.primary === 'WARRANTY') return { route: 'RAG_INSTITUTIONAL', sqlTools: [], needsProductRag: false, needsInstitutionalRag: true, intents };
 
   if (intent.primary === 'PRODUCT_INFO' || intent.primary === 'ATTRIBUTE') {
     return { route: context.hasProduct ? 'RAG_PRODUCT' : 'CLARIFICATION', sqlTools: context.hasProduct ? [] : [SQL.resolve], needsProductRag: context.hasProduct, needsInstitutionalRag: false, intents };
