@@ -46,6 +46,7 @@ export type ChatTurnResult = {
     explicitSwitch: boolean;
     budget: number | null;
     priceObjection: boolean;
+    erp?: ProductQuote | null;
     llm?: LlmDebug;
     totalDurationMs?: number;
     automation?: { delivered: boolean; error?: string };
