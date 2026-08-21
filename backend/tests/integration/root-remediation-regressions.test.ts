@@ -32,12 +32,14 @@ test('institutional response accepts vector evidence by domain, not transport pr
   assert.equal(answer,'Atendemos de 10:00 a 17:00.');
 });
 
-test('ANSWER_ONLY is an output authority: writer cannot append a commercial question',async()=>{
+test('ANSWER_ONLY is an output authority: keeps grounded answer but removes appended commercial question',async()=>{
   const writer:LlmProvider={async write(){return {text:'Sí, tiene NFC. ¿Quieres que te confirme precio?',model:'gpt-test',usage,durationMs:1};}};
   const input:any={message:'tiene nfc?',intent:'CAPABILITY',state:{},decision:decision({primaryIntent:'CAPABILITY',nextBestAction:'ANSWER_ONLY'}),deterministicAnswer:'Sí, tiene NFC.'};
   const result=await safeWrite(writer,input,'Sí, tiene NFC.');
   assert.equal(result.answer,'Sí, tiene NFC.');
-  assert.equal(result.fallback.error,'NBA_ANSWER_ONLY_QUESTION');
+  assert.equal(result.fallback.delivered,true);
+  assert.equal(result.fallback.error,undefined);
+  assert.doesNotMatch(result.answer,/\?/);
 });
 
 test('writer rejects a product offer outside the SQL/context allowlist',async()=>{
