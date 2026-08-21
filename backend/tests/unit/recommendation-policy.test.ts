@@ -45,3 +45,21 @@ test('delivery context derives battery and resistance criteria without product h
   assert.ok(rows[0]?.criteria.includes('BATERIA'));
   assert.ok(rows[0]?.criteria.includes('RESISTENCIA'));
 });
+
+test('thermal inspection need makes TERMICA a first-class criterion',()=>{
+  const rows=rankRecommendations([
+    {quote:quote('Standard',900),evidence:[ev('Standard','TERMICA','Cámara térmica: No.',0.99)]},
+    {quote:quote('Thermal',1900),evidence:[ev('Thermal','TERMICA','Cámara térmica: Sí. Frecuencia térmica: 25 Hz. Resolución térmica horizontal: 160 px. Resolución térmica vertical: 120 px. Temperatura máxima térmica: 550 °C.',0.41)]},
+  ],{priorities:['termica'],useCase:'inspeccion de temperatura en mantenimiento industrial'});
+  assert.equal(rows[0]?.quote.shortName,'Thermal');
+  assert.ok(rows[0]?.criteria.includes('TERMICA'));
+  assert.ok((rows[0]?.criterionScores.TERMICA??0)>(rows[1]?.criterionScores.TERMICA??0));
+});
+
+test('technical tie does not silently become cheapest-product preference when price is not a criterion',()=>{
+  const rows=rankRecommendations([
+    {quote:quote('FirstCandidate',1200),evidence:[ev('FirstCandidate','CAMARA','Cámara principal: 50 MP. Cámara nocturna: 24 MP.',0.5)]},
+    {quote:quote('CheaperCandidate',700),evidence:[ev('CheaperCandidate','CAMARA','Cámara principal: 50 MP. Cámara nocturna: 24 MP.',0.5)]},
+  ],{priorities:['camara']});
+  assert.deepEqual(rows.map(x=>x.quote.shortName),['FirstCandidate','CheaperCandidate']);
+});
