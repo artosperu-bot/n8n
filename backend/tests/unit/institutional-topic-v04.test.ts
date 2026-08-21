@@ -14,6 +14,13 @@ test('routes common policy questions to exact institutional topics',()=>{
   assert.deepEqual(resolveInstitutionalTopic('¿Puedo recogerlo en tienda?'),{category:'entrega',subcategory:'recojo_tienda'});
 });
 
+test('routes colloquial store, warranty and payment language',()=>{
+  assert.deepEqual(resolveInstitutionalTopic('hasta q hora atienden?'),{category:'ubicacion',subcategory:'horario'});
+  assert.deepEqual(resolveInstitutionalTopic('donde queda su tienda?'),{category:'ubicacion',subcategory:'direccion'});
+  assert.deepEqual(resolveInstitutionalTopic('si falla me lo cambian?'),{category:'garantia',subcategory:'evaluacion_y_resultado'});
+  assert.deepEqual(resolveInstitutionalTopic('como validan mi pago?'),{category:'pagos',subcategory:'validacion_pago'});
+});
+
 test('routes order/payment lifecycle policies without global lexical search',()=>{
   assert.deepEqual(resolveInstitutionalTopic('¿Cómo confirmo mi pedido?'),{category:'pagos',subcategory:'confirmacion_pedido'});
   assert.deepEqual(resolveInstitutionalTopic('¿Puedo cancelar el pedido?'),{category:'pagos',subcategory:'cancelacion_pedido'});
