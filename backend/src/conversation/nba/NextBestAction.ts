@@ -2,22 +2,18 @@ import type { ConversationState } from '../../domain/types.ts';
 
 /**
  * Bounded commercial next-best-action catalog.
- *
- * The action is intentionally coarse: it tells the writer what kind of move is
- * allowed next without forcing a scripted phrase. Facts still come from SQL/RAG
- * authorities; this layer only controls conversational progression.
+ * Facts still come from SQL/RAG authorities; this layer only controls progression.
  */
 export function nextBestAction(intent: string, state: ConversationState = {}): string | null {
-  // A strong purchase signal is terminal for discovery: never ask the customer
-  // to re-explain needs once they already decided to advance.
-  if (state.purchaseSignal) return 'ASSISTED_HANDOFF';
+  const normalized=String(intent??'').toUpperCase();
+  const multiUnit=(state.quantity??1)>=2;
 
-  switch (intent) {
+  if (state.purchaseSignal) return multiUnit ? 'ASSISTED_HANDOFF' : 'COLLECT_RESERVATION_DATA';
+
+  switch (normalized) {
     case 'GREETING':
       return 'ASK_MISSING_FACT';
 
-    // Complete factual questions should be answered directly. The writer may
-    // still be warm/commercial, but it must not manufacture a follow-up question.
     case 'PRODUCT_INFO':
     case 'ATTRIBUTE':
     case 'CAPABILITY':
@@ -32,8 +28,7 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
       return 'ANSWER_ONLY';
 
     case 'EVALUATE_USE':
-      if (!state.problem && !state.useCase) return 'ASK_MISSING_FACT';
-      if (state.budget == null && !state.recommendedProduct && !state.activeProduct) return 'ASK_MISSING_FACT';
+      if (!state.problem && !state.useCase && !(state.priorities?.length)) return 'ASK_MISSING_FACT';
       if (!state.recommendedProduct && !state.activeProduct) return 'RECOMMEND';
       return 'SOFT_CLOSE';
 
@@ -54,6 +49,7 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
       return 'OFFER_ALTERNATIVE';
 
     case 'PURCHASE':
+      return multiUnit ? 'ASSISTED_HANDOFF' : 'COLLECT_RESERVATION_DATA';
     case 'HUMAN':
     case 'QUOTE':
       return 'ASSISTED_HANDOFF';
