@@ -10,6 +10,7 @@ import { extractCommercialFacts } from './commercial/CommercialFacts.ts';
 import { productEvidenceSections } from './commercial/ProductEvidencePolicy.ts';
 import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, stockResponse } from './commercial/ResponsePolicy.ts';
 import { validateTurnDecision } from './decision/DecisionValidator.ts';
+import { resolveInstitutionalTopic } from './institutional/InstitutionalTopicResolver.ts';
 import { resolveIntentPlan } from './intent/IntentPlan.ts';
 import { nextBestAction } from './nba/NextBestAction.ts';
 import { resolveReference } from './reference/ReferenceResolver.ts';
@@ -70,7 +71,12 @@ function strategyFor(intent: string): string {
 function fallbackDecision(message: string, state: ConversationState): TurnDecision {
   const plan = resolveIntentPlan(message);
   const ref = resolveReference(message, state);
-  const intent = normalizeIntent(plan.primary, state.budget ?? null);
+  const institutional = resolveInstitutionalTopic(message);
+  const institutionalIntent = institutional
+    ? (institutional.category === 'garantia' || (institutional.category === 'postventa' && institutional.subcategory === 'garantia_general') ? 'WARRANTY' : 'POLICY')
+    : null;
+  const primary = plan.primary === 'OTHER' && institutionalIntent ? institutionalIntent : plan.primary;
+  const intent = normalizeIntent(primary, state.budget ?? null);
   return {
     primaryIntent:intent,
     secondaryIntents:plan.secondary.map(x => normalizeIntent(x, state.budget ?? null)),
@@ -91,7 +97,7 @@ function fallbackDecision(message: string, state: ConversationState): TurnDecisi
     needsSql:['PRICE','STOCK','IMAGE','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','ORDER_STATUS'].includes(intent),
     needsProductRag:['PRODUCT_INFO','CAPABILITY','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','EVALUATE_USE','HANDLE_PRICE_OBJECTION'].includes(intent),
     needsInstitutionalRag:['POLICY','WARRANTY'].includes(intent),
-    confidence:plan.confidence,
+    confidence:institutionalIntent && primary === institutionalIntent ? 0.99 : plan.confidence,
   };
 }
 function plannerDebug(result: LlmDecisionResult | null) {
@@ -452,18 +458,17 @@ export class HybridConversationEngine {
         answer,
         state:{...nextState,contextVersion:(previous.contextVersion??0)+1},
         debug:{
-          intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,queryTarget:nextState.queryTarget??null,explicitSwitch,budget:nextState.budget??null,priceObjection:budgetTurn.priceObjection,
-          erp:quote,images,ragSources:rag.map(x=>x.source),planner:plannerDebug(planner),
-          llm:writerResult?.llmResult?{model:writerResult.llmResult.model,inputTokens:writerResult.llmResult.usage.inputTokens,outputTokens:writerResult.llmResult.usage.outputTokens,totalTokens:writerResult.llmResult.usage.totalTokens,cachedInputTokens:writerResult.llmResult.usage.cachedInputTokens,durationMs:writerResult.llmResult.durationMs}:undefined,
-          plannerFallback:plannerFailure?{delivered:false,error:plannerFailure}:undefined,
-          writerFallback:writerResult?.fallback,totalDurationMs:Math.max(0,Math.round(performance.now()-started)),telemetry,automation,
+          intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,
+          queryTarget:decision.targetProduct??target,activeProduct,salientProduct,selectedProduct,recommendedProduct,comparisonProducts,
+          requestedUnknown,ragCount:rag.length,imageCount:images.length,nextBestAction:nba,
+          handoff,handoffReason,planner:plannerDebug(planner),plannerFailure,
+          writer:writerResult?{model:writerResult.model,fallback:writerResult.fallback}:undefined,
+          telemetry,automation,durationMs:Math.max(0,Math.round(performance.now()-started)),
         },
       };
     } catch(error) {
       if(leaseAcquired&&this.#deps.conversations.failTurn){
-        try{
-          await this.#deps.conversations.failTurn(input.sessionId,messageId,error instanceof Error?error.message:String(error));
-        }catch{}
+        try{await this.#deps.conversations.failTurn(input.sessionId,messageId,error instanceof Error?error.message:String(error));}catch{}
       }
       throw error;
     }
