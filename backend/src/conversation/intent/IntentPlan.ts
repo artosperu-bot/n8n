@@ -57,7 +57,8 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(subcategorias?)\b/)) hits.push('SUBCATEGORIES');
   if (has(/\b(catalogo|que productos|que equipos|que modelos tienen|muestrame)\b/)) hits.push('CATALOG');
   if (has(/\b(compara|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)) hits.push('COMPARE');
-  const recommendationLanguage = has(/\b(recomienda|recomiendas|recomendacion|cual me conviene|que modelo me conviene|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica)\b/)
+  const recommendationLanguage = has(/\b(recomienda|recomiendas|recomiendan|recomendar|recomendacion|cual me conviene|que modelo me conviene|que modelo entra|q modelo entra|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica|cual parecido|que parecido|cual similar|que similar)\b/)
+    || has(/\b(cual|que|q)\b[^?.!]{0,35}\b(parecido|similar)\b[^?.!]{0,35}\b(tienen|hay|disponible)\b/)
     || has(/\b(cual|que|qué)\b[^?.!]{0,45}\b(?:entra|cabe|queda)\b[^?.!]{0,35}\bpresupuesto\b/)
     || has(/\b(?:el|la)\s+mas\s+(?:resistente|potente|economico|barato|rapido)\b/)
     || has(/\b(?:cual|que)\b[^?.!]{0,40}\b(?:mejor|mayor)\s+(?:bateria|camara|rendimiento|resistencia|pantalla|memoria)\b/)
