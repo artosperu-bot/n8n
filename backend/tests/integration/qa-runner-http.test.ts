@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runLiveQa } from '../../scripts/qa-live.ts';
 
-test('live runner uses HTTP boundary, deterministic ids and aggregates usage', async () => {
+test('live runner uses HTTP boundary, deterministic ids and aggregates planner plus writer usage', async () => {
   const chats: any[] = [];
   const fetcher: typeof fetch = async (url, init: any = {}) => {
     const target = String(url);
@@ -19,6 +19,7 @@ test('live runner uses HTTP boundary, deterministic ids and aggregates usage', a
         debug: {
           intent: 'PRICE', queryTarget: 'Armor X13', explicitSwitch: false, budget: null, priceObjection: false,
           erp: { product: 'Armor X13', price: 899, stock: 4, currency: 'PEN', source: 'SQL_BRIDGE' },
+          planner: { model: 'gpt-live', inputTokens: 25, outputTokens: 5, totalTokens: 30, cachedInputTokens: 0, durationMs: 20 },
           llm: { model: 'gpt-live', inputTokens: 100, outputTokens: 20, totalTokens: 120, cachedInputTokens: 10, durationMs: 50 },
           totalDurationMs: 70,
           automation: { delivered: true },
@@ -45,7 +46,9 @@ test('live runner uses HTTP boundary, deterministic ids and aggregates usage', a
   assert.equal(report.runId, 'qa-20260821-001530-a7f2');
   assert.equal(report.summary.green, 1);
   assert.equal(report.summary.red, 0);
-  assert.equal(report.usage.totalTokens, 120);
+  assert.equal(report.usage.totalTokens, 150);
+  assert.equal(report.usage.inputTokens, 125);
+  assert.equal(report.latency.averageLlmMs, 35);
   assert.equal(chats[0].sessionId, 'qa-20260821-001530-a7f2-PRICE-1');
   assert.equal(chats[0].messageId, 'qa-20260821-001530-a7f2:PRICE-1:t01');
 });
