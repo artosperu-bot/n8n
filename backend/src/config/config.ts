@@ -9,6 +9,7 @@ export type AppConfig = {
   automationMode: 'noop' | 'n8n';
   openAiApiKey?: string;
   openAiModel: string;
+  openAiEmbeddingModel: string;
   supabaseUrl?: string;
   supabaseServiceRoleKey?: string;
   supabaseSessionTable: string;
@@ -54,6 +55,7 @@ export function loadConfig(env: EnvLike = process.env): AppConfig {
     automationMode: env.N8N_MODE === 'n8n' ? 'n8n' : env.N8N_MODE === 'noop' ? 'noop' : test ? 'noop' : 'n8n',
     openAiApiKey: env.OPENAI_API_KEY,
     openAiModel: env.OPENAI_MODEL ?? 'REEMPLAZAR_MODELO_OPENAI',
+    openAiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small',
     supabaseUrl: env.SUPABASE_URL,
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
     supabaseSessionTable: env.SUPABASE_SESSION_TABLE ?? 'ia_sesiones',
