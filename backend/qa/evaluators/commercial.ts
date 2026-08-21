@@ -34,6 +34,10 @@ export function evaluateCommercial(observation: QaTurnObservation): QaFinding[] 
     }
   }
 
+  if (debug.telemetry?.delivered === false) {
+    findings.push({ level: 'YELLOW', code: 'TELEMETRY_DELIVERY_FAILED', message: `No se pudo persistir telemetría LLM: ${debug.telemetry.error ?? 'sin detalle'}` });
+  }
+
   if (debug.automation?.delivered === false) {
     findings.push({ level: 'YELLOW', code: 'AUTOMATION_DELIVERY_FAILED', message: `n8n no recibió el evento: ${debug.automation.error ?? 'sin detalle'}` });
   }
