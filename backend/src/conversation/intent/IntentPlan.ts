@@ -37,7 +37,9 @@ function isDirectImageRequest(t:string):boolean {
   if(!hasImage)return false;
   const captureUse=/\b(tomar|sacar|capturar|subir|subirlas|publicar)\b[^.!?]{0,45}\b(foto|fotos|imagen|imagenes)\b|\b(foto|fotos)\b[^.!?]{0,45}\b(redes|trabajo|trabajos|clientes)\b/.test(t);
   if(captureUse)return false;
-  return /\b(manda|mandame|enviame|envia|muestra|muestrame|pasame|pasa|quiero ver|ver)\b[^.!?]{0,35}\b(foto|fotos|imagen|imagenes)\b/.test(t)
+  const standaloneItem=/(?:^|[,;]\s*)\b(foto|fotos|imagen|imagenes)\b(?=\s*(?:[,;]|y\b|$))/.test(t);
+  return standaloneItem
+    || /\b(manda|mandame|enviame|envia|muestra|muestrame|pasame|pasa|quiero ver|ver)\b[^.!?]{0,35}\b(foto|fotos|imagen|imagenes)\b/.test(t)
     || /^(?:foto|fotos|imagen|imagenes)(?:\s+(?:ps|pues|porfa|por favor))?[?.!]*$/.test(t)
     || /^(?:foto|fotos|imagen|imagenes)\s+(?:del?|de la)\s+/.test(t);
 }
