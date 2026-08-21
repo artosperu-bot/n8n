@@ -47,3 +47,10 @@ test('validator accepts only bounded contextual N+1 actions proposed by the plan
   const invalid = validateTurnDecision(decision({ primaryIntent:'OTHER', nextBestAction:'DO_RANDOM_THING' }), {});
   assert.equal(invalid.nextBestAction, null);
 });
+
+test('factual price cannot be escalated to assisted handoff without a purchase signal', () => {
+  const planner = decision({ primaryIntent:'PRICE', nextBestAction:'ASSISTED_HANDOFF' });
+  const deterministic = decision({ primaryIntent:'PRICE', nextBestAction:'ANSWER_ONLY' });
+  const r = validateTurnDecision(planner, { purchaseSignal:false }, ['Armor X13'], deterministic);
+  assert.equal(r.nextBestAction,'ANSWER_ONLY');
+});
