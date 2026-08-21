@@ -40,7 +40,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(subcategorias?)\b/)) hits.push('SUBCATEGORIES');
   if (has(/\b(catalogo|que productos|que equipos|que modelos tienen|muestrame)\b/)) hits.push('CATALOG');
   if (has(/\b(compara|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)) hits.push('COMPARE');
-  if (has(/\b(recomienda|recomiendas|recomendacion|cual me conviene|que modelo me conviene|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica)\b/)) hits.push('RECOMMEND');
+  if (has(/\b(recomienda|recomiendas|recomendacion|cual me conviene|que modelo me conviene|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica)\b/) || has(/\b(cual|que|qué)\b[^?.!]{0,45}\b(?:entra|cabe|queda)\b[^?.!]{0,35}\bpresupuesto\b/)) hits.push('RECOMMEND');
   if (has(/\b(quiero comprar|comprarlo|comprarla|me quedo con|lo quiero|avanzar con la compra)\b/)) hits.push('PURCHASE');
   if (has(/\b(cotiza|cotizar|cotizacion|cotizarnos)\b/)) hits.push('QUOTE');
   if (has(/\b(asesor|humano|persona|vendedor)\b/)) hits.push('HUMAN');
