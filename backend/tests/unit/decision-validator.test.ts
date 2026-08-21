@@ -23,7 +23,7 @@ test('recent explicit selection beats stale recommendation for selection referen
   }, ['Armor X13','Armor 22','Armor 25T Pro']);
   assert.equal(r.targetProduct,'Armor 22');
   assert.equal(r.selectedProduct,'Armor 22');
-  assert.equal(r.nextBestAction,'ASSISTED_HANDOFF');
+  assert.equal(r.nextBestAction,'COLLECT_RESERVATION_DATA');
 });
 
 test('mere product mention cannot become an explicit switch without selection', () => {
@@ -53,4 +53,9 @@ test('factual price cannot be escalated to assisted handoff without a purchase s
   const deterministic = decision({ primaryIntent:'PRICE', nextBestAction:'ANSWER_ONLY' });
   const r = validateTurnDecision(planner, { purchaseSignal:false }, ['Armor X13'], deterministic);
   assert.equal(r.nextBestAction,'ANSWER_ONLY');
+});
+
+test('two or more units remain assisted handoff',()=>{
+  const r=validateTurnDecision(decision({primaryIntent:'PURCHASE',targetProduct:'Armor X13'}),{quantity:2,purchaseSignal:true},['Armor X13']);
+  assert.equal(r.nextBestAction,'ASSISTED_HANDOFF');
 });
