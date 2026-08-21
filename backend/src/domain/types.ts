@@ -2,6 +2,38 @@ import type { Intent } from '../conversation/intent/IntentResolver.ts';
 
 export type CustomerType = 'PERSONAL' | 'BUSINESS';
 export type ReservationStage = 'NEED_DOCUMENT'|'NEED_NAME'|'NEED_ADDRESS'|'READY'|'CONFIRMED';
+
+export type RecommendationCandidateTrace = {
+  product:string;
+  productId?:string|null;
+  score?:number|null;
+  confidence?:number|null;
+  criteria?:string[];
+  criterionScores?:Record<string,number>;
+  reasons?:string[];
+  tradeoffs?:string[];
+};
+export type RecommendationDecisionTrace = {
+  catalogCandidates:string[];
+  eligibleCandidates:RecommendationCandidateTrace[];
+  discardedCandidates:Array<{product:string;reason:'BUDGET'|'NO_STOCK'|'EXCLUDED'}>;
+  sectionsRequested:string[];
+  sectionsRecovered:string[];
+  rankedCandidates:RecommendationCandidateTrace[];
+  winner:string|null;
+};
+export type TurnDecisionTrace = {
+  deterministicIntent:string;
+  plannerIntent:string|null;
+  finalIntent:string;
+  route:string;
+  nextBestAction:string|null;
+  referenceType?:string|null;
+  targetProduct?:string|null;
+  writerFallback?:string|null;
+  recommendation?:RecommendationDecisionTrace|null;
+};
+
 export type ConversationState = {
   sessionId?: string;
   contextVersion?: number;
@@ -48,6 +80,7 @@ export type ConversationState = {
   lastResolvedProductCode?: string|null;
   lastProductResolutionConfidence?: number|null;
   lastProductResolutionOrigin?: string|null;
+  lastDecisionTrace?: TurnDecisionTrace|null;
   lastUserMessage?: string|null;
   lastAssistantMessage?: string|null;
   turnCount?: number;
@@ -127,6 +160,7 @@ export type ChatTurnResult = {
     recommendationCriteria?:string[];
     recommendationReasons?:string[];
     recommendationTradeoffs?:string[];
+    decisionTrace?:TurnDecisionTrace;
     planner?:LlmDebug;
     plannerFallback?:DeliveryDebug;
     plannerFailure?:string;
