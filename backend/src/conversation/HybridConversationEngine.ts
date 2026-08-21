@@ -291,7 +291,7 @@ export class HybridConversationEngine {
         const alternatives=await this.#rankCandidates(commercialState,query,commercialState.budget??99999999,target,2);
         recommendedProduct=productName(alternatives[0]?.quote)??null;
         rag=alternatives.flatMap(x=>x.evidence.slice(0,3));
-        nba=alternatives.length?'OFFER_ALTERNATIVES':'CLARIFY_OR_HANDOFF';
+        nba=alternatives.length?'OFFER_ALTERNATIVE':'ASK_MISSING_FACT';
         route=alternatives.length?'UNKNOWN_TO_ALTERNATIVES':'UNKNOWN_NO_ALTERNATIVE';
         if(alternatives.length)sqlTools.push('dbo.sp_ListarCatalogoVenta');
         const names=alternatives.map(x=>productName(x.quote)).filter(Boolean).join(' y ');
@@ -345,10 +345,15 @@ export class HybridConversationEngine {
         const fallback=subject?`Puedo ayudarte a evaluar ${subject}, pero no voy a afirmar características que no tenga verificadas.`:'¿Qué aspecto es más importante para ti en el equipo?';
         writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},quote,rag,deterministicAnswer:plan,decision},fallback);
         answer=writerResult.answer;route=rag.length?'RAG_PRODUCT':'COMMERCIAL_REASONING';
-      }else if(intent==='PURCHASE'||intent==='HUMAN'){
-        const selected=decision.selectedProduct??target??commercialState.selectedProduct??recommendedProduct??commercialState.activeProduct??null;
+      }else if(intent==='PURCHASE'){
+        const selected=decision.selectedProduct??commercialState.selectedProduct??target??recommendedProduct??commercialState.activeProduct??null;
         quote=await this.#quote(selected,initialCandidates);answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:selected,recommendedProduct},quote);
-        handoff=true;handoffReason=intent==='HUMAN'?'SOLICITUD_HUMANO':'CONTINUAR_VENTA';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';
+        handoff=true;handoffReason='CONTINUAR_VENTA';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';
+      }else if(intent==='HUMAN'){
+        const selected=decision.selectedProduct??commercialState.selectedProduct??null;
+        const handoffFocus=selected??decision.targetProduct??recommendedProduct??commercialState.activeProduct??null;
+        quote=await this.#quote(handoffFocus,initialCandidates);answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:handoffFocus,recommendedProduct},quote);
+        handoff=true;handoffReason='SOLICITUD_HUMANO';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';
       }else if(intent==='QUOTE'){
         answer=quoteRequestResponse({...commercialState,queryTarget:target,recommendedProduct});route='QUOTE_DISCOVERY';
         if(target&&facts.quantity){handoff=true;handoffReason='COTIZACION_LISTA_PARA_ASESOR';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';}
@@ -458,8 +463,24 @@ export class HybridConversationEngine {
       const telemetry=!plannerTelemetry.delivered?plannerTelemetry:writerTelemetry;
       let automation:{delivered:boolean;error?:string}={delivered:false};
       try{
+        const handoffProduct=selectedProduct??(intent==='QUOTE'?target:null);
         automation=handoff
-          ?await this.#deps.automation.publish({type:'handoff.requested',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{product:selectedProduct??activeProduct,reason:handoffReason,context:nextState}})
+          ?await this.#deps.automation.publish({
+            type:'handoff.requested',
+            occurredAt:new Date().toISOString(),
+            sessionId:input.sessionId,
+            payload:{
+              product:handoffProduct,
+              selectedProduct:selectedProduct??null,
+              activeProduct:activeProduct??null,
+              recommendedProduct:recommendedProduct??null,
+              comparisonProducts,
+              quantity:nextState.quantity??null,
+              invoiceRequired:nextState.invoiceRequired??null,
+              reason:handoffReason,
+              context:nextState,
+            },
+          })
           :await this.#deps.automation.publish({type:'conversation.turn.completed',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{intent,route,product:activeProduct,nextBestAction:nba}});
       }catch(error){automation={delivered:false,error:error instanceof Error?error.message:String(error)};}
 
