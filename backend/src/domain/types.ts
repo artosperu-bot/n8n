@@ -21,6 +21,7 @@ export type ConversationState = {
   requiresSql?: boolean;
   requiresRag?: boolean;
   spinFacts?: string[];
+  lastSpinContribution?: string|null;
   lastNba?: string|null;
   customerType?: CustomerType|null;
   sector?: string|null;
