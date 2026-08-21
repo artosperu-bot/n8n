@@ -14,6 +14,7 @@ import { SupabaseConversationRepository } from './adapters/supabase/SupabaseConv
 import { SupabaseRagRepository } from './adapters/supabase/SupabaseRagRepository.ts';
 import { SupabaseTelemetryRepository } from './adapters/supabase/SupabaseTelemetryRepository.ts';
 import { HybridConversationEngine } from './conversation/HybridConversationEngine.ts';
+import { RecentHistoryLlmProvider } from './conversation/history/RecentHistoryLlmProvider.ts';
 
 function need(value: string | undefined, name: string): string {
   if (!value || value.startsWith('REEMPLAZAR')) throw new Error(`${name} is required for selected adapter`);
@@ -63,9 +64,12 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
     ? new SupabaseRagRepository({ url: need(config.supabaseUrl,'SUPABASE_URL'), key: need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY'), rpc: config.supabaseRagRpc })
     : config.ragMode === 'fake' ? new FakeRagRepository() : new DisabledRagRepository();
 
-  const llm = config.llmMode === 'openai'
+  const baseLlm = config.llmMode === 'openai'
     ? new OpenAIProvider({ apiKey: need(config.openAiApiKey,'OPENAI_API_KEY'), model: need(config.openAiModel,'OPENAI_MODEL') })
     : new FakeLlmProvider();
+  const llm = config.llmMode === 'openai'
+    ? new RecentHistoryLlmProvider(baseLlm, conversations, 6)
+    : baseLlm;
 
   const automation = config.automationMode === 'n8n'
     ? new N8nAutomationBus({ url: need(config.n8nWebhookUrl,'N8N_WEBHOOK_URL'), token: config.n8nWebhookToken, strict: config.n8nStrict })
