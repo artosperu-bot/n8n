@@ -85,6 +85,26 @@ test('atomic persistence never overflows ia_conversaciones.spin_aporte varchar(3
   assert.ok(value.length <= 30, `spin_aporte overflow: ${value.length} chars: ${value}`);
 });
 
+test('atomic persistence includes compact decision trace inside commercial snapshot without schema changes', async () => {
+  let persistBody:any=null;
+  const fetcher:typeof fetch=async(input,init)=>{
+    const url=String(input);
+    if(url.includes('/rest/v1/ia_sesiones'))return Response.json([]);
+    if(url.includes('/rpc/ia_adquirir_turno'))return Response.json({ok:true,acquired:true,reason:'ACQUIRED'});
+    if(url.includes('/rpc/ia_persistir_turno_atomico')){persistBody=JSON.parse(String(init?.body??'{}'));return Response.json({ok:true,status:'SAVED',context_version:1});}
+    if(url.includes('/rpc/ia_liberar_turno'))return Response.json({ok:true,released:true,reason:'OK'});
+    return Response.json({});
+  };
+  const repo=new SupabaseConversationRepository({url:'https://example.supabase.co',key:'TEST_ONLY',fetcher});
+  const trace:any={deterministicIntent:'CAPABILITY',plannerIntent:'CAPABILITY',finalIntent:'RECOMMEND',route:'RAG_RECOMMENDATION',nextBestAction:'RECOMMEND',recommendation:{eligibleCandidates:[{product:'Armor 22'}],winner:'Armor 22',sectionsRequested:['CAMARA','RESISTENCIA'],rankedCandidates:[{product:'Armor 22',score:1}]}};
+  await repo.beginTurn('s-trace','m-trace','m-trace');
+  await repo.completeTurn('s-trace','quiero uno para fotos','Armor 22',{
+    sessionId:'s-trace',contextVersion:0,turnCount:1,lastIntent:'RECOMMEND',lastRoute:'RAG_RECOMMENDATION',lastNba:'RECOMMEND',recommendedProduct:'Armor 22',comparisonProducts:[],priorities:['camara'],spinFacts:[],lastDecisionTrace:trace,
+  } as any,{model:'gpt-test'});
+  assert.deepEqual(persistBody?.p_conversacion?.contexto_comercial_snapshot?.debug_trace,trace);
+  assert.deepEqual(persistBody?.p_contexto?.contexto?.debug_trace,trace);
+});
+
 test('hybrid engine marks acquired turn failed when processing throws before persistence', async () => {
   let failCalled = false;
   const conversations: any = {
