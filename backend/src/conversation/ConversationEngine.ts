@@ -3,6 +3,7 @@ import type { ConversationRepository } from '../ports/ConversationRepository.ts'
 import type { ErpRepository } from '../ports/ErpRepository.ts';
 import type { LlmProvider } from '../ports/LlmProvider.ts';
 import type { RagRepository } from '../ports/RagRepository.ts';
+import type { TelemetryRepository } from '../ports/TelemetryRepository.ts';
 import type { ChatInput, ChatTurnResult, ProductQuote } from '../domain/types.ts';
 import { classifyBudgetTurn } from './budget/BudgetResolver.ts';
 import { resolveIntent } from './intent/IntentResolver.ts';
@@ -12,6 +13,7 @@ import { reduceState } from './state/StateReducer.ts';
 
 type Dependencies = {
   conversations: ConversationRepository;
+  telemetry: TelemetryRepository;
   erp: ErpRepository;
   rag: RagRepository;
   llm: LlmProvider;
@@ -32,11 +34,18 @@ export class ConversationEngine {
   constructor(deps: Dependencies) { this.deps = deps; }
 
   async processTurn(input: ChatInput): Promise<ChatTurnResult> {
+    const turnStarted = performance.now();
     if (!input.sessionId?.trim()) throw new Error('sessionId is required');
     if (!input.message?.trim()) throw new Error('message is required');
 
     const previous = await this.deps.conversations.getState(input.sessionId);
-    await this.deps.conversations.appendMessage(input.sessionId, 'user', input.message);
+    const turnNumber = (previous.turnCount ?? 0) + 1;
+    const requestId = input.messageId?.includes(':') ? input.messageId.split(':')[0] : null;
+    await this.deps.conversations.appendMessage(input.sessionId, 'user', input.message, {
+      messageId: input.messageId ?? null,
+      requestId,
+      conversationType: input.sessionId.startsWith('qa-') ? 'QA_LIVE' : null,
+    });
 
     const budget = classifyBudgetTurn(input.message, { prevBudget: previous.budget ?? null });
     const baseIntent = resolveIntent(input.message, { staleIntent: previous.lastIntent ?? null });
@@ -87,20 +96,32 @@ export class ConversationEngine {
       spinResidual: budget.budgetConstraint ? budget.spinResidual : undefined
     });
 
-    const answer = await this.deps.llm.write({ message: input.message, intent, state, quote, rag, deterministicAnswer });
+    const llmResult = await this.deps.llm.write({ message: input.message, intent, state, quote, rag, deterministicAnswer });
+    await this.deps.telemetry.recordLlmUsage({
+      sessionId: input.sessionId,
+      turn: turnNumber,
+      route: intent,
+      model: llmResult.model,
+      inputTokens: llmResult.usage.inputTokens,
+      outputTokens: llmResult.usage.outputTokens,
+      cachedTokens: llmResult.usage.cachedInputTokens,
+      durationMs: llmResult.durationMs,
+      messageId: input.messageId ?? null,
+    });
+
     await this.deps.conversations.saveState(input.sessionId, state);
-    await this.deps.conversations.appendMessage(input.sessionId, 'assistant', answer);
+    await this.deps.conversations.appendMessage(input.sessionId, 'assistant', llmResult.text, { model: llmResult.model });
 
     const automation = await this.deps.automation.publish({
       type: intent === 'PURCHASE' ? 'purchase.intent' : 'conversation.turn.completed',
       occurredAt: new Date().toISOString(),
       sessionId: input.sessionId,
-      payload: { messageId: input.messageId ?? null, intent, queryTarget: reference.queryTarget, state, answer }
+      payload: { messageId: input.messageId ?? null, intent, queryTarget: reference.queryTarget, state, answer: llmResult.text }
     });
 
     return {
       sessionId: input.sessionId,
-      answer,
+      answer: llmResult.text,
       state,
       debug: {
         intent,
@@ -108,6 +129,15 @@ export class ConversationEngine {
         explicitSwitch: reference.explicitSwitch,
         budget: state.budget ?? null,
         priceObjection: budget.priceObjection,
+        llm: {
+          model: llmResult.model,
+          inputTokens: llmResult.usage.inputTokens,
+          outputTokens: llmResult.usage.outputTokens,
+          totalTokens: llmResult.usage.totalTokens,
+          cachedInputTokens: llmResult.usage.cachedInputTokens,
+          durationMs: llmResult.durationMs,
+        },
+        totalDurationMs: Math.max(0, Math.round(performance.now() - turnStarted)),
         automation
       }
     };
