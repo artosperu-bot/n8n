@@ -1,5 +1,5 @@
 import type { ErpRepository } from '../../ports/ErpRepository.ts';
-import type { ProductQuote } from '../../domain/types.ts';
+import type { ProductImage, ProductQuote } from '../../domain/types.ts';
 
 const TEST_QUOTES: ProductQuote[] = [
   { product: 'Armor X12 Pro', productCode: 'P000047', price: 699, stock: 5, currency: 'PEN', source: 'FAKE_TEST_DATA' },
@@ -10,4 +10,9 @@ const TEST_QUOTES: ProductQuote[] = [
 export class FakeErpRepository implements ErpRepository {
   async getProductQuote(product: string): Promise<ProductQuote | null> { return structuredClone(TEST_QUOTES.find(q => q.product.toLowerCase() === product.toLowerCase()) ?? null); }
   async listProductsWithinBudget(maxBudget: number): Promise<ProductQuote[]> { return structuredClone(TEST_QUOTES.filter(q => q.price != null && q.price <= maxBudget).sort((a,b) => (b.price ?? 0) - (a.price ?? 0))); }
+  async getProductImages(product: string, maxImages = 10): Promise<ProductImage[]> {
+    const known = TEST_QUOTES.find(q => q.product.toLowerCase() === product.toLowerCase());
+    if (!known) return [];
+    return [{ url:`https://example.test/${encodeURIComponent(known.productCode ?? known.product)}-1.jpg`, type:'principal', source:'FAKE_TEST_DATA' }].slice(0, maxImages);
+  }
 }
