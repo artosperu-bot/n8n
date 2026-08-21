@@ -2,9 +2,9 @@ import type { IntentPlan, SemanticIntent } from '../intent/IntentPlan.ts';
 
 export type SalesRoute =
   | 'DIRECT_RESPONSE' | 'SQL_PRODUCTS' | 'RAG_PRODUCT' | 'RAG_INSTITUTIONAL'
-  | 'SQL_AND_RAG' | 'COMPARISON' | 'CLARIFICATION' | 'ASSISTED_HANDOFF';
+  | 'SQL_AND_RAG' | 'COMPARISON' | 'CLARIFICATION' | 'RESERVATION_DATA' | 'ASSISTED_HANDOFF';
 
-export type RouteContext = { hasProduct?: boolean; hasOrderCredentials?: boolean };
+export type RouteContext = { hasProduct?: boolean; hasOrderCredentials?: boolean; quantity?: number|null };
 export type RoutePlan = { route: SalesRoute; sqlTools: string[]; needsProductRag: boolean; needsInstitutionalRag: boolean; intents: SemanticIntent[] };
 
 const SQL = {
@@ -22,7 +22,11 @@ function uniq(values: string[]): string[] { return [...new Set(values)]; }
 export function planRoute(intent: IntentPlan, context: RouteContext = {}): RoutePlan {
   const intents = [intent.primary, ...intent.secondary];
 
-  if (intent.primary === 'PURCHASE' || intent.primary === 'HUMAN' || intent.primary === 'QUOTE') {
+  if (intent.primary === 'PURCHASE') {
+    if ((context.quantity ?? 1) >= 2) return { route:'ASSISTED_HANDOFF', sqlTools:[], needsProductRag:false, needsInstitutionalRag:false, intents };
+    return { route: context.hasProduct ? 'RESERVATION_DATA' : 'CLARIFICATION', sqlTools: context.hasProduct ? [] : [SQL.resolve], needsProductRag:false, needsInstitutionalRag:false, intents };
+  }
+  if (intent.primary === 'HUMAN' || intent.primary === 'QUOTE') {
     return { route: 'ASSISTED_HANDOFF', sqlTools: [], needsProductRag: false, needsInstitutionalRag: false, intents };
   }
   if (intent.primary === 'ORDER_STATUS') {
