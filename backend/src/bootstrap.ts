@@ -13,7 +13,7 @@ import { OpenAIProvider } from './adapters/openai/OpenAIProvider.ts';
 import { SupabaseConversationRepository } from './adapters/supabase/SupabaseConversationRepository.ts';
 import { SupabaseRagRepository } from './adapters/supabase/SupabaseRagRepository.ts';
 import { SupabaseTelemetryRepository } from './adapters/supabase/SupabaseTelemetryRepository.ts';
-import { ConversationEngine } from './conversation/ConversationEngine.ts';
+import { HybridConversationEngine } from './conversation/HybridConversationEngine.ts';
 
 function need(value: string | undefined, name: string): string {
   if (!value || value.startsWith('REEMPLAZAR')) throw new Error(`${name} is required for selected adapter`);
@@ -79,6 +79,6 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
     rag,
     llm,
     automation,
-    engine: new ConversationEngine({ conversations, telemetry, erp, rag, llm, automation }),
+    engine: new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation }),
   };
 }
