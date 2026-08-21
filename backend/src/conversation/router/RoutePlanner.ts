@@ -22,7 +22,7 @@ function uniq(values: string[]): string[] { return [...new Set(values)]; }
 export function planRoute(intent: IntentPlan, context: RouteContext = {}): RoutePlan {
   const intents = [intent.primary, ...intent.secondary];
 
-  if (intent.primary === 'PURCHASE' || intent.primary === 'HUMAN') {
+  if (intent.primary === 'PURCHASE' || intent.primary === 'HUMAN' || intent.primary === 'QUOTE') {
     return { route: 'ASSISTED_HANDOFF', sqlTools: [], needsProductRag: false, needsInstitutionalRag: false, intents };
   }
   if (intent.primary === 'ORDER_STATUS') {
