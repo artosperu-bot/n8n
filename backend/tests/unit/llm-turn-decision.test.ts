@@ -52,6 +52,7 @@ test('GPT-5 mini returns a structured semantic/commercial turn decision', async 
   assert.equal(result.decision.nextBestAction, 'ASSISTED_HANDOFF');
   assert.equal(result.decision.confidence, 0.96);
   assert.equal(result.usage.totalTokens, 130);
-  assert.match(sent.instructions, /analista semantico/i);
+  assert.match(sent.instructions, /analista conversacional/i);
+  assert.match(String(sent.input), /HISTORIA_RECIENTE/);
   assert.match(String(sent.input), /Armor 25T Pro/);
 });
