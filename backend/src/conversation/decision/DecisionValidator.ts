@@ -92,8 +92,6 @@ export function validateTurnDecision(
     ?? fallbackIntent
     ?? 'OTHER';
 
-  // A single current product mention is not, by itself, a comparison. If deterministic parsing
-  // sees no comparison signal, do not let semantic overreach turn the message into COMPARE.
   if (primaryIntent === 'COMPARE' && fallbackIntent !== 'COMPARE' && currentMentions.length < 2) {
     primaryIntent = fallbackIntent ?? 'OTHER';
   }
@@ -103,8 +101,6 @@ export function validateTurnDecision(
   let targetProduct = canonical(decision.targetProduct, universe);
   let selectedProduct = canonical(decision.selectedProduct, universe);
 
-  // A named current product found by the authoritative catalog becomes the turn target without
-  // implying a switch of active product.
   if (currentMentions.length === 1) {
     targetProduct = currentMentions[0];
     if (!decision.explicitSwitch) referenceType = 'NAMED_QUERY_TARGET';
@@ -117,8 +113,6 @@ export function validateTurnDecision(
     selectedProduct = recentSelection;
   }
 
-  // After an unresolved product was answered with a verified recommendation, an ambiguous
-  // follow-up must continue from that recommendation instead of resurrecting the stale unknown.
   if (!state.activeProduct && fallbackReference === 'RECOMMENDED_FALLBACK' && fallbackTarget) {
     targetProduct = fallbackTarget;
     referenceType = 'RECOMMENDED_FALLBACK';
@@ -140,6 +134,7 @@ export function validateTurnDecision(
     comparisonProducts = unique([active, currentMentions[0], ...comparisonProducts]).slice(0,2);
   }
 
+  const targetNeedsResolution = Boolean(targetProduct && !catalogCandidates.some(p => fold(p) === fold(targetProduct!)));
   return {
     ...decision,
     primaryIntent,
@@ -157,9 +152,9 @@ export function validateTurnDecision(
       ? decision.spinContribution.trim().slice(0,240)
       : null,
     nextBestAction,
-    needsSql: decision.needsSql || forcedSql(primaryIntent) || Boolean(targetProduct && !catalogCandidates.some(p => fold(p) === fold(targetProduct!))),
-    needsProductRag: decision.needsProductRag || forcedProductRag(primaryIntent),
-    needsInstitutionalRag: decision.needsInstitutionalRag || forcedInstitutionalRag(primaryIntent),
+    needsSql: forcedSql(primaryIntent) || targetNeedsResolution,
+    needsProductRag: forcedProductRag(primaryIntent),
+    needsInstitutionalRag: forcedInstitutionalRag(primaryIntent),
     confidence: Number.isFinite(decision.confidence) ? Math.max(0, Math.min(1, decision.confidence)) : 0.5,
   };
 }
