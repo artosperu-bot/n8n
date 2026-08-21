@@ -24,6 +24,7 @@ export type QaTurnObservation = {
   ok: boolean;
   request: { sessionId: string; messageId: string; message: string };
   response: any;
+  persisted?: { sessionId?:string; state?:any; messages?:Array<{role:string;content:string;at?:string}> } | null;
   roundTripMs: number;
 };
 
