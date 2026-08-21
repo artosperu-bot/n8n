@@ -12,7 +12,9 @@ ROOT = Path(sys.argv[1] if len(sys.argv) > 1 else '.').resolve()
 SKIP_DIRS = {'.git', '.venv', 'venv', 'node_modules', '__pycache__'}
 ALLOW_MARKERS = ('__SECRET_', '__REDACTED__', '<REDACTED>', 'EXAMPLE_ONLY')
 PATTERNS = [
-    ('bearer_token', re.compile(r'(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}')),
+    # Avoid the documentation phrase "bearer service-role key" while retaining
+    # detection for actual bearer credential values.
+    ('bearer_token', re.compile(r'(?i)\bBearer\s+(?!service-role\b)[A-Za-z0-9._~+/=-]{12,}')),
     ('authorization_value', re.compile(r'(?i)["\']?Authorization["\']?\s*[:=]\s*["\'][^"\']{12,}["\']')),
     ('openai_key', re.compile(r'\bsk-[A-Za-z0-9_-]{16,}\b')),
     ('supabase_service_role', re.compile(r'(?i)\bservice[_-]?role\b.{0,30}\beyJ[A-Za-z0-9_-]{20,}')),
