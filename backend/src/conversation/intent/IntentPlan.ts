@@ -2,7 +2,7 @@ import { fold } from '../../shared/text.ts';
 
 export type SemanticIntent =
   | 'GREETING' | 'PRODUCT_INFO' | 'ATTRIBUTE' | 'EVALUATE_USE' | 'RECOMMEND'
-  | 'COMPARE' | 'PRICE_AVAILABILITY' | 'STOCK' | 'IMAGES' | 'POLICY'
+  | 'COMPARE' | 'PRICE_AVAILABILITY' | 'STOCK' | 'IMAGES' | 'POLICY' | 'WARRANTY'
   | 'ORDER_STATUS' | 'OBJECTION' | 'HUMAN' | 'PURCHASE' | 'CATALOG'
   | 'CATEGORIES' | 'SUBCATEGORIES' | 'OTHER';
 
@@ -41,15 +41,16 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(subcategorias?)\b/)) hits.push('SUBCATEGORIES');
   if (has(/\b(catalogo|que productos|que equipos|que modelos tienen|muestrame)\b/)) hits.push('CATALOG');
   if (has(/\b(compara|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)) hits.push('COMPARE');
-  if (has(/\b(recomienda|recomiendas|recomendacion|cual me conviene|que modelo me conviene)\b/)) hits.push('RECOMMEND');
+  if (has(/\b(recomienda|recomiendas|recomendacion|cual me conviene|que modelo me conviene|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica)\b/)) hits.push('RECOMMEND');
   if (has(/\b(quiero comprar|comprarlo|comprarla|me quedo con|lo quiero|avanzar con la compra)\b/)) hits.push('PURCHASE');
   if (has(/\b(asesor|humano|persona|vendedor)\b/)) hits.push('HUMAN');
   if (has(/\b(caro|sale de mi presupuesto|fuera de mi presupuesto|no confio|me preocupa|esperaba)\b/)) hits.push('OBJECTION');
-  if (has(/\b(tienda fisica|direccion|ubicacion|horario|recojo|envio|envios|provincia|lima|contraentrega|forma de pago|medios? de pago|yape|plin|transferencia|tarjeta|boleta|factura|garantia|cambio|devolucion|reembolso)\b/)) hits.push('POLICY');
+  if (has(/\bgarantia\b/)) hits.push('WARRANTY');
+  if (has(/\b(tienda fisica|direccion|ubicacion|horario|recojo|envio|envios|provincia|lima|contraentrega|forma de pago|medios? de pago|yape|plin|transferencia|tarjeta|boleta|factura|cambio|devolucion|reembolso)\b/)) hits.push('POLICY');
 
   const attributes = unique(ATTRS.filter(([rx]) => rx.test(t)).map(([, name]) => name));
   const productInfo = has(/\b(info|informacion|caracteristicas|especificaciones|ficha|cuentame|hablame)\b/) && has(/\b(armor|celular|telefono|equipo|modelo)\b/);
-  const use = has(/\b(trabajo|trabajar|construccion|campo|tecnico|juego|juegos|gaming|uso diario|se me cae|se me caen|necesito algo|me sirve|sirve para)\b/);
+  const use = has(/\b(trabajo|trabajar|construccion|campo|tecnico|juego|juegos|gaming|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para)\b/);
 
   if (productInfo) hits.push('PRODUCT_INFO');
   if (use) hits.push('EVALUATE_USE');
@@ -57,11 +58,10 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (/^(hola|buenas|buenos dias|buenas tardes|buenas noches)[\s!.,¿?]*$/.test(t)) hits.push('GREETING');
 
   const intents = unique(hits);
-  const precedence: SemanticIntent[] = [
-    'ORDER_STATUS', 'PURCHASE', 'PRICE_AVAILABILITY', 'STOCK', 'COMPARE', 'RECOMMEND',
-    'IMAGES', 'CATEGORIES', 'SUBCATEGORIES', 'CATALOG', 'POLICY', 'PRODUCT_INFO',
-    'OBJECTION', 'EVALUATE_USE', 'ATTRIBUTE', 'HUMAN', 'GREETING', 'OTHER',
-  ];
+  const declarativeNeed = use && has(/\b(necesito|necesitamos|busco|quiero algo)\b/) && !/[?¿]/.test(message);
+  const precedence: SemanticIntent[] = declarativeNeed
+    ? ['PURCHASE','PRICE_AVAILABILITY','STOCK','COMPARE','RECOMMEND','EVALUATE_USE','IMAGES','WARRANTY','POLICY','ATTRIBUTE','PRODUCT_INFO','OTHER']
+    : ['ORDER_STATUS','PURCHASE','PRICE_AVAILABILITY','STOCK','COMPARE','RECOMMEND','IMAGES','CATEGORIES','SUBCATEGORIES','CATALOG','WARRANTY','POLICY','PRODUCT_INFO','OBJECTION','EVALUATE_USE','ATTRIBUTE','HUMAN','GREETING','OTHER'];
   const primary = precedence.find(x => intents.includes(x)) ?? 'OTHER';
 
   return {
