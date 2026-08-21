@@ -5,12 +5,14 @@ import { FakeRagRepository } from './adapters/fake/FakeRagRepository.ts';
 import { DisabledRagRepository } from './adapters/fake/DisabledRagRepository.ts';
 import { FakeLlmProvider } from './adapters/fake/FakeLlmProvider.ts';
 import { NoopAutomationBus } from './adapters/fake/NoopAutomationBus.ts';
+import { NoopTelemetryRepository } from './adapters/fake/NoopTelemetryRepository.ts';
 import { N8nAutomationBus } from './adapters/n8n/N8nAutomationBus.ts';
 import { SqlBridgeErpRepository } from './adapters/sqlbridge/SqlBridgeErpRepository.ts';
 import { SqlServerErpRepository } from './adapters/sqlserver/SqlServerErpRepository.ts';
 import { OpenAIProvider } from './adapters/openai/OpenAIProvider.ts';
 import { SupabaseConversationRepository } from './adapters/supabase/SupabaseConversationRepository.ts';
 import { SupabaseRagRepository } from './adapters/supabase/SupabaseRagRepository.ts';
+import { SupabaseTelemetryRepository } from './adapters/supabase/SupabaseTelemetryRepository.ts';
 import { ConversationEngine } from './conversation/ConversationEngine.ts';
 
 function need(value: string | undefined, name: string): string {
@@ -29,6 +31,14 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
         conversationTable: config.supabaseConversationTable,
       })
     : new MemoryConversationRepository();
+
+  const telemetry = config.persistenceMode === 'supabase'
+    ? new SupabaseTelemetryRepository({
+        url: need(config.supabaseUrl,'SUPABASE_URL'),
+        key: need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY'),
+        table: config.supabaseTokenMetricsTable,
+      })
+    : new NoopTelemetryRepository();
 
   const erp = config.erpMode === 'sqlserver'
     ? new SqlServerErpRepository({
@@ -61,5 +71,14 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
     ? new N8nAutomationBus({ url: need(config.n8nWebhookUrl,'N8N_WEBHOOK_URL'), token: config.n8nWebhookToken, strict: config.n8nStrict })
     : new NoopAutomationBus();
 
-  return { config, conversations, erp, rag, llm, automation, engine: new ConversationEngine({ conversations, erp, rag, llm, automation }) };
+  return {
+    config,
+    conversations,
+    telemetry,
+    erp,
+    rag,
+    llm,
+    automation,
+    engine: new ConversationEngine({ conversations, telemetry, erp, rag, llm, automation }),
+  };
 }
