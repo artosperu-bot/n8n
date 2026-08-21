@@ -12,7 +12,8 @@
     "test": "node --experimental-strip-types scripts/run-tests.ts",
     "chat": "node --env-file-if-exists=.env --experimental-strip-types scripts/chat-cli.ts",
     "smoke": "node --experimental-strip-types scripts/smoke-test.ts",
-    "test:n8n": "node --env-file-if-exists=.env --experimental-strip-types scripts/test-n8n-gateway.ts"
+    "test:n8n": "node --env-file-if-exists=.env --experimental-strip-types scripts/test-n8n-gateway.ts",
+    "qa:live": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts"
   },
   "dependencies": { "mssql": "^12.7.0" }
 }
