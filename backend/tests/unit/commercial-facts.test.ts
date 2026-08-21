@@ -19,3 +19,18 @@ test('preserves prior commercial facts and detects invoice and purchase signal',
   assert.equal(f.invoiceRequired, true);
   assert.equal(f.purchaseSignal, true);
 });
+
+test('recognizes strong purchase signals without returning to discovery', () => {
+  const messages = [
+    'ya ese quiero',
+    'me llevo ese',
+    'me decidi por ese',
+    'como compro',
+    'lo compro',
+    'quiero avanzar',
+    'quiero q un asesor siga con la compra',
+  ];
+  for (const message of messages) {
+    assert.equal(extractCommercialFacts(message, {}).purchaseSignal, true, message);
+  }
+});
