@@ -36,3 +36,10 @@ test('missing identity or protected order credentials asks clarification',()=>{
   assert.equal(planRoute(p('IMAGES'),{hasProduct:false}).route,'CLARIFICATION');
   assert.equal(planRoute(p('ORDER_STATUS'),{hasOrderCredentials:false}).route,'CLARIFICATION');
 });
+
+test('warranty uses institutional RAG without product technical mixing',()=>{
+  const r=planRoute(p('WARRANTY'),{hasProduct:true});
+  assert.equal(r.route,'RAG_INSTITUTIONAL');
+  assert.equal(r.needsInstitutionalRag,true);
+  assert.equal(r.needsProductRag,false);
+});
