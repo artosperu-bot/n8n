@@ -108,6 +108,8 @@ export function validateTurnDecision(
   const fallbackIntent = canonicalIntent(fallbackDecision?.primaryIntent);
   const fallbackReference = canonicalReference(fallbackDecision?.referenceType, null);
   const fallbackTarget = canonical(fallbackDecision?.targetProduct, universe);
+  const decisionAttributes = unique((decision.attributes ?? []).map(x => String(x).toUpperCase()));
+  const fallbackAttributes = unique((fallbackDecision?.attributes ?? []).map(x => String(x).toUpperCase()));
   const currentMentions = unique((decision.mentionedProducts ?? []).map(p => canonical(p, universe)))
     .filter(p => catalogCandidates.some(c => fold(c) === fold(p)));
 
@@ -117,6 +119,14 @@ export function validateTurnDecision(
 
   if (primaryIntent === 'COMPARE' && fallbackIntent !== 'COMPARE' && currentMentions.length < 2) {
     primaryIntent = fallbackIntent ?? 'OTHER';
+  }
+
+  // A direct lexical attribute request is more specific than a generic LLM
+  // PRODUCT_INFO/EVALUATE_USE classification. Keep the deterministic attribute
+  // family so RAG retrieves the exact section (SIM, FISICO, SEGURIDAD, etc.).
+  const specificAttributeAuthority = fallbackIntent === 'CAPABILITY' && fallbackAttributes.length > 0;
+  if (specificAttributeAuthority && ['PRODUCT_INFO','OTHER','EVALUATE_USE'].includes(primaryIntent)) {
+    primaryIntent = 'CAPABILITY';
   }
 
   let referenceType = canonicalReference(decision.referenceType, fallbackDecision?.referenceType);
@@ -156,6 +166,9 @@ export function validateTurnDecision(
     comparisonProducts = unique([active, currentMentions[0], ...comparisonProducts]).slice(0,2);
   }
 
+  const attributes = primaryIntent === 'CAPABILITY' && specificAttributeAuthority
+    ? fallbackAttributes
+    : decisionAttributes;
   const targetNeedsResolution = Boolean(targetProduct && !catalogCandidates.some(p => fold(p) === fold(targetProduct!)));
   return {
     ...decision,
@@ -167,7 +180,7 @@ export function validateTurnDecision(
     explicitSwitch,
     selectedProduct,
     comparisonProducts,
-    attributes: unique((decision.attributes ?? []).map(x => String(x).toUpperCase())),
+    attributes,
     priorities: unique(decision.priorities ?? []),
     commercialStage: canonicalStage(decision.commercialStage) ?? canonicalStage(fallbackDecision?.commercialStage),
     spinContribution: typeof decision.spinContribution === 'string' && decision.spinContribution.trim() && !decision.spinContribution.includes('[object Object]')
