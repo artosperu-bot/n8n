@@ -21,7 +21,7 @@ export function resolveInstitutionalTopic(query:string):InstitutionalTopic|null 
     if(/\b(cambian|cambio|falla|fallo|reparan|resultado|evaluan|evaluacion)\b/.test(t))return{category:'garantia',subcategory:'evaluacion_y_resultado'};
     return{category:'postventa',subcategory:'garantia_general'};
   }
-  if(/\b(cambio|cambios|devolucion|devoluciones)\b/.test(t)){
+  if(/\b(cambio|cambios|devolucion|devoluciones|devolver|devolverlo|devolverla|devolverlos|devolverlas|devuelvo|devuelven)\b/.test(t)){
     if(/\benvio\b.*\b(seguro|devolver)|\bseguro\b.*\bdevol/.test(t))return{category:'postventa',subcategory:'devolucion_envio_seguro'};
     return{category:'postventa',subcategory:'cambios_devoluciones'};
   }
