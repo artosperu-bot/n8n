@@ -25,6 +25,16 @@ function tokens(value: string): string[] { return [...new Set(fold(value).split(
 function validText(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
 function searchable(value: unknown): string { return fold(typeof value === 'string' ? value : JSON.stringify(value ?? '')); }
 function boundedLimit(limit:number,max=12){return Math.max(1,Math.min(max,Number(limit)||1));}
+function institutionalAuthority(row:Institutional):string {
+  const full=validText(row.contenido)||validText(row.content);
+  const base=validText(row.respuesta_base);
+  if(full){
+    const official=full.match(/Informaci[oó]n oficial:\s*([\s\S]*?)(?:\nRespuesta base:|$)/i)?.[1]?.trim()??'';
+    if(official)return official;
+    if(!base)return full;
+  }
+  return base||full;
+}
 
 export class SupabaseRagRepository implements RagRepository {
   readonly #url: string;
@@ -154,7 +164,7 @@ export class SupabaseRagRepository implements RagRepository {
       if(exact.length)rows=exact;
     }
     return rows.slice(0,boundedLimit(limit,8)).map(row=>{
-      const base=validText(row.respuesta_base)||validText(row.contenido)||validText(row.content);
+      const base=institutionalAuthority(row);
       return {text:base,source:`SUPABASE_VECTOR_INSTITUCIONAL:${String(row.categoria??'general')}:${String(row.subcategoria??'general')}`,score:Number(row.similarity??0),domain:'INSTITUTIONAL'} as RagEvidence;
     }).filter(row=>Boolean(row.text));
   }
@@ -174,9 +184,9 @@ export class SupabaseRagRepository implements RagRepository {
     }
     const scored: Array<{ score: number; evidence: RagEvidence }> = [];
     for (const row of pool) {
-      const base = validText(row.respuesta_base) || validText(row.content);
+      const base = institutionalAuthority(row);
       if (!base) continue;
-      const hay = searchable([row.categoria,row.subcategoria,row.titulo,row.pregunta_canonica,row.preguntas_ejemplo,row.sinonimos,row.keywords,base]);
+      const hay = searchable([row.categoria,row.subcategoria,row.titulo,row.pregunta_canonica,row.preguntas_ejemplo,row.sinonimos,row.keywords,base,row.content]);
       let score = qTokens.reduce((n, token) => n + (hay.includes(token) ? 3 : 0), 0);
       score += Math.min(5, Number(row.prioridad ?? 0) / 20);
       if (topic && fold(row.categoria) === fold(topic.category)) score += 50;
