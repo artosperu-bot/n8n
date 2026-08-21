@@ -36,11 +36,19 @@ test('OpenAI adapter sends deterministic evidence through Responses API', async 
   let body: any;
   const fetcher: typeof fetch = async (_url, init) => {
     body = JSON.parse(String(init?.body));
-    return Response.json({ output: [{ type: 'message', content: [{ type: 'output_text', text: 'Respuesta final' }] }] });
+    return Response.json({
+      model: 'gpt-test',
+      output: [{ type: 'message', content: [{ type: 'output_text', text: 'Respuesta final' }] }],
+    });
   };
   const llm = new OpenAIProvider({ apiKey: 'key', model: 'gpt-test', fetcher });
-  const text = await llm.write({ message: 'precio?', intent: 'PRICE', state: { queryTarget: 'Armor 22' }, deterministicAnswer: 'Armor 22: S/ 1299.' });
-  assert.equal(text, 'Respuesta final');
+  const result = await llm.write({
+    message: 'precio?',
+    intent: 'PRICE',
+    state: { queryTarget: 'Armor 22' },
+    deterministicAnswer: 'Armor 22: S/ 1299.',
+  });
+  assert.equal(result.text, 'Respuesta final');
   assert.match(body.input, /S\/ 1299/);
   assert.match(body.instructions, /no inventes/i);
 });
