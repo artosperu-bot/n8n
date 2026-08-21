@@ -72,6 +72,6 @@ test('Golden runner records a failed turn but still executes the rest of the jou
     scenarios:[{id:'CONTINUE',family:'TRUTH',title:'continue',turns:[{message:'turno 1'},{message:'turno 2'},{message:'turno 3'}]}],
   });
   assert.equal(chats.length,3,'un RED no debe ocultar los turnos posteriores del journey');
-  assert.equal(report.results[0]?.turns.length,3);
+  assert.equal(report.scenarios[0]?.turns.length,3);
   assert.equal(report.summary.red,1);
 });
