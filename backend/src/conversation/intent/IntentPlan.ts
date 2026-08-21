@@ -15,14 +15,19 @@ export type IntentPlan = {
 };
 
 const ATTRS: Array<[RegExp, string]> = [
-  [/\b(bateria|autonomia|carga)\b/, 'BATERIA'],
-  [/\b(camara|foto|video|vision nocturna)\b/, 'CAMARA'],
-  [/\b(resistente|resistencia|ip68|ip69k|caida|golpe)\b/, 'RESISTENCIA'],
-  [/\b(nfc|wifi|bluetooth|usb|infrarrojo|gps)\b/, 'CONECTIVIDAD'],
-  [/\b(5g|4g|red|bandas|volte)\b/, 'REDES'],
-  [/\b(ram|memoria|almacenamiento|microsd)\b/, 'MEMORIA'],
+  [/\b(bateria|autonomia|carga|cargador|cargar)\b/, 'BATERIA'],
+  [/\b(camara|foto|fotos|video|vision nocturna)\b/, 'CAMARA'],
+  [/\b(resistente|resistencia|ip68|ip69k|mil(?:-std)?|caida|caidas|golpe|golpes|agua|polvo)\b/, 'RESISTENCIA'],
+  [/\b(nfc|wifi|wi fi|bluetooth|usb|otg|infrarrojo)\b/, 'CONECTIVIDAD'],
+  [/\b(5g|4g|lte|red|redes|bandas|volte)\b/, 'REDES'],
+  [/\b(sim|dual sim|nano sim|esim)\b/, 'SIM'],
+  [/\b(ram|memoria|almacenamiento|espacio|microsd|micro sd|rom)\b/, 'MEMORIA'],
   [/\b(procesador|rendimiento|cpu|gpu|rapido|velocidad)\b/, 'RENDIMIENTO'],
-  [/\b(pantalla|hz|resolucion)\b/, 'PANTALLA'],
+  [/\b(pantalla|display|hz|resolucion|pulgadas)\b/, 'PANTALLA'],
+  [/\b(huella|biometria|biometrico|desbloqueo facial|reconocimiento facial)\b/, 'SEGURIDAD'],
+  [/\b(peso|grosor|dimensiones|dimension|tamano|medidas|color)\b/, 'FISICO'],
+  [/\b(sensor|sensores|giroscopio|barometro|proximidad|brujula)\b/, 'SENSORES'],
+  [/\b(gps|galileo|glonass|beidou|posicionamiento)\b/, 'POSICIONAMIENTO'],
 ];
 
 function unique<T>(values: T[]): T[] { return [...new Set(values)]; }
@@ -33,7 +38,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const has = (rx: RegExp) => rx.test(t);
 
   if (has(/\b(precio|cuanto cuesta|cuanto vale|cuanto esta|cuanto sale|cuanto ta|a cuanto esta|a cuanto sale|costo)\b/)) hits.push('PRICE_AVAILABILITY');
-  if (has(/\b(stock|disponible|disponibilidad|hay unidades|tienen unidades)\b/)) hits.push('STOCK');
+  if (has(/\b(stock|stk|disponible|disponibilidad|hay unidades|tienen unidades|queda stock|quedan unidades)\b/)) hits.push('STOCK');
   if (has(/\b(foto|fotos|imagen|imagenes)\b/)) hits.push('IMAGES');
   if (has(/\b(pedido|orden)\b/) && has(/\b(consultar|estado|seguimiento|ver|revisar|donde)\b/)) hits.push('ORDER_STATUS');
   if (has(/\b(categorias?)\b/)) hits.push('CATEGORIES');
@@ -41,7 +46,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(catalogo|que productos|que equipos|que modelos tienen|muestrame)\b/)) hits.push('CATALOG');
   if (has(/\b(compara|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)) hits.push('COMPARE');
   if (has(/\b(recomienda|recomiendas|recomendacion|cual me conviene|que modelo me conviene|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica)\b/) || has(/\b(cual|que|qué)\b[^?.!]{0,45}\b(?:entra|cabe|queda)\b[^?.!]{0,35}\bpresupuesto\b/)) hits.push('RECOMMEND');
-  if (has(/\b(quiero comprar|comprarlo|comprarla|me quedo con|lo quiero|avanzar con la compra)\b/)) hits.push('PURCHASE');
+  if (has(/\b(quiero comprar|quiero comprarlo|quiero comprarla|comprarlo|comprarla|como compro|lo compro|la compro|me llevo (?:ese|esa|este|esta)|me quedo con|quiero (?:ese|esa|este|esta)|ya (?:ese|esa|este|esta) quiero|me decidi(?: por (?:ese|esa|este|esta))?|ya me decidi|lo quiero|la quiero|avanzar con la compra|quiero avanzar)\b/)) hits.push('PURCHASE');
   if (has(/\b(cotiza|cotizar|cotizacion|cotizarnos)\b/)) hits.push('QUOTE');
   if (has(/\b(asesor|humano|persona|vendedor)\b/)) hits.push('HUMAN');
   if (has(/\b(caro|sale de mi presupuesto|fuera de mi presupuesto|no confio|me preocupa|esperaba|descuento|otra tienda[^.!?]{0,60}(?:barato|economico)|mas barato)\b/)) hits.push('OBJECTION');
