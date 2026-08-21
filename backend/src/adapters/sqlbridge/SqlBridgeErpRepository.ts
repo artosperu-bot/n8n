@@ -25,13 +25,17 @@ function looksQuantityLike(text:string,model:string):boolean{
   const t=fold(text),m=model.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   return new RegExp(`\\b${m}\\s*(?:unidades?|equipos?|celulares?|uds?)\\b|\\b(?:cantidad|qty)\\s*[:=]?\\s*${m}\\b`,'i').test(t);
 }
+function looksAgeLike(text:string,model:string):boolean{
+  const t=fold(text),m=model.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return new RegExp(`\\b(?:tengo|edad)\\s+(?:de\\s+)?${m}\\s*(?:anos?)?\\b|\\b${m}\\s+anos?\\b`,'i').test(t);
+}
 function numericModelReference(query:string,model:string):boolean{
   if(/[a-z]/i.test(model))return true;
-  if(looksDateLike(query)||looksQuantityLike(query,model))return false;
+  if(looksDateLike(query)||looksQuantityLike(query,model)||looksAgeLike(query,model))return false;
   const t=fold(query),q=tokens(query),m=model.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   if(!q.includes(model))return false;
-  if(q.length<=5)return true;
-  return new RegExp(`\\b(?:el|modelo|armor|quiero|prefiero|elijo|vs|contra)\\s+(?:modelo\\s+)?${m}\\b|\\b${m}\\s+(?:quiero|prefiero|elijo|es\\s+mejor|vs|contra)\\b`,'i').test(t);
+  if(t===model)return true;
+  return new RegExp(`\\b(?:el|modelo|armor|quiero|prefiero|elijo|vs|contra)\\s+(?:modelo\\s+)?${m}\\b|\\b${m}\\s+(?:quiero|prefiero|elijo|es\\s+mejor|vs|contra|cuanto|precio|stock|stk|camara|bateria|foto|pesa)\\b`,'i').test(t);
 }
 function typoScore(query:string,product:string):number{
   const q=tokens(query),p=tokens(product);
