@@ -107,3 +107,24 @@ test('strong institutional pre-router wins when semantic planner returns OTHER',
   assert.equal(r.debug.route,'RAG_INSTITUTIONAL');
   assert.equal(r.state.requiresRag,true);
 });
+
+test('el otro inherits the previous factual intent while resolving the comparison alternative', async () => {
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-intent-inheritance',{
+    sessionId:'s-intent-inheritance', contextVersion:0, turnCount:3,
+    activeProduct:'Armor X13', activeProductId:'P-ARMOR-X13', activeProductCode:'P000048',
+    queryTarget:'Armor X13', salientProduct:'Armor X13', comparisonProducts:['Armor X13','Armor 22'],
+    lastIntent:'PRICE', spinFacts:[], priorities:[],
+  });
+  const writer=new FakeLlmProvider();
+  const llm:LlmProvider={
+    async decide(){ return result(baseDecision({ primaryIntent:'OTHER', nextBestAction:'DISCOVER_ONE_FACT' })); },
+    write(input:LlmWriteInput){ return writer.write(input); },
+  };
+  const r=await new HybridConversationEngine(deps(llm,conversations)).processTurn({
+    sessionId:'s-intent-inheritance', message:'y el otro?', messageId:'m-intent-inheritance',
+  });
+  assert.equal(r.debug.intent,'PRICE');
+  assert.equal(r.debug.queryTarget,'Armor 22');
+  assert.match(r.answer,/S\/\s*1199/);
+});
