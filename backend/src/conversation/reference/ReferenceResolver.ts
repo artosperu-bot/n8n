@@ -45,14 +45,40 @@ function productUniverse(state: ReferenceState, options: ReferenceOptions): stri
   ]);
 }
 
+function aliasesForProduct(product:string):string[] {
+  const parts=fold(product).split(/[^a-z0-9]+/).filter(Boolean);
+  const firstModel=parts.findIndex(p=>/\d/.test(p));
+  if(firstModel<0)return[];
+  const tail=parts.slice(firstModel);
+  const aliases=[tail[0],tail.join(' ')];
+  return unique(aliases.filter(a=>a.length>=2));
+}
+
+function contextualAliasProducts(message:string,universe:string[]):string[] {
+  const t=fold(message);
+  if(/\b(dia|fecha|llega|llegue|entrega|entregar|agosto|septiembre|octubre|noviembre|diciembre)\s+(?:el\s+)?\d{1,2}\b/.test(t))return[];
+  const owners=new Map<string,string[]>();
+  for(const product of universe){
+    for(const alias of aliasesForProduct(product))owners.set(alias,[...(owners.get(alias)??[]),product]);
+  }
+  const matches:string[]=[];
+  for(const [alias,products] of owners){
+    if(products.length!==1)continue;
+    const escaped=alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    if(new RegExp(`\\b${escaped}\\b`,'i').test(t))matches.push(products[0]);
+  }
+  return unique(matches);
+}
+
 function directNamedProducts(message: string, universe: string[]): string[] {
   const t = fold(message);
-  return universe
+  const direct=universe
     .filter(p => {
       const fp = fold(p);
       return fp.length >= 3 && t.includes(fp);
     })
     .sort((a, b) => fold(b).length - fold(a).length);
+  return direct.length?direct:contextualAliasProducts(message,universe);
 }
 
 function comparisonAlternative(state: ReferenceState): string | null {
@@ -92,10 +118,13 @@ export function resolveReference(message: string, state: ReferenceState, options
         : null;
 
   const product = named ?? referentialTarget;
-  const namedFold = named ? fold(named) : '';
-  const escapedName = namedFold.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const attributePreference = Boolean(named) && /\bprefiero\s+(?:la|el)\s+/.test(t) && !new RegExp(`\\bprefiero\\s+(?:el\\s+)?${escapedName}\\b`).test(t);
-  const namedSwitch = Boolean(named) && !attributePreference && /\b(prefiero|elijo|quiero\s+el|me\s+quedo\s+con\s+el|mejor\s+veamos|cambiemos\s+al?)\b/.test(t);
+  const namedAliases=named?unique([fold(named),...aliasesForProduct(named)]):[];
+  const namedSelection=Boolean(named)&&namedAliases.some(alias=>{
+    const escaped=alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    return new RegExp(`\\b(?:prefiero|elijo)\\s+(?:el\\s+)?${escaped}\\b|\\bquiero\\s+(?:el\\s+)?${escaped}\\b|\\bya\\s+(?:el\\s+)?${escaped}\\s+quiero\\b|\\bme\\s+quedo\\s+con\\s+(?:el\\s+)?${escaped}\\b`,'i').test(t);
+  });
+  const attributePreference = Boolean(named) && /\bprefiero\s+(?:la|el)\s+/.test(t) && !namedSelection;
+  const namedSwitch = Boolean(namedSelection && !attributePreference && fold(named!) !== fold(state.activeProduct ?? ''));
   const selectionSwitch = Boolean(selectionRef && product && fold(product) !== fold(state.activeProduct ?? ''));
   const explicitSwitch = namedSwitch || selectionSwitch;
 
@@ -103,15 +132,18 @@ export function resolveReference(message: string, state: ReferenceState, options
   let nextActiveProduct = explicitSwitch ? queryTarget : (state.activeProduct ?? null);
   if (!nextActiveProduct && named) nextActiveProduct = named;
 
-  const selectedProduct = explicitSwitch && queryTarget
-    ? queryTarget
-    : selectionRef && queryTarget
+  const selectedProduct = namedSelection && named
+    ? named
+    : explicitSwitch && queryTarget
       ? queryTarget
-      : state.selectedProduct ?? null;
+      : selectionRef && queryTarget
+        ? queryTarget
+        : state.selectedProduct ?? null;
 
   let reason = 'ACTIVE_PRODUCT_FALLBACK';
   if (unknownNamedProduct) reason = 'UNKNOWN_PRODUCT_MENTION';
-  else if (named) reason = namedSwitch ? 'EXPLICIT_PRODUCT_SWITCH' : mentionedProducts.length > 1 ? 'MULTI_PRODUCT_MENTION' : 'NAMED_QUERY_TARGET';
+  else if (namedSelection) reason = explicitSwitch ? 'EXPLICIT_PRODUCT_SWITCH' : 'SELECTION_REFERENT';
+  else if (named) reason = mentionedProducts.length > 1 ? 'MULTI_PRODUCT_MENTION' : 'NAMED_QUERY_TARGET';
   else if (selectionRef) reason = 'SELECTION_REFERENT';
   else if (recommendedRef) reason = 'RECOMMENDED_REFERENT';
   else if (otherRef) reason = 'COMPARISON_ALTERNATIVE';
