@@ -35,8 +35,8 @@ test('contextual N+1 answers complete factual questions without a forced follow-
   assert.equal(nextBestAction('POLICY', {}), 'ANSWER_ONLY');
 });
 
-test('contextual N+1 asks only a decision-changing missing fact', () => {
-  assert.equal(nextBestAction('EVALUATE_USE', { problem:'caidas_frecuentes', budget:null }), 'ASK_MISSING_FACT');
+test('sufficient decision context recommends instead of asking ritual discovery', () => {
+  assert.equal(nextBestAction('EVALUATE_USE', { problem:'caidas_frecuentes', budget:null }), 'RECOMMEND');
 });
 
 test('recommendation and comparison choose bounded commercial actions', () => {
@@ -44,7 +44,8 @@ test('recommendation and comparison choose bounded commercial actions', () => {
   assert.equal(nextBestAction('COMPARE', { comparisonProducts:['Armor X13','Armor 22'], priorities:['resistencia'] }), 'RECOMMEND');
 });
 
-test('strong purchase signal can never return to discovery', () => {
-  assert.equal(nextBestAction('OTHER', { purchaseSignal:true }), 'ASSISTED_HANDOFF');
-  assert.equal(nextBestAction('PURCHASE', { purchaseSignal:true }), 'ASSISTED_HANDOFF');
+test('strong purchase signal never returns to discovery and respects quantity contract', () => {
+  assert.equal(nextBestAction('OTHER', { purchaseSignal:true }), 'COLLECT_RESERVATION_DATA');
+  assert.equal(nextBestAction('PURCHASE', { purchaseSignal:true }), 'COLLECT_RESERVATION_DATA');
+  assert.equal(nextBestAction('PURCHASE', { purchaseSignal:true, quantity:2 }), 'ASSISTED_HANDOFF');
 });
