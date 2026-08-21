@@ -21,6 +21,11 @@ test('recognizes consultative need when customer describes work problem', () => 
   assert.equal(r.primary, 'EVALUATE_USE');
 });
 
+test('recognizes direct budget-fit request as recommendation', () => {
+  assert.equal(resolveIntentPlan('¿Cuál entra en mi presupuesto?').primary, 'RECOMMEND');
+  assert.equal(resolveIntentPlan('¿Qué modelo queda dentro de mi presupuesto?').primary, 'RECOMMEND');
+});
+
 test('recognizes catalog navigation and protected order lookup', () => {
   assert.equal(resolveIntentPlan('¿Qué categorías tienen?').primary, 'CATEGORIES');
   assert.equal(resolveIntentPlan('Muéstrame el catálogo de celulares').primary, 'CATALOG');
