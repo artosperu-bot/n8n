@@ -27,9 +27,10 @@ const PRIORITY_MAP:Record<string,string>={
 
 function unique(values:string[]):string[]{return [...new Set(values.filter(Boolean))];}
 function numberAfter(text:string,label:RegExp,unit:RegExp):number|null{
-  const match=text.match(new RegExp(`${label.source}[^\d]{0,35}(\d+(?:[.,]\d+)?)\s*${unit.source}`,'i'));
-  if(!match)return null;
-  const n=Number(match[1].replace(',','.'));
+  const pattern=`(?:${label.source})[^\\d]{0,35}(\\d+(?:[.,]\\d+)?)\\s*(?:${unit.source})`;
+  const raw=text.match(new RegExp(pattern,'i'))?.[1];
+  if(!raw)return null;
+  const n=Number(raw.replace(',','.'));
   return Number.isFinite(n)?n:null;
 }
 function yes(text:string,rx:RegExp):number{return rx.test(text)?1:0;}
