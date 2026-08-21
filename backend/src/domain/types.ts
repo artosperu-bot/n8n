@@ -79,6 +79,13 @@ export type SubcategoryOption = { code:string; name:string; categoryCode?:string
 export type OrderLookup = Record<string, unknown>;
 export type ProductImage = { url:string; type?:string|null; source:'FAKE_TEST_DATA'|'SQL_BRIDGE'|'SQL_SERVER' };
 export type RagEvidence = { text:string; source:string; score?:number; productId?:string|null; section?:string|null; domain?:'PRODUCT'|'INSTITUTIONAL' };
+export type VerifiedFact = {
+  domain:'SQL'|'PRODUCT_RAG'|'INSTITUTIONAL_RAG';
+  key:string;
+  value:string;
+  productId?:string|null;
+  source:string;
+};
 export type ChatInput = { sessionId:string; message:string; messageId?:string };
 export type LlmDebug = { model:string; inputTokens:number|null; outputTokens:number|null; totalTokens:number|null; cachedInputTokens:number|null; durationMs:number };
 export type DeliveryDebug = { delivered:boolean; error?:string };
