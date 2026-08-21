@@ -3,6 +3,7 @@ import type { Intent } from '../conversation/intent/IntentResolver.ts';
 export type CustomerType = 'PERSONAL' | 'BUSINESS';
 export type ConversationState = {
   sessionId?: string;
+  contextVersion?: number;
   activeProduct?: string|null;
   activeProductId?: string|null;
   activeProductCode?: string|null;
