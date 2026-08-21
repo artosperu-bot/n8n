@@ -42,3 +42,11 @@ test('protected order lookup calls sp_ConsultarPedido only with both exact value
   assert.equal(r?.numero_pedido, 'ABC123');
   assert.match(queries.at(-1)!, /^EXEC dbo\.sp_ConsultarPedido /);
 });
+
+test('searchProducts can resolve a product from natural customer text through the catalog SP', async () => {
+  const { erp, queries } = repo({ 'sp_BuscarProductosVenta': [{ producto: 'Armor 22', producto_rag_id: 'P-ARMOR-22-256G', precio: 1199, stock: 3 }] });
+  const rows = await erp.searchProducts!('también estoy viendo el Armor 22', 5);
+  assert.equal(rows[0].productRagId, 'P-ARMOR-22-256G');
+  assert.match(queries.at(-1)!, /@TextoBusqueda=N'también estoy viendo el Armor 22'/);
+  assert.match(queries.at(-1)!, /@MaxResultados=5/);
+});
