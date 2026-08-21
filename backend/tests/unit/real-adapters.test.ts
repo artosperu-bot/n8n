@@ -57,9 +57,10 @@ test('OpenAI adapter sends deterministic evidence through Responses API', async 
   assert.equal(result.text, 'Respuesta final');
   assert.match(body.input, /S\/ 1299/);
   assert.match(body.instructions, /no inventes/i);
-  assert.match(body.instructions, /corto y humano/i);
+  assert.match(body.instructions, /persona experta, cercana y concreta/i);
+  assert.match(body.instructions, /1 a 3 frases/i);
   assert.match(body.instructions, /ANSWER_ONLY/i);
-  assert.match(body.instructions, /sin (?:hacer )?pregunta/i);
+  assert.match(body.instructions, /responder y terminar/i);
   assert.match(body.instructions, /ASSISTED_HANDOFF/i);
-  assert.match(body.instructions, /no (?:digas|afirmes).*(?:reserva|pedido).*(?:confirmad|realizad)/i);
+  assert.match(body.instructions, /nunca inventes acciones completadas/i);
 });
