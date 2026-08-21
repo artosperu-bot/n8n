@@ -66,3 +66,51 @@ test('direct image request remains a deterministic URL-only fast path', async ()
   assert.match(r.answer,/^https:\/\//);
   assert.doesNotMatch(r.answer,/aqui|imagen|foto/i);
 });
+
+test('B2B multi-candidate handoff preserves context without inventing a selected product', async () => {
+  const conversations = new MemoryConversationRepository();
+  await conversations.saveState('s-b2b', {
+    activeProduct:'Armor X13',
+    selectedProduct:null,
+    recommendedProduct:'Armor 22',
+    comparisonProducts:['Armor X13','Armor 22'],
+    customerType:'BUSINESS',
+    quantity:12,
+    invoiceRequired:true,
+    turnCount:4,
+  });
+  const events:any[]=[];
+  const base = new FakeLlmProvider();
+  const llm:LlmProvider={
+    async decide(){
+      return {decision:{
+        primaryIntent:'HUMAN',secondaryIntents:[],targetProduct:null,mentionedProducts:[],referenceType:null,
+        explicitSwitch:false,selectedProduct:null,comparisonProducts:['Armor X13','Armor 22'],attributes:[],
+        customerNeed:'tecnicos de campo',customerProblem:null,priorities:['resistencia','bateria'],objection:null,
+        commercialStage:'CIERRE_ASISTIDO',spinContribution:null,nextBestAction:'ASSISTED_HANDOFF',
+        needsSql:false,needsProductRag:false,needsInstitutionalRag:false,confidence:0.99,
+      },model:'gpt-5-mini-test',usage:{inputTokens:10,outputTokens:10,totalTokens:20,cachedInputTokens:0},durationMs:1};
+    },
+    write(input:LlmWriteInput){return base.write(input);},
+  };
+  const engine=new HybridConversationEngine({
+    conversations,
+    telemetry:new NoopTelemetryRepository(),
+    erp:new FakeErpRepository(),
+    rag:new FakeRagRepository(),
+    llm,
+    automation:{async publish(event:any){events.push(event);return {delivered:true};}},
+  });
+
+  const r=await engine.processTurn({sessionId:'s-b2b',message:'quiero q un asesor siga con la compra'});
+  const event=events.at(-1);
+  assert.equal(event?.type,'handoff.requested');
+  assert.equal(event?.payload?.product,null);
+  assert.equal(event?.payload?.selectedProduct,null);
+  assert.equal(event?.payload?.activeProduct,'Armor X13');
+  assert.equal(event?.payload?.recommendedProduct,'Armor 22');
+  assert.deepEqual(event?.payload?.comparisonProducts,['Armor X13','Armor 22']);
+  assert.equal(event?.payload?.quantity,12);
+  assert.equal(event?.payload?.invoiceRequired,true);
+  assert.equal(r.state.selectedProduct,null);
+});
