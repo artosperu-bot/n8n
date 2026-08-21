@@ -36,6 +36,8 @@ export type LlmDebug = {
   durationMs: number;
 };
 
+export type DeliveryDebug = { delivered: boolean; error?: string };
+
 export type ChatTurnResult = {
   sessionId: string;
   answer: string;
@@ -49,7 +51,8 @@ export type ChatTurnResult = {
     erp?: ProductQuote | null;
     llm?: LlmDebug;
     totalDurationMs?: number;
-    automation?: { delivered: boolean; error?: string };
+    telemetry?: DeliveryDebug;
+    automation?: DeliveryDebug;
   };
 };
 
