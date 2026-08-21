@@ -114,3 +114,26 @@ test('B2B multi-candidate handoff preserves context without inventing a selected
   assert.equal(event?.payload?.invoiceRequired,true);
   assert.equal(r.state.selectedProduct,null);
 });
+
+test('explicit budget with known use cannot be degraded to OTHER by semantic planner', async () => {
+  const conversations = new MemoryConversationRepository();
+  await conversations.saveState('s-budget-authority', {
+    useCase:'delivery', priorities:['bateria','resistencia'], turnCount:2,
+  });
+  const base = new FakeLlmProvider();
+  const llm:LlmProvider={
+    async decide(){return {decision:{
+      primaryIntent:'OTHER',secondaryIntents:[],targetProduct:null,mentionedProducts:[],referenceType:null,
+      explicitSwitch:false,selectedProduct:null,comparisonProducts:[],attributes:[],customerNeed:'delivery',customerProblem:null,
+      priorities:['bateria','resistencia'],objection:null,commercialStage:'EVALUACION',spinContribution:null,
+      nextBestAction:'ASK_MISSING_FACT',needsSql:false,needsProductRag:false,needsInstitutionalRag:false,confidence:0.7,
+    },model:'gpt-test',usage:{inputTokens:1,outputTokens:1,totalTokens:2,cachedInputTokens:0},durationMs:1};},
+    write(input:LlmWriteInput){return base.write(input);},
+  };
+  const engine=new HybridConversationEngine(deps(llm,conversations));
+  const r=await engine.processTurn({sessionId:'s-budget-authority',message:'tengo 1000 maximo'});
+  assert.equal(r.state.budget,1000);
+  assert.equal(r.debug.intent,'RECOMMEND_WITHIN_BUDGET');
+  assert.notEqual(r.debug.route,'GENERAL_COMMERCIAL');
+  assert.ok(r.state.recommendedProduct);
+});
