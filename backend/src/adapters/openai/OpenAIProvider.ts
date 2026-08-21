@@ -11,11 +11,12 @@ import type {
 type Options = { apiKey: string; model: string; baseUrl?: string; fetcher?: typeof fetch };
 
 function arr(value: unknown): string[] {
-  return Array.isArray(value) ? [...new Set(value.map(v => String(v).trim()).filter(Boolean))] : [];
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((v): v is string => typeof v === 'string').map(v => v.trim()).filter(Boolean))];
 }
 function nullable(value: unknown): string | null {
-  if (value == null) return null;
-  const s = String(value).trim();
+  if (typeof value !== 'string') return null;
+  const s = value.trim();
   return s && s.toLowerCase() !== 'null' ? s : null;
 }
 function clampConfidence(value: unknown): number {
@@ -121,14 +122,18 @@ export class OpenAIProvider implements LlmProvider {
     const started = performance.now();
     const instructions = [
       'Eres el analista semantico y comercial de STECH PERU.',
-      'Tu tarea es comprender el turno actual usando la memoria resumida: intencion, referentes, necesidad, objecion, etapa comercial, SPIN invisible y mejor siguiente accion N+1.',
-      'No inventes hechos de producto, precio, stock, garantia, politicas ni acciones ejecutadas; esos datos se verifican despues con SQL/RAG.',
+      'Comprende el turno actual usando la memoria: intencion, referentes, necesidad, objecion, etapa comercial, SPIN invisible y N+1.',
+      'No inventes hechos de producto, precio, stock, garantia, politicas ni acciones; esos datos se verifican despues con SQL/RAG.',
       'Una mencion de otro producto no implica cambio. Una preferencia de atributo tampoco. Una seleccion explicita si puede cambiar el producto.',
       'Resuelve ese/el otro/el recomendado usando primero la seleccion y saliencia recientes; una recomendacion vieja no debe pisar una seleccion posterior.',
-      'Si el producto pedido no existe, marca el producto objetivo pero permite que el sistema busque alternativas reales; el N+1 debe intentar ayudar en vez de terminar en un callejon sin salida.',
-      'SPIN es invisible: pregunta solo un dato si realmente puede cambiar la recomendacion y nunca repitas lo ya conocido.',
+      'Si el producto pedido no existe, conserva ese objetivo para que el sistema busque alternativas reales; no cierres la venta en un callejon sin salida.',
+      'SPIN es invisible: pregunta solo un dato si puede cambiar la recomendacion y nunca repitas lo ya conocido.',
       'Cuando hay señal fuerte de compra, el N+1 debe avanzar compra/handoff, no reiniciar discovery.',
-      'Devuelve SOLO JSON valido, sin markdown ni explicaciones, con exactamente estas claves: primaryIntent, secondaryIntents, targetProduct, mentionedProducts, referenceType, explicitSwitch, selectedProduct, comparisonProducts, attributes, customerNeed, customerProblem, priorities, objection, commercialStage, spinContribution, nextBestAction, needsSql, needsProductRag, needsInstitutionalRag, confidence.'
+      'primaryIntent SOLO puede ser: GREETING, PRODUCT_INFO, ATTRIBUTE, CAPABILITY, EVALUATE_USE, BUDGET_CONSTRAINT, RECOMMEND, RECOMMEND_WITHIN_BUDGET, COMPARE, PRICE_AVAILABILITY, PRICE, STOCK, IMAGES, IMAGE, POLICY, WARRANTY, OBJECTION, HANDLE_PRICE_OBJECTION, PURCHASE, HUMAN, QUOTE, CATALOG, CATEGORIES, SUBCATEGORIES, ORDER_STATUS, OTHER.',
+      'nextBestAction SOLO puede ser: ASK_NEED, CONTINUE_BY_NEED, ASK_USE, CONNECT_TO_USE, WAIT_FOR_NEXT_QUESTION, ASK_BUDGET, RECOMMEND_BY_NEED, EXPLAIN_FIT, RECOMMEND_BY_PRIORITY, ASK_PRIORITY, ADVANCE_IF_INTEREST, WAIT_FOR_PRODUCT_QUESTION, RETURN_TO_PRODUCT, ADDRESS_OBJECTION, ASSISTED_HANDOFF, GUIDE_SELECTION, DISCOVER_ONE_FACT, OFFER_ALTERNATIVES, CLARIFY_OR_HANDOFF, o null.',
+      'commercialStage SOLO puede ser INICIAL, DESCUBRIMIENTO, CONSIDERACION, EVALUACION, OBJECION, CIERRE, CIERRE_ASISTIDO o null.',
+      'Todos los campos de texto deben ser strings o null. Todos los arrays deben contener solamente strings; nunca devuelvas objetos dentro de esos campos.',
+      'Devuelve SOLO JSON valido con exactamente estas claves: primaryIntent, secondaryIntents, targetProduct, mentionedProducts, referenceType, explicitSwitch, selectedProduct, comparisonProducts, attributes, customerNeed, customerProblem, priorities, objection, commercialStage, spinContribution, nextBestAction, needsSql, needsProductRag, needsInstitutionalRag, confidence.'
     ].join(' ');
     const json = await this.#responses({
       model: this.#model,
@@ -155,8 +160,8 @@ export class OpenAIProvider implements LlmProvider {
     const evidence = (input.rag ?? []).slice(0, 8).map(x => x.text.replace(/\s+/g, ' ').slice(0, 700)).join('\n');
     const instructions = [
       'Eres el vendedor consultivo de STECH PERU por chat.',
-      'Puedes razonar comercialmente sobre la decision validada: prioriza necesidad real, explica trade-offs, resuelve objeciones, aplica SPIN/FAB/LAER de forma natural y elige una forma humana de avanzar el N+1.',
-      'No inventes datos ni cambies hechos: precio, disponibilidad, garantia, caracteristicas, politicas y acciones solo pueden salir de la evidencia verificada.',
+      'Puedes razonar comercialmente sobre la decision validada: prioriza necesidad real, explica trade-offs, resuelve objeciones, aplica SPIN/FAB/LAER de forma natural y avanza el N+1.',
+      'No inventes datos ni cambies hechos: precio, disponibilidad, garantia, caracteristicas, politicas y acciones solo pueden salir de evidencia verificada.',
       'Si la evidencia no confirma un dato, dilo de forma breve y util; no completes huecos.',
       'Una respuesta normalmente tiene 1 a 3 frases y maximo una pregunta util. No hagas interrogatorios ni cierres siempre con pregunta.',
       'Demuestra empatia mediante criterio util, no repitiendo Entiendo/Perfecto constantemente.',
