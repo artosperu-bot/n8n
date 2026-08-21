@@ -20,3 +20,15 @@ test('price objection needs acknowledgement', () => {
   const findings = evaluateCommercial(observation('Compra el Armor X13 porque es mejor.', { intent: 'HANDLE_PRICE_OBJECTION', priceObjection: true }));
   assert.ok(findings.some(x => x.code === 'EMPATHY_WEAK_PRICE_OBJECTION'));
 });
+
+test('telemetry and n8n delivery failures are advisory yellow findings', () => {
+  const findings = evaluateCommercial(observation('Entiendo, busquemos una opción que encaje.', {
+    intent: 'HANDLE_PRICE_OBJECTION',
+    priceObjection: true,
+    telemetry: { delivered: false, error: 'metrics down' },
+    automation: { delivered: false, error: 'n8n 500' },
+  }));
+  assert.ok(findings.some(x => x.code === 'TELEMETRY_DELIVERY_FAILED'));
+  assert.ok(findings.some(x => x.code === 'AUTOMATION_DELIVERY_FAILED'));
+  assert.equal(findings.some(x => x.level === 'RED'), false);
+});
