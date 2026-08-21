@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { extractCommercialFacts } from '../../src/conversation/commercial/CommercialFacts.ts';
+
+test('extracts business quantity sector problem and priorities without an LLM', () => {
+  const f = extractCommercialFacts('Somos una empresa y necesitamos 12 celulares para técnicos que trabajan en construcción. Se les caen y necesitamos buena batería y resistencia.', {});
+  assert.equal(f.customerType, 'BUSINESS');
+  assert.equal(f.quantity, 12);
+  assert.equal(f.sector, 'construccion');
+  assert.match(f.problem ?? '', /caid/);
+  assert.deepEqual(f.priorities?.sort(), ['bateria', 'resistencia']);
+  assert.ok((f.spinFacts ?? []).includes('cantidad:12'));
+});
+
+test('preserves prior commercial facts and detects invoice and purchase signal', () => {
+  const f = extractCommercialFacts('Necesitamos factura y quiero avanzar con la compra', { customerType: 'BUSINESS', quantity: 12, sector: 'construccion' });
+  assert.equal(f.customerType, 'BUSINESS');
+  assert.equal(f.quantity, 12);
+  assert.equal(f.invoiceRequired, true);
+  assert.equal(f.purchaseSignal, true);
+});
