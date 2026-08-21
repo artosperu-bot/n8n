@@ -1,4 +1,4 @@
-import type { ConversationRepository } from '../../ports/ConversationRepository.ts';
+import type { ConversationMessageMeta, ConversationRepository } from '../../ports/ConversationRepository.ts';
 import type { ConversationState } from '../../domain/types.ts';
 
 type Options = {
@@ -39,7 +39,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
   }
 
   async #ensureSession(sessionId: string): Promise<void> {
-    const body = [{ session_id: sessionId, canal: 'backend' }];
+    const body = [{ session_id: sessionId, canal: sessionId.startsWith('qa-') ? 'qa_live' : 'backend' }];
     const r = await this.#fetcher(
       `${this.#url}/rest/v1/${this.#sessionTable}?on_conflict=session_id`,
       {
@@ -91,15 +91,24 @@ export class SupabaseConversationRepository implements ConversationRepository {
     this.#lastState.set(sessionId, structuredClone(normalized));
   }
 
-  async appendMessage(sessionId: string, role: 'user' | 'assistant', content: string): Promise<void> {
+  async appendMessage(
+    sessionId: string,
+    role: 'user' | 'assistant',
+    content: string,
+    meta: ConversationMessageMeta = {},
+  ): Promise<void> {
     await this.#ensureSession(sessionId);
+    const isQa = sessionId.startsWith('qa-');
 
     if (role === 'user') {
       const body = [{
         session_id: sessionId,
         mensaje_cliente: content,
         respuesta_bot: null,
-        modelo: 'stech-backend',
+        message_id: meta.messageId ?? null,
+        request_id: meta.requestId ?? null,
+        tipo_conversacion: meta.conversationType ?? (isQa ? 'QA_LIVE' : null),
+        modelo: meta.model ?? 'stech-backend',
         fecha: new Date().toISOString(),
       }];
       const r = await this.#fetcher(`${this.#url}/rest/v1/${this.#conversationTable}`, {
@@ -124,6 +133,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       producto_detectado: state?.queryTarget ?? state?.activeProduct ?? null,
       presupuesto_detectado: state?.budget ?? null,
       cambio_producto_explicito: state?.explicitSwitch ?? false,
+      ...(meta.model ? { modelo: meta.model } : {}),
     };
     const r = await this.#fetcher(
       `${this.#url}/rest/v1/${this.#conversationTable}?id=eq.${encodeURIComponent(turnId)}`,
