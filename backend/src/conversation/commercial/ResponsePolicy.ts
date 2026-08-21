@@ -1,13 +1,13 @@
 import type { ConversationState, ProductImage, ProductQuote, RagEvidence } from '../../domain/types.ts';
-import { canonicalProductName } from '../reference/ReferenceResolver.ts';
 
 function shortProduct(value: string | null | undefined): string {
-  return canonicalProductName(value) ?? String(value ?? 'el producto');
+  const raw = String(value ?? '').trim();
+  return raw || 'el producto';
 }
 
 export function priceResponse(quote: ProductQuote | null): string {
   if (!quote || quote.price == null) return 'No tengo un precio confirmado en este momento.';
-  return `${shortProduct(quote.product)} está a S/ ${quote.price}.`;
+  return `${shortProduct(quote.shortName ?? quote.product)} está a S/ ${quote.price}.`;
 }
 
 export function stockResponse(quote: ProductQuote | null, requestedQuantity?: number | null): string {
@@ -34,21 +34,21 @@ export function institutionalResponse(evidence: RagEvidence[]): string | null {
 }
 
 export function purchaseResponse(state: ConversationState, quote: ProductQuote | null): string {
-  const product = shortProduct(state.queryTarget ?? state.activeProduct ?? state.recommendedProduct);
+  const product = shortProduct(state.selectedProduct ?? state.queryTarget ?? state.recommendedProduct ?? state.activeProduct);
+  if (!state.selectedProduct && !state.queryTarget && !state.recommendedProduct && !state.activeProduct) {
+    return 'Claro. ¿Qué modelo quieres comprar?';
+  }
   if (quote?.stock != null && quote.stock <= 0) {
-    return `Ahora ${product} no está disponible. ¿Quieres que te recomiende una alternativa?`;
+    return `Ahora ${product} no está disponible. Puedo ayudarte a revisar una alternativa disponible.`;
   }
-  if (state.queryTarget || state.activeProduct || state.recommendedProduct) {
-    return `Perfecto. Para avanzar con ${product}, ¿me indicas tu nombre completo?`;
-  }
-  return 'Perfecto. ¿Qué modelo quieres comprar?';
+  return `Listo, te paso con un asesor para continuar la compra de ${product}.`;
 }
 
 export function quoteRequestResponse(state: ConversationState): string {
-  const product = state.queryTarget ?? state.activeProduct ?? state.recommendedProduct ?? null;
+  const product = state.selectedProduct ?? state.queryTarget ?? state.recommendedProduct ?? state.activeProduct ?? null;
   if (!product) return 'Claro. ¿Qué modelo necesitas cotizar?';
   if (!state.quantity || state.quantity < 1) return `Claro. ¿Cuántas unidades de ${shortProduct(product)} necesitas?`;
-  return `Tengo ${shortProduct(product)} y ${state.quantity} unidades como solicitud. ¿Me indicas tu nombre de contacto?`;
+  return `Con ${state.quantity} unidades de ${shortProduct(product)}, ya tengo lo necesario para que un asesor continúe con la cotización.`;
 }
 
 export function ambiguousReferenceResponse(): string {
