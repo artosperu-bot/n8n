@@ -79,3 +79,48 @@ test('specific deterministic attribute intent beats generic PRODUCT_INFO from pl
   assert.deepEqual(r.attributes,['SEGURIDAD']);
   assert.equal(r.nextBestAction,'ANSWER_ONLY');
 });
+
+test('planner cannot turn a named factual query into an explicit product selection',()=>{
+  const planner=decision({
+    primaryIntent:'PRICE',targetProduct:'Armor X13',mentionedProducts:['Armor X13'],selectedProduct:'Armor X13',explicitSwitch:true,referenceType:'NAMED_QUERY_TARGET',
+  });
+  const deterministic=decision({
+    primaryIntent:'PRICE',targetProduct:'Armor X13',mentionedProducts:['Armor X13'],selectedProduct:null,explicitSwitch:false,referenceType:'NAMED_QUERY_TARGET',nextBestAction:'ANSWER_ONLY',
+  });
+  const r=validateTurnDecision(planner,{activeProduct:null,selectedProduct:null},['Armor X13','Armor 22'],deterministic);
+  assert.equal(r.targetProduct,'Armor X13');
+  assert.equal(r.selectedProduct,null);
+  assert.equal(r.explicitSwitch,false);
+});
+
+test('mentioning a second canonical product builds a comparison pair instead of switching',()=>{
+  const planner=decision({
+    primaryIntent:'PRODUCT_INFO',targetProduct:'Armor 22',mentionedProducts:['Armor 22'],selectedProduct:'Armor 22',explicitSwitch:true,
+  });
+  const deterministic=decision({
+    primaryIntent:'PRODUCT_INFO',targetProduct:'Armor 22',mentionedProducts:['Armor 22'],selectedProduct:null,explicitSwitch:false,referenceType:'NAMED_QUERY_TARGET',nextBestAction:'ANSWER_ONLY',
+  });
+  const r=validateTurnDecision(planner,{activeProduct:'Armor X13',selectedProduct:null},['Armor X13','Armor 22'],deterministic);
+  assert.equal(r.explicitSwitch,false);
+  assert.equal(r.selectedProduct,null);
+  assert.deepEqual(r.comparisonProducts,['Armor X13','Armor 22']);
+});
+
+test('generic need phrase cannot survive validation as if it were a product model',()=>{
+  const planner=decision({
+    primaryIntent:'CAPABILITY',targetProduct:'cámara resistente para fotos de trabajos y redes sociales',mentionedProducts:['cámara resistente para fotos de trabajos y redes sociales'],
+  });
+  const deterministic=decision({primaryIntent:'CAPABILITY',targetProduct:null,attributes:['CAMARA'],nextBestAction:'ANSWER_ONLY'});
+  const r=validateTurnDecision(planner,{},['Armor X12 Pro','Armor X13','Armor 22'],deterministic);
+  assert.equal(r.targetProduct,null);
+  assert.deepEqual(r.mentionedProducts,[]);
+});
+
+test('short catalog alias from planner is canonicalized instead of persisting raw numeric model text',()=>{
+  const planner=decision({primaryIntent:'COMPARE',targetProduct:'22',mentionedProducts:['22'],comparisonProducts:['Armor X13','22']});
+  const deterministic=decision({primaryIntent:'COMPARE',targetProduct:'Armor 22',mentionedProducts:['Armor 22'],comparisonProducts:['Armor X13','Armor 22'],referenceType:'NAMED_QUERY_TARGET'});
+  const r=validateTurnDecision(planner,{activeProduct:'Armor X13',comparisonProducts:['Armor X13','Armor 22']},['Armor X13','Armor 22'],deterministic);
+  assert.equal(r.targetProduct,'Armor 22');
+  assert.deepEqual(r.comparisonProducts,['Armor X13','Armor 22']);
+  assert.ok(!r.mentionedProducts.includes('22'));
+});
