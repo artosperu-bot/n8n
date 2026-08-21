@@ -34,31 +34,32 @@ export class OpenAIProvider implements LlmProvider {
       nextBestAction: s.lastNba ?? null,
     };
     const evidence = (input.rag ?? [])
-      .slice(0, 4)
-      .map(x => x.text.replace(/\s+/g, ' ').slice(0, 650))
+      .slice(0, 8)
+      .map(x => x.text.replace(/\s+/g, ' ').slice(0, 700))
       .join('\n');
 
     const instructions = [
-      'Eres un vendedor consultivo de STECH PERÚ por chat, no un asistente genérico.',
-      'Escribe español peruano natural, breve y comercial: normalmente 1 a 3 frases y máximo una pregunta útil.',
+      'Eres el redactor closed-book de un vendedor consultivo de STECH PERÚ por chat.',
+      'No decides intención, ruta, producto ni fuente: eso ya viene resuelto.',
+      'Escribe español peruano natural, breve y comercial; normalmente 1 a 3 frases y máximo una pregunta útil.',
+      'Para una ficha general autorizada puedes usar bloques breves con los hechos suministrados, sin convertirla en un manual.',
       'Primero responde lo que el cliente pidió; después, solo si aporta valor, avanza un paso comercial.',
-      'Usa SPIN de forma natural: aprovecha situación, problema y prioridad ya conocidos; no repitas preguntas ya respondidas.',
+      'Usa SPIN/FAB/LAER únicamente cuando el contexto lo justifique y no repitas datos ya conocidos.',
       'Convierte características verificadas en beneficios ligados a la necesidad real del cliente.',
       'No inventes precio, disponibilidad, garantía, características, políticas, urgencia, escasez, testimonios ni acciones humanas.',
       'Nunca reveles cantidades de stock; solo habla de disponibilidad.',
       'Nunca ofrezcas ni menciones precio si el cliente no lo pidió explícitamente.',
       'No digas UNKNOWN, INTENT, queryTarget, RAG, sistema interno ni lenguaje técnico del backend.',
-      'No prometas enviar cotizaciones, correos, llamadas, demos o reservas si la evidencia/acción no confirma que ocurrió.',
-      'Evita listas largas, formularios y menús. En cierre pide un solo dato por turno.',
+      'No prometas cotizaciones, reservas, pedidos, correos o llamadas que no estén confirmados como ejecutados.',
       'La evidencia suministrada es la única fuente factual.'
     ].join(' ');
 
-    const body = {
+    const body: Record<string, unknown> = {
       model: this.#model,
-      max_output_tokens: 320,
       instructions,
-      input: `CLIENTE:\n${input.message}\n\nINTENCION:${input.intent}\nCONTEXTO_COMERCIAL:${JSON.stringify(compactState)}\nEVIDENCIA_DETERMINISTICA:${input.deterministicAnswer ?? 'SIN_DATO'}\nEVIDENCIA_VERIFICADA:\n${evidence || 'SIN_DATO'}`,
+      input: `CLIENTE:\n${input.message}\n\nINTENCION:${input.intent}\nCONTEXTO_COMERCIAL:${JSON.stringify(compactState)}\nPLAN_AUTORIZADO:${input.deterministicAnswer ?? 'SIN_PLAN'}\nEVIDENCIA_VERIFICADA:\n${evidence || 'SIN_DATO'}`,
     };
+    if (/^gpt-5(?:$|[-.])/i.test(this.#model)) body.reasoning = { effort: 'minimal' };
 
     const response = await this.#fetcher(`${this.#baseUrl}/responses`, {
       method: 'POST',
@@ -67,6 +68,9 @@ export class OpenAIProvider implements LlmProvider {
     });
     if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}: ${await response.text()}`);
     const json: any = await response.json();
+    if (json.status === 'incomplete') {
+      throw new Error(`OpenAI response incomplete: ${String(json.incomplete_details?.reason ?? 'unknown_reason')}`);
+    }
 
     let text: string | null = null;
     if (typeof json.output_text === 'string' && json.output_text) text = json.output_text;
@@ -78,7 +82,7 @@ export class OpenAIProvider implements LlmProvider {
         if (text) break;
       }
     }
-    if (!text) throw new Error('OpenAI response contained no output text');
+    if (!text) throw new Error(`OpenAI response contained no output text (status=${String(json.status ?? 'unknown')})`);
 
     return {
       text: text.trim(),
