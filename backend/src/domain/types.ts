@@ -1,8 +1,11 @@
 import type { Intent } from '../conversation/intent/IntentResolver.ts';
 
+export type CustomerType = 'PERSONAL' | 'BUSINESS';
+
 export type ConversationState = {
   sessionId?: string;
   activeProduct?: string | null;
+  salientProduct?: string | null;
   recommendedProduct?: string | null;
   comparisonProducts?: string[];
   queryTarget?: string | null;
@@ -11,6 +14,17 @@ export type ConversationState = {
   lastIntent?: Intent | string | null;
   spinFacts?: string[];
   lastNba?: string | null;
+  customerType?: CustomerType | null;
+  sector?: string | null;
+  useCase?: string | null;
+  problem?: string | null;
+  priorities?: string[];
+  quantity?: number | null;
+  invoiceRequired?: boolean | null;
+  objection?: string | null;
+  purchaseSignal?: boolean;
+  lastUserMessage?: string | null;
+  lastAssistantMessage?: string | null;
   turnCount?: number;
   updatedAt?: string;
 };
@@ -24,6 +38,7 @@ export type ProductQuote = {
   source: 'FAKE_TEST_DATA' | 'SQL_BRIDGE' | 'SQL_SERVER';
 };
 
+export type ProductImage = { url: string; type?: string | null; source: 'FAKE_TEST_DATA' | 'SQL_BRIDGE' | 'SQL_SERVER' };
 export type RagEvidence = { text: string; source: string; score?: number };
 export type ChatInput = { sessionId: string; message: string; messageId?: string };
 
@@ -49,6 +64,8 @@ export type ChatTurnResult = {
     budget: number | null;
     priceObjection: boolean;
     erp?: ProductQuote | null;
+    images?: ProductImage[];
+    ragSources?: string[];
     llm?: LlmDebug;
     totalDurationMs?: number;
     telemetry?: DeliveryDebug;
