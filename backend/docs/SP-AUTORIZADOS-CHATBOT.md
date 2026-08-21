@@ -94,6 +94,77 @@ Si el cliente pide 2 o más unidades:
 
 `señal fuerte de compra + cantidad >= 2 → handoff a asesor con contexto preservado`
 
+## Regla global de N+1 contextual / Next Best Action
+
+El N+1 debe evaluarse **en cada respuesta del bot**, pero eso no significa que cada respuesta deba terminar obligatoriamente con una pregunta.
+
+La regla es: después de resolver correctamente la intención actual, el sistema debe decidir inteligentemente cuál es el mejor siguiente paso comercial utilizando intención, estado de conversación, producto activo/recomendado/seleccionado, presupuesto, necesidad, objeciones y señales de compra ya conocidas.
+
+El N+1 puede ser cualquiera de estas formas según el caso:
+
+- **Responder y terminar (`ANSWER_ONLY`)** cuando la consulta factual ya quedó resuelta y añadir otra pregunta solo generaría ruido.
+- **Hacer una sola pregunta útil** cuando falta un dato que realmente cambia la recomendación o la decisión.
+- **Acercar naturalmente al producto** cuando el cliente todavía está en una consulta institucional/general y existe una oportunidad comercial razonable.
+- **Recomendar o comparar** cuando ya existe suficiente contexto de necesidad, presupuesto o prioridad.
+- **Hacer un soft close** cuando el cliente ya está evaluando un producto concreto.
+- **Avanzar a reserva/asesor** cuando existe señal fuerte de compra, sin devolver al cliente a preguntas de discovery ya superadas.
+
+### Aplicación por tipo de conversación
+
+#### Consultas institucionales: horario, ubicación, garantía, pagos, envío, etc.
+
+Primero se responde la consulta concreta de forma clara y breve. Después, si tiene sentido comercial, el bot puede generar un puente suave hacia producto o compra sin sonar forzado.
+
+Ejemplo conceptual:
+
+`pregunta por horario → responder horario → si no hay compra avanzada, ofrecer ayuda para elegir/encontrar un equipo adecuado`
+
+No utilizar siempre la misma frase ni convertir toda consulta institucional en una venta agresiva. El puente debe depender del contexto.
+
+#### Consultas de producto: precio, stock, imágenes, especificaciones
+
+Primero se responde exactamente lo solicitado con la fuente autoritativa correspondiente. Luego el N+1 solo aparece si aporta valor.
+
+Ejemplos conceptuales:
+
+- `pregunta precio → responder precio → si está evaluando compra, avanzar a disponibilidad/cierre`
+- `pregunta resistencia → responder resistencia → si conocemos el uso, conectar el beneficio con ese uso`
+- `pregunta imagen → entregar imagen → no obligar a una pregunta artificial si no hace falta`
+
+#### Cliente que piensa comprar
+
+Si aparecen señales como “estoy pensando comprarlo”, “me interesa”, “creo que me quedo con ese”, el N+1 debe avanzar la conversación hacia decisión/cierre de forma progresiva, usando lo que ya se conoce y evitando reiniciar discovery.
+
+#### Cliente que ya decidió comprar
+
+Si aparece una señal fuerte como “ya lo compro”, “me llevo ese”, “quiero ese”, “separa ese”, el N+1 deja de ser discovery y pasa al flujo de compra/reserva definido en este documento.
+
+Para una unidad y producto resuelto:
+
+`compra clara → pedir únicamente el siguiente dato faltante entre DNI/CE, nombres y apellidos, dirección → reserva`
+
+Para 2 o más unidades:
+
+`compra clara + cantidad >= 2 → asesor con contexto preservado`
+
+#### Objeciones o dudas
+
+El N+1 debe resolver primero la objeción y luego elegir el siguiente paso comercial adecuado: reforzar ajuste al uso, ofrecer alternativa, comparar o acercar al cierre. No responder con guiones rígidos ni técnicas nombradas explícitamente.
+
+### Reglas de calidad N+1
+
+- Máximo **una pregunta útil por turno** salvo que una operación transaccional requiera explícitamente un bloque de datos y se haya definido así.
+- Nunca preguntar algo que ya se sabe por memoria/estado.
+- No preguntar por preguntar.
+- No forzar producto si el usuario solo necesita una respuesta institucional y el puente comercial sería inoportuno.
+- No usar siempre CTA genéricos como “¿en qué más te ayudo?”.
+- No usar siempre “¿quieres que te recomiende...?”; variar según la etapa real.
+- El siguiente paso debe sentirse como continuidad natural de la conversación, no como un árbol de decisiones visible.
+- SPIN, FAB, empatía, neuroventas y manejo de objeciones deben influir en la decisión y redacción, pero nunca mencionarse como técnicas al cliente.
+- La empatía debe ser principalmente **implícita y contextual**, no una muletilla repetitiva como “te entiendo”.
+- Si ya existe una intención de compra, priorizar progresión comercial sobre discovery.
+- Si la mejor acción es no preguntar nada, `ANSWER_ONLY` es una respuesta correcta y profesional.
+
 ## Observaciones comerciales pendientes para la próxima iteración
 
 Estas observaciones quedan anotadas, **pero no se implementan en este cambio documental**:
@@ -109,8 +180,10 @@ Estas observaciones quedan anotadas, **pero no se implementan en este cambio doc
 
 - Whitelist documentada: **SÍ**
 - Contrato de captura de reserva documentado: **SÍ**
+- Contrato N+1 contextual documentado: **SÍ**
 - Código modificado en este cambio: **NO**
 - Flujo de reserva conectado al backend: **PENDIENTE DE LA SIGUIENTE ITERACIÓN**
 - Writer comercial/neuroventas ajustado: **PENDIENTE DE LA SIGUIENTE ITERACIÓN**
+- N+1 contextual validado con Golden 100: **PENDIENTE**
 - Golden 100 modificado: **NO**
 - Producción modificada: **NO**
