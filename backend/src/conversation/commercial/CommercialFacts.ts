@@ -16,6 +16,18 @@ const PRIORITIES: Array<[string, RegExp]> = [
 
 function unique(values: string[]): string[] { return [...new Set(values)]; }
 
+function hasStrongPurchaseSignal(text: string): boolean {
+  return /\bquiero\s+(?:avanzar(?:\s+con\s+la\s+compra)?|compr(?:ar|arlo|arla)?|ese|esa|este|esta)\b/.test(text)
+    || /\b(?:ya\s+)?(?:ese|esa|este|esta)\s+quiero\b/.test(text)
+    || /\bme\s+(?:quedo|llevo)\s+con?\s*(?:ese|esa|este|esta)?\b/.test(text)
+    || /\bme\s+(?:he\s+)?decidi(?:\s+por\s+(?:ese|esa|este|esta))?\b/.test(text)
+    || /\b(?:lo|la)\s+(?:quiero|compro)\b/.test(text)
+    || /\bcomo\s+compro\b/.test(text)
+    || /\b(?:separar|reservar)(?:lo|la)?\b/.test(text)
+    || /\bquiero\s+(?:q|que)\s+(?:un\s+)?asesor\s+(?:siga|continue|continúe|me\s+ayude)(?:\s+con\s+la\s+compra)?\b/.test(text)
+    || /\b(?:hablemos|hablar)\s+(?:para|de)\s+compr/.test(text);
+}
+
 export function extractCommercialFacts(message: string, previous: ConversationState): CommercialFacts {
   const t = fold(message);
   const business = /\b(empresa|corporativo|institucion|negocio|ruc|factura|tecnicos|personal|equipo\s+de\s+trabajo)\b/.test(t);
@@ -46,7 +58,7 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
   const objection = /\b(muy\s+caro|esta\s+caro|se\s+me\s+hace\s+caro|sale\s+de\s+mi\s+presupuesto|mas\s+barato)\b/.test(t)
     ? 'precio'
     : (previous.objection ?? null);
-  const purchaseSignal = /\b(quiero\s+(?:avanzar\s+con\s+la\s+)?compra|quiero\s+compr|me\s+quedo\s+con|lo\s+quiero|separar|reservar)\b/.test(t)
+  const purchaseSignal = hasStrongPurchaseSignal(t)
     ? true
     : (previous.purchaseSignal ?? false);
 
