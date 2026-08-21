@@ -8,7 +8,7 @@ export function resolveInstitutionalTopic(query:string):InstitutionalTopic|null 
   if(/\bcontra\s*entrega\b|\bcontraentrega\b/.test(t))return{category:'pagos',subcategory:'contraentrega'};
   if(/\b(medios?|formas?)\s+de\s+pago\b|\byape\b|\bplin\b|\btransferencia\b|\btarjeta\b/.test(t))return{category:'pagos',subcategory:'medios_pago'};
   if(/\b(validar|validan|validamos|validacion|verificar|verifican|verificamos|verificacion)\b.*\bpago\b|\bpago\b.*\b(validar|validan|validamos|verificar|verifican|verificamos)\b/.test(t))return{category:'pagos',subcategory:'validacion_pago'};
-  if(/\b(confirmar|confirmo|confirmamos|confirmado|confirmada|confirmacion)\b.*\b(pedido|compra)\b/.test(t))return{category:'pagos',subcategory:'confirmacion_pedido'};
+  if(/\b(confirmar|confirma|confirmas|confirman|confirmo|confirmamos|confirmado|confirmada|confirmacion)\b[^.!?]{0,45}\b(pedido|compra)\b|\b(pedido|compra)\b[^.!?]{0,45}\b(confirmar|confirma|confirmas|confirman|confirmo|confirmamos|confirmado|confirmada|confirmacion)\b/.test(t))return{category:'pagos',subcategory:'confirmacion_pedido'};
   if(/\b(cancelar|cancelacion|anular)\b.*\b(pedido|compra)\b/.test(t))return{category:'pagos',subcategory:'cancelacion_pedido'};
   if(/\bdatos\b.*\b(compra|pedido|cierre)\b|\bque datos\b.*\bnecesit/.test(t))return{category:'pagos',subcategory:'datos_cierre_venta'};
 
