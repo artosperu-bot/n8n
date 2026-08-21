@@ -1,5 +1,10 @@
 import type { ConversationState, ProductQuote, RagEvidence } from '../domain/types.ts';
 
+export type RecentDialogueMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
 export type LlmWriteInput = {
   message: string;
   intent: string;
@@ -13,6 +18,7 @@ export type LlmWriteInput = {
 export type LlmDecisionInput = {
   message: string;
   state: ConversationState;
+  history?: RecentDialogueMessage[];
 };
 
 export type TurnDecision = {
