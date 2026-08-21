@@ -19,7 +19,7 @@ const baseDecision: TurnDecision = {
   needsSql: false, needsProductRag: false, needsInstitutionalRag: false, confidence: 0.8,
 };
 
-test('invalid GPT control vocabulary falls back to canonical intent and N+1 codes', () => {
+test('invalid GPT control vocabulary falls back to canonical intent and bounded N+1 codes', () => {
   const raw: TurnDecision = {
     ...baseDecision,
     primaryIntent: 'precio_query',
@@ -33,7 +33,7 @@ test('invalid GPT control vocabulary falls back to canonical intent and N+1 code
   };
   const validated = validateTurnDecision(raw, { activeProduct: 'Armor X13' }, ['Armor X13'], fallback);
   assert.equal(validated.primaryIntent, 'PRICE');
-  assert.equal(validated.nextBestAction, 'ADVANCE_IF_INTEREST');
+  assert.equal(validated.nextBestAction, 'SOFT_CLOSE');
 });
 
 test('structured GPT fields reject objects instead of persisting [object Object]', async () => {
