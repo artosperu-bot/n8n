@@ -41,9 +41,9 @@ function normalizeDecision(raw: any): TurnDecision {
     commercialStage: nullable(raw?.commercialStage),
     spinContribution: nullable(raw?.spinContribution),
     nextBestAction: nullable(raw?.nextBestAction),
-    needsSql: raw?.needsSql === true,
-    needsProductRag: raw?.needsProductRag === true,
-    needsInstitutionalRag: raw?.needsInstitutionalRag === true,
+    needsSql: false,
+    needsProductRag: false,
+    needsInstitutionalRag: false,
     confidence: clampConfidence(raw?.confidence),
   };
 }
@@ -128,7 +128,7 @@ export class OpenAIProvider implements LlmProvider {
       'Mencionar otro producto no significa cambiar; preferir un atributo tampoco; una selección explícita sí puede cambiar.',
       'No vuelvas a preguntar datos ya conocidos.',
       'Propón el siguiente paso comercial más útil; si el cliente quiere comprar, avanza.',
-      'Devuelve SOLO JSON válido con estas claves: primaryIntent, secondaryIntents, targetProduct, mentionedProducts, referenceType, explicitSwitch, selectedProduct, comparisonProducts, attributes, customerNeed, customerProblem, priorities, objection, commercialStage, spinContribution, nextBestAction, needsSql, needsProductRag, needsInstitutionalRag, confidence.',
+      'Devuelve SOLO JSON válido con estas claves: primaryIntent, secondaryIntents, targetProduct, mentionedProducts, referenceType, explicitSwitch, selectedProduct, comparisonProducts, attributes, customerNeed, customerProblem, priorities, objection, commercialStage, spinContribution, nextBestAction, confidence.',
       'Texto: string o null. Arrays: solo strings. No devuelvas objetos dentro de campos de texto o arrays.'
     ].join(' ');
     const history = (input.history ?? []).slice(-6).map(x => ({ role:x.role, content:x.content }));
