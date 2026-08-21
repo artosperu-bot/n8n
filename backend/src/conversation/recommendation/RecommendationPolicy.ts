@@ -180,7 +180,10 @@ export function rankRecommendations(candidates:RecommendationCandidate[],context
       total+=normalized;covered+=1;
       const reason=explain(criterion,row.metrics[criterion]);if(reason)reasons.push(reason);
     }
-    const score=covered?total/covered:0;
+    // Missing comparable evidence is not a free pass. The score represents fit
+    // across the whole decision criterion set, while confidence separately exposes
+    // how much of that set had usable evidence.
+    const score=criteria.length?total/criteria.length:0;
     return {
       ...row.candidate,
       score,
