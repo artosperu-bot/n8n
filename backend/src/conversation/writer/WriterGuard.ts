@@ -31,6 +31,9 @@ function mentionsProductOutsideAllowlist(answer:string,allowed:string[]):boolean
   }
   return false;
 }
+function evidenceText(input:LlmWriteInput):string {
+  return fold((input.rag??[]).map(x=>x.text).join('\n'));
+}
 
 function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | null {
   const intent = String(input.intent ?? '').toUpperCase();
@@ -48,6 +51,15 @@ function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | nu
 
   if(String(input.decision?.nextBestAction??'').toUpperCase()==='ANSWER_ONLY'&&/[¿?]/.test(answer))return 'NBA_ANSWER_ONLY_QUESTION';
   if(mentionsProductOutsideAllowlist(answer,input.allowedProducts??[]))return 'PRODUCT_OUTSIDE_ALLOWLIST';
+
+  const speculative=/\b(?:probablemente|seguramente|posiblemente|quiz[aá]s|tal\s+vez)\b/i;
+  if(speculative.test(answer))return 'UNSUPPORTED_SPECULATION';
+
+  const lowLightClaim=/\b(?:mejor|superior|mucho\s+mejor|mayor)\b[^\n.]{0,55}\b(?:baja|poca)\s+luz\b|\b(?:baja|poca)\s+luz\b[^\n.]{0,55}\b(?:mejor|superior)\b/i;
+  if(lowLightClaim.test(answer)){
+    const ev=evidenceText(input);
+    if(!/(baja|poca)\s+luz|low.?light|lux/.test(ev))return 'UNSUPPORTED_LOW_LIGHT_INFERENCE';
+  }
 
   const superlative=/\b(?:el|la)\s+m[aá]s\s+(?:resistente|potente|r[aá]pido|econ[oó]mico)|\b(?:la|el)\s+mejor\s+(?:opci[oó]n|bater[ií]a|c[aá]mara|rendimiento|resistencia)\b/i;
   if(superlative.test(answer)){
