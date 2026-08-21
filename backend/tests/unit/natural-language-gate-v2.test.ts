@@ -45,3 +45,18 @@ test('camera-use wording is not confused with a request to show product images',
 test('explicit short model purchase wording is recognized as purchase', () => {
   assert.equal(resolveIntentPlan('ya el 22 quiero').primary, 'PURCHASE');
 });
+
+test('superlative catalog requests are recommendations, not bare attributes',()=>{
+  const resistance=resolveIntentPlan('quiero el mas resistente q tengan');
+  assert.equal(resistance.primary,'RECOMMEND');
+  assert.ok(resistance.attributes.includes('RESISTENCIA'));
+  const battery=resolveIntentPlan('cual tiene la mejor bateria?');
+  assert.equal(battery.primary,'RECOMMEND');
+  assert.ok(battery.attributes.includes('BATERIA'));
+});
+
+test('cheaper but resistant alternative is a recommendation',()=>{
+  const result=resolveIntentPlan('hay uno mas barato pero resistente?');
+  assert.equal(result.primary,'RECOMMEND');
+  assert.ok(result.attributes.includes('RESISTENCIA'));
+});
