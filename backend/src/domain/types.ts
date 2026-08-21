@@ -5,6 +5,8 @@ export type CustomerType = 'PERSONAL' | 'BUSINESS';
 export type ConversationState = {
   sessionId?: string;
   activeProduct?: string | null;
+  activeProductId?: string | null;
+  activeProductCode?: string | null;
   salientProduct?: string | null;
   recommendedProduct?: string | null;
   comparisonProducts?: string[];
@@ -12,6 +14,8 @@ export type ConversationState = {
   explicitSwitch?: boolean;
   budget?: number | null;
   lastIntent?: Intent | string | null;
+  secondaryIntents?: string[];
+  lastRoute?: string | null;
   spinFacts?: string[];
   lastNba?: string | null;
   customerType?: CustomerType | null;
@@ -32,14 +36,29 @@ export type ConversationState = {
 export type ProductQuote = {
   product: string;
   productCode?: string | null;
+  productRagId?: string | null;
+  internalId?: number | null;
+  sku?: string | null;
+  partNumber?: string | null;
+  ean?: string | null;
   price: number | null;
   stock: number | null;
   currency: string;
+  categoryCode?: string | null;
+  category?: string | null;
+  subcategoryCode?: string | null;
+  subcategory?: string | null;
+  warrantyMonths?: number | null;
+  commercialState?: string | null;
   source: 'FAKE_TEST_DATA' | 'SQL_BRIDGE' | 'SQL_SERVER';
 };
 
+export type CatalogResolution = Record<string, unknown>;
+export type CategoryOption = { code: string; name: string; description?: string | null };
+export type SubcategoryOption = { code: string; name: string; categoryCode?: string | null; category?: string | null; description?: string | null };
+export type OrderLookup = Record<string, unknown>;
 export type ProductImage = { url: string; type?: string | null; source: 'FAKE_TEST_DATA' | 'SQL_BRIDGE' | 'SQL_SERVER' };
-export type RagEvidence = { text: string; source: string; score?: number };
+export type RagEvidence = { text: string; source: string; score?: number; productId?: string | null; section?: string | null; domain?: 'PRODUCT' | 'INSTITUTIONAL' };
 export type ChatInput = { sessionId: string; message: string; messageId?: string };
 
 export type LlmDebug = {
@@ -59,6 +78,9 @@ export type ChatTurnResult = {
   state: ConversationState;
   debug: {
     intent: string;
+    secondaryIntents?: string[];
+    route?: string;
+    sqlTools?: string[];
     queryTarget: string | null;
     explicitSwitch: boolean;
     budget: number | null;
@@ -67,6 +89,7 @@ export type ChatTurnResult = {
     images?: ProductImage[];
     ragSources?: string[];
     llm?: LlmDebug;
+    writerFallback?: DeliveryDebug;
     totalDurationMs?: number;
     telemetry?: DeliveryDebug;
     automation?: DeliveryDebug;
