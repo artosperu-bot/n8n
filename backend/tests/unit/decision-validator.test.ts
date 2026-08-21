@@ -59,3 +59,23 @@ test('two or more units remain assisted handoff',()=>{
   const r=validateTurnDecision(decision({primaryIntent:'PURCHASE',targetProduct:'Armor X13'}),{quantity:2,purchaseSignal:true},['Armor X13']);
   assert.equal(r.nextBestAction,'ASSISTED_HANDOFF');
 });
+
+test('specific deterministic attribute intent beats generic PRODUCT_INFO from planner',()=>{
+  const planner=decision({
+    primaryIntent:'PRODUCT_INFO',
+    targetProduct:'Armor 22',
+    attributes:[],
+    nextBestAction:'ANSWER_ONLY',
+  });
+  const deterministic=decision({
+    primaryIntent:'CAPABILITY',
+    targetProduct:'Armor 22',
+    attributes:['SEGURIDAD'],
+    nextBestAction:'ANSWER_ONLY',
+    confidence:0.99,
+  });
+  const r=validateTurnDecision(planner,{activeProduct:'Armor 22'},['Armor 22'],deterministic);
+  assert.equal(r.primaryIntent,'CAPABILITY');
+  assert.deepEqual(r.attributes,['SEGURIDAD']);
+  assert.equal(r.nextBestAction,'ANSWER_ONLY');
+});
