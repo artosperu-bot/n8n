@@ -32,7 +32,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const hits: SemanticIntent[] = [];
   const has = (rx: RegExp) => rx.test(t);
 
-  if (has(/\b(precio|cuanto cuesta|cuanto vale|costo)\b/)) hits.push('PRICE_AVAILABILITY');
+  if (has(/\b(precio|cuanto cuesta|cuanto vale|cuanto esta|cuanto sale|cuanto ta|a cuanto esta|a cuanto sale|costo)\b/)) hits.push('PRICE_AVAILABILITY');
   if (has(/\b(stock|disponible|disponibilidad|hay unidades|tienen unidades)\b/)) hits.push('STOCK');
   if (has(/\b(foto|fotos|imagen|imagenes)\b/)) hits.push('IMAGES');
   if (has(/\b(pedido|orden)\b/) && has(/\b(consultar|estado|seguimiento|ver|revisar|donde)\b/)) hits.push('ORDER_STATUS');
