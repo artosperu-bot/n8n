@@ -141,3 +141,23 @@ test('explicit purchase with one canonical SQL candidate overrides stale active 
   assert.equal(r.selectedProduct,'Armor 22');
   assert.equal(r.explicitSwitch,true);
 });
+
+test('canonical planner target from current SQL candidates beats stale active fallback',()=>{
+  const planner=decision({
+    primaryIntent:'PURCHASE',
+    targetProduct:'Armor 22',
+    mentionedProducts:[],
+    referenceType:'NAMED_QUERY_TARGET',
+    nextBestAction:'COLLECT_RESERVATION_DATA',
+  });
+  const deterministic=decision({
+    primaryIntent:'PURCHASE',
+    targetProduct:'Armor X13',
+    mentionedProducts:[],
+    referenceType:'ACTIVE_PRODUCT_FALLBACK',
+    nextBestAction:'COLLECT_RESERVATION_DATA',
+  });
+  const r=validateTurnDecision(planner,{activeProduct:'Armor X13'},['Armor 22','Armor X13'],deterministic);
+  assert.equal(r.targetProduct,'Armor 22');
+  assert.equal(r.referenceType,'NAMED_QUERY_TARGET');
+});
