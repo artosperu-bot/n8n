@@ -1,4 +1,5 @@
 import type { LlmProvider, LlmResult, LlmWriteInput } from '../../ports/LlmProvider.ts';
+import { normalizeEvidence } from '../evidence/EvidenceNormalizer.ts';
 
 export type WriterGuardResult = {
   answer: string;
@@ -22,7 +23,11 @@ function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | nu
 
 export async function safeWrite(llm: LlmProvider, input: LlmWriteInput, fallbackAnswer: string): Promise<WriterGuardResult> {
   try {
-    const result = await llm.write(input);
+    const writeInput: LlmWriteInput = {
+      ...input,
+      verifiedFacts: input.verifiedFacts ?? normalizeEvidence({ intent:input.intent, quote:input.quote, rag:input.rag }),
+    };
+    const result = await llm.write(writeInput);
     const violation = guardGeneratedAnswer(input, result.text);
     if (violation) {
       return {
