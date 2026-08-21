@@ -50,3 +50,30 @@ test('searchProducts can resolve a product from natural customer text through th
   assert.match(queries.at(-1)!, /@TextoBusqueda=N'también estoy viendo el Armor 22'/);
   assert.match(queries.at(-1)!, /@MaxResultados=5/);
 });
+
+test('when direct product search is empty a unique typo is recovered only from canonical SQL catalog', async () => {
+  const { erp, queries } = repo({
+    'sp_BuscarProductosVenta': [],
+    'sp_ListarCatalogoVenta': [
+      { producto:'Armor X12 Pro', producto_rag_id:'P-X12', precio:699, stock:5 },
+      { producto:'Armor X13', producto_rag_id:'P-X13', precio:899, stock:5 },
+      { producto:'Armor 22', producto_rag_id:'P-22', precio:1199, stock:5 },
+    ],
+  });
+  const rows=await erp.searchProducts!('armro x13 cuanto ta',5);
+  assert.deepEqual(rows.map(x=>x.product),['Armor X13']);
+  assert.equal(rows[0]?.productRagId,'P-X13');
+  assert.equal(queries.some(q=>/sp_ListarCatalogoVenta/.test(q)),true);
+});
+
+test('catalog typo fallback fails closed on ambiguous or date-like numeric text', async () => {
+  const { erp } = repo({
+    'sp_BuscarProductosVenta': [],
+    'sp_ListarCatalogoVenta': [
+      { producto:'Armor 22', producto_rag_id:'P-22', precio:1199, stock:5 },
+      { producto:'Other 22', producto_rag_id:'P-O22', precio:999, stock:5 },
+    ],
+  });
+  assert.deepEqual(await erp.searchProducts!('llega el 22 de agosto',5),[]);
+  assert.deepEqual(await erp.searchProducts!('quiero el 22',5),[]);
+});
