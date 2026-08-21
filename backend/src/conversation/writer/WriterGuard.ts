@@ -18,6 +18,15 @@ function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | nu
 
   const stockLeak = /(?:stock|disponib)[^\n.]{0,35}\b\d+\s*(?:unidades?|uds?)\b|\b\d+\s*(?:unidades?|uds?)\b[^\n.]{0,35}(?:stock|disponib)/i;
   if (stockLeak.test(answer)) return 'RAW_STOCK_QUANTITY';
+
+  const roboticMeta=/\b(?:cat[aá]logo\s+verificado|evidencia\s+verificada|seg[uú]n\s+(?:mi|el)\s+sistema(?:\s+interno)?|seg[uú]n\s+el\s+rag|querytarget|\bintent\b)\b/i;
+  if(roboticMeta.test(answer))return 'ROBOTIC_META_LANGUAGE';
+
+  const superlative=/\b(?:el|la)\s+m[aá]s\s+(?:resistente|potente|r[aá]pido|econ[oó]mico)|\b(?:la|el)\s+mejor\s+(?:opci[oó]n|bater[ií]a|c[aá]mara|rendimiento|resistencia)\b/i;
+  if(superlative.test(answer)){
+    const productIds=new Set((input.rag??[]).map(x=>String(x.productId??'').trim()).filter(Boolean));
+    if(productIds.size<2)return 'UNSUPPORTED_SUPERLATIVE';
+  }
   return null;
 }
 
