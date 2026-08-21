@@ -70,5 +70,22 @@ test('records LLM usage with turn and message id and exposes non-secret debug te
   assert.equal(metrics[0].messageId, 'qa-run-001:TEL-001:t01');
   assert.equal(r.debug.llm?.model, 'fake-test-llm');
   assert.equal(r.debug.llm?.totalTokens, 0);
+  assert.equal(r.debug.telemetry?.delivered, true);
   assert.ok((r.debug.totalDurationMs ?? -1) >= 0);
+});
+
+test('telemetry failure does not destroy a completed commercial turn', async () => {
+  const e = new ConversationEngine({
+    conversations: new MemoryConversationRepository(),
+    telemetry: { async recordLlmUsage() { throw new Error('metrics down'); } },
+    erp: new FakeErpRepository(),
+    rag: new FakeRagRepository(),
+    llm: new FakeLlmProvider(),
+    automation: new NoopAutomationBus(),
+  });
+
+  const r = await e.processTurn({ sessionId: 's-telemetry-fail', message: '¿Cuánto cuesta el Armor 22?' });
+  assert.match(r.answer, /1199/);
+  assert.equal(r.debug.telemetry?.delivered, false);
+  assert.match(r.debug.telemetry?.error ?? '', /metrics down/);
 });
