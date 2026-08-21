@@ -21,7 +21,7 @@ function build(repo = new MemoryConversationRepository(), events:any[] = []) {
   };
 }
 
-test('purchase referent uses recent explicit selection instead of stale recommendation and requests handoff', async()=>{
+test('purchase referent uses recent explicit selection and starts personal reservation instead of handoff', async()=>{
   const events:any[]=[];
   const {repo,engine}=build(new MemoryConversationRepository(),events);
   await repo.saveState('select-recent',{
@@ -33,11 +33,13 @@ test('purchase referent uses recent explicit selection instead of stale recommen
   const r=await engine.processTurn({sessionId:'select-recent',message:'Entonces me quedo con ese.'});
   assert.equal(r.debug.queryTarget,'Armor 22');
   assert.equal(r.state.selectedProduct,'Armor 22');
-  assert.equal(r.state.handoffActive,true);
-  assert.equal(r.state.blockAutomaticReply,true);
-  assert.equal(r.state.lastNba,'ASSISTED_HANDOFF');
+  assert.equal(r.state.handoffActive,false);
+  assert.equal(r.state.blockAutomaticReply,false);
+  assert.equal(r.state.lastNba,'COLLECT_RESERVATION_DATA');
+  assert.equal(r.state.reservationStage,'NEED_DOCUMENT');
   assert.match(r.answer,/Armor 22/);
-  assert.equal(events.at(-1)?.type,'handoff.requested');
+  assert.match(r.answer,/DNI|Carn[eé] de Extranjer/i);
+  assert.equal(events.at(-1)?.type,'conversation.turn.completed');
 });
 
 test('comparison pair survives a non-switch mention and resolves los dos without re-asking models',async()=>{
