@@ -39,6 +39,10 @@ export function validateTurnDecision(decision: TurnDecision, state: Conversation
   let targetProduct = canonical(decision.targetProduct, universe);
   let selectedProduct = canonical(decision.selectedProduct, universe);
 
+  // SQL/catalog identity is allowed to fill a missing semantic target, but never to choose
+  // between several candidates. Ambiguity remains a conversation decision.
+  if (!targetProduct && catalogCandidates.length === 1) targetProduct = canonical(catalogCandidates[0], universe);
+
   if (referenceType === 'SELECTION' && recentSelection) {
     targetProduct = recentSelection;
     selectedProduct = recentSelection;
