@@ -97,6 +97,8 @@ export type ChatTurnResult = {
     erp?:ProductQuote|null;
     images?:ProductImage[];
     ragSources?:string[];
+    planner?:LlmDebug;
+    plannerFallback?:DeliveryDebug;
     llm?:LlmDebug;
     writerFallback?:DeliveryDebug;
     totalDurationMs?:number;
