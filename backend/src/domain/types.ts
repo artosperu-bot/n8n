@@ -1,6 +1,7 @@
 import type { Intent } from '../conversation/intent/IntentResolver.ts';
 
 export type CustomerType = 'PERSONAL' | 'BUSINESS';
+export type ReservationStage = 'NEED_DOCUMENT'|'NEED_NAME'|'NEED_ADDRESS'|'READY'|'CONFIRMED';
 export type ConversationState = {
   sessionId?: string;
   contextVersion?: number;
@@ -23,6 +24,7 @@ export type ConversationState = {
   spinFacts?: string[];
   lastSpinContribution?: string|null;
   lastNba?: string|null;
+  pendingCommercialAction?: string|null;
   customerType?: CustomerType|null;
   sector?: string|null;
   useCase?: string|null;
@@ -34,6 +36,11 @@ export type ConversationState = {
   purchaseSignal?: boolean;
   commercialStage?: string|null;
   commercialStrategy?: string|null;
+  reservationStage?: ReservationStage|null;
+  reservationDocument?: string|null;
+  reservationCustomerName?: string|null;
+  reservationAddress?: string|null;
+  reservationId?: string|null;
   handoffActive?: boolean;
   blockAutomaticReply?: boolean;
   handoffReason?: string|null;
@@ -100,17 +107,34 @@ export type ChatTurnResult = {
     route?:string;
     sqlTools?:string[];
     queryTarget:string|null;
+    activeProduct?:string|null;
+    salientProduct?:string|null;
+    selectedProduct?:string|null;
+    recommendedProduct?:string|null;
+    comparisonProducts?:string[];
     explicitSwitch:boolean;
     budget:number|null;
     priceObjection:boolean;
     erp?:ProductQuote|null;
     images?:ProductImage[];
     ragSources?:string[];
+    ragCount?:number;
+    imageCount?:number;
+    nextBestAction?:string|null;
+    requestedUnknown?:boolean;
+    handoff?:boolean;
+    handoffReason?:string|null;
+    recommendationCriteria?:string[];
+    recommendationReasons?:string[];
+    recommendationTradeoffs?:string[];
     planner?:LlmDebug;
     plannerFallback?:DeliveryDebug;
+    plannerFailure?:string;
     llm?:LlmDebug;
     writerFallback?:DeliveryDebug;
+    writer?:Record<string,unknown>;
     totalDurationMs?:number;
+    durationMs?:number;
     telemetry?:DeliveryDebug;
     automation?:DeliveryDebug;
   };
