@@ -38,3 +38,12 @@ test('unknown requested model remains a SQL lookup target so alternatives can be
   assert.equal(r.targetProduct,'Armor 30');
   assert.equal(r.needsSql,true);
 });
+
+test('validator accepts only bounded contextual N+1 actions proposed by the planner', () => {
+  for (const action of ['ANSWER_ONLY','ASK_MISSING_FACT','OFFER_ALTERNATIVE','COMPARE','RECOMMEND','SOFT_CLOSE'] as const) {
+    const r = validateTurnDecision(decision({ primaryIntent:'OTHER', nextBestAction:action }), {});
+    assert.equal(r.nextBestAction, action);
+  }
+  const invalid = validateTurnDecision(decision({ primaryIntent:'OTHER', nextBestAction:'DO_RANDOM_THING' }), {});
+  assert.equal(invalid.nextBestAction, null);
+});
