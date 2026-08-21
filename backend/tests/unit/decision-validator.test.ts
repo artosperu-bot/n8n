@@ -132,3 +132,12 @@ test('ambiguous factual followup keeps canonical active product even if planner 
   assert.equal(r.targetProduct,'Armor X13');
   assert.equal(r.selectedProduct,null);
 });
+
+test('explicit purchase with one canonical SQL candidate overrides stale active product',()=>{
+  const planner=decision({primaryIntent:'PURCHASE',targetProduct:'Armor X12 Pro',selectedProduct:'Armor X12 Pro',referenceType:'ACTIVE_PRODUCT_FALLBACK'});
+  const deterministic=decision({primaryIntent:'PURCHASE',targetProduct:'Armor X12 Pro',selectedProduct:null,referenceType:'ACTIVE_PRODUCT_FALLBACK',nextBestAction:'COLLECT_RESERVATION_DATA'});
+  const r=validateTurnDecision(planner,{activeProduct:'Armor X12 Pro',selectedProduct:null},['Armor 22'],deterministic);
+  assert.equal(r.targetProduct,'Armor 22');
+  assert.equal(r.selectedProduct,'Armor 22');
+  assert.equal(r.explicitSwitch,true);
+});
