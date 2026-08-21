@@ -19,7 +19,8 @@ function unique(values: string[]): string[] { return [...new Set(values)]; }
 function hasStrongPurchaseSignal(text: string): boolean {
   return /\bquiero\s+(?:avanzar(?:\s+con\s+la\s+compra)?|compr(?:ar|arlo|arla)?|ese|esa|este|esta)\b/.test(text)
     || /\b(?:ya\s+)?(?:ese|esa|este|esta)\s+quiero\b/.test(text)
-    || /\bme\s+(?:quedo|llevo)\s+con?\s*(?:ese|esa|este|esta)?\b/.test(text)
+    || /\bme\s+quedo\s+con\s+(?:ese|esa|este|esta)\b/.test(text)
+    || /\bme\s+llevo(?:\s+(?:ese|esa|este|esta))?\b/.test(text)
     || /\bme\s+(?:he\s+)?decidi(?:\s+por\s+(?:ese|esa|este|esta))?\b/.test(text)
     || /\b(?:lo|la)\s+(?:quiero|compro)\b/.test(text)
     || /\bcomo\s+compro\b/.test(text)
