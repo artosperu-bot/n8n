@@ -40,7 +40,9 @@ export class ConversationEngine {
 
     const previous = await this.deps.conversations.getState(input.sessionId);
     const turnNumber = (previous.turnCount ?? 0) + 1;
-    const requestId = input.messageId?.includes(':') ? input.messageId.split(':')[0] : null;
+    // request_id is globally unique in ia_conversaciones, so it must identify one HTTP turn,
+    // not the whole QA run. messageId is already deterministic and unique per QA turn.
+    const requestId = input.messageId ?? null;
     await this.deps.conversations.appendMessage(input.sessionId, 'user', input.message, {
       messageId: input.messageId ?? null,
       requestId,
