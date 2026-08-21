@@ -129,6 +129,7 @@ export class ConversationEngine {
         explicitSwitch: reference.explicitSwitch,
         budget: state.budget ?? null,
         priceObjection: budget.priceObjection,
+        erp: quote,
         llm: {
           model: llmResult.model,
           inputTokens: llmResult.usage.inputTokens,
