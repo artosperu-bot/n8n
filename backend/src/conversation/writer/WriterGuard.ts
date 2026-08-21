@@ -34,11 +34,51 @@ function mentionsProductOutsideAllowlist(answer:string,allowed:string[]):boolean
 function evidenceText(input:LlmWriteInput):string {
   return fold((input.rag??[]).map(x=>x.text).join('\n'));
 }
+function monetaryValues(text:string):string[]{
+  return [...text.matchAll(/\bS\/\s*(\d+(?:[.,]\d{1,2})?)/gi)].map(m=>String(Number(m[1].replace(',','.'))));
+}
+function institutionalMoneySupported(input:LlmWriteInput,answer:string):boolean {
+  const values=monetaryValues(answer);
+  if(!values.length)return true;
+  const institutional=(input.rag??[]).filter(x=>x.domain==='INSTITUTIONAL').map(x=>x.text).join('\n');
+  const facts=(input.verifiedFacts??[]).join('\n');
+  const authority=`${institutional}\n${facts}`;
+  const supported=new Set(monetaryValues(authority));
+  return values.every(v=>supported.has(v));
+}
+function factCategory(segment:string):string|null {
+  const t=fold(segment);
+  if(/\bpesa\b|\bpeso\b/.test(t))return 'PESO';
+  if(/\bbateria\b|\bcapacidad\b/.test(t))return 'BATERIA';
+  if(/\bcarga\b/.test(t))return 'CARGA';
+  if(/\bram\b/.test(t))return 'RAM';
+  if(/\balmacenamiento\b|\bmemoria interna\b/.test(t))return 'ALMACENAMIENTO';
+  if(/\bcamara nocturna\b|\bvision nocturna\b/.test(t))return 'CAMARA_NOCTURNA';
+  if(/\bcamara principal\b/.test(t))return 'CAMARA_PRINCIPAL';
+  if(/\bpantalla\b|\brefresco\b/.test(t))return 'PANTALLA';
+  return null;
+}
+function duplicateFact(answer:string,input:LlmWriteInput):boolean {
+  const segments=answer.split(/\n+|(?<=[.!])\s+/).map(x=>x.trim()).filter(Boolean);
+  const seen=new Set<string>();
+  const unitRx=/\b(\d+(?:[.,]\d+)?)\s*(kg|g|mah|w|gb|mp|hz|mm|cm|m)\b/gi;
+  for(const segment of segments){
+    const category=factCategory(segment);
+    if(!category)continue;
+    for(const match of segment.matchAll(unitRx)){
+      const signature=`${category}:${Number(match[1].replace(',','.'))}:${match[2].toLowerCase()}`;
+      if(seen.has(signature))return true;
+      seen.add(signature);
+    }
+  }
+  return false;
+}
 
 function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | null {
   const intent = String(input.intent ?? '').toUpperCase();
   const priceAllowed = ['PRICE','QUOTE','PRICE_AVAILABILITY'].includes(intent);
-  if (!priceAllowed && /\bS\/\s*\d/i.test(answer)) return 'UNSOLICITED_PRICE';
+  const institutionalIntent=['POLICY','WARRANTY'].includes(intent);
+  if (!priceAllowed && /\bS\/\s*\d/i.test(answer) && !(institutionalIntent&&institutionalMoneySupported(input,answer))) return 'UNSOLICITED_PRICE';
 
   const unverifiedAction = /(?:ya\s+reserv(?:e|é)|reserva\s+(?:quedo|quedó|confirmada)|pedido\s+(?:creado|registrado)|compra\s+(?:realizada|confirmada))/i;
   if (unverifiedAction.test(answer)) return 'UNVERIFIED_ACTION';
@@ -47,7 +87,8 @@ function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | nu
   if (stockLeak.test(answer)) return 'RAW_STOCK_QUANTITY';
 
   const roboticMeta=/\b(?:cat[aá]logo\s+verificado|evidencia\s+verificada|seg[uú]n\s+(?:mi|el)\s+sistema(?:\s+interno)?|seg[uú]n\s+el\s+rag|querytarget|\bintent\b)\b/i;
-  if(roboticMeta.test(answer))return 'ROBOTIC_META_LANGUAGE';
+  const internalControl=/\b(?:SOFT_CLOSE|ANSWER_ONLY|ASK_MISSING_FACT|OFFER_ALTERNATIVE|COLLECT_RESERVATION_DATA|EXECUTE_RESERVATION|ASSISTED_HANDOFF|RECOMMEND_WITHIN_BUDGET)\b/;
+  if(roboticMeta.test(answer)||internalControl.test(answer))return 'ROBOTIC_META_LANGUAGE';
 
   if(String(input.decision?.nextBestAction??'').toUpperCase()==='ANSWER_ONLY'&&/[¿?]/.test(answer))return 'NBA_ANSWER_ONLY_QUESTION';
   if(mentionsProductOutsideAllowlist(answer,input.allowedProducts??[]))return 'PRODUCT_OUTSIDE_ALLOWLIST';
@@ -66,6 +107,7 @@ function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | nu
     const productIds=new Set((input.rag??[]).map(x=>String(x.productId??'').trim()).filter(Boolean));
     if(productIds.size<2)return 'UNSUPPORTED_SUPERLATIVE';
   }
+  if(duplicateFact(answer,input))return 'DUPLICATE_FACT';
   return null;
 }
 
@@ -80,6 +122,10 @@ function stripTrailingQuestion(answer:string):string {
   const boundary=Math.max(before.lastIndexOf('.'),before.lastIndexOf('!'),before.lastIndexOf('\n'));
   return boundary>=0?before.slice(0,boundary+1).trim():'';
 }
+function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
+  if(String(input.decision?.nextBestAction??'').toUpperCase()!=='ANSWER_ONLY')return fallbackAnswer;
+  return stripTrailingQuestion(fallbackAnswer)||'No tengo ese dato confirmado.';
+}
 
 export async function safeWrite(llm: LlmProvider, input: LlmWriteInput, fallbackAnswer: string): Promise<WriterGuardResult> {
   try {
@@ -88,16 +134,16 @@ export async function safeWrite(llm: LlmProvider, input: LlmWriteInput, fallback
       verifiedFacts: input.verifiedFacts ?? normalizeEvidence({ intent:input.intent, quote:input.quote, rag:input.rag }),
     };
     const result = await llm.write(writeInput);
-    const violation = guardGeneratedAnswer(input, result.text);
+    const violation = guardGeneratedAnswer(writeInput, result.text);
     if (violation === 'NBA_ANSWER_ONLY_QUESTION') {
       const salvaged=stripTrailingQuestion(result.text);
-      if(salvaged && !guardGeneratedAnswer(input,salvaged)) {
+      if(salvaged && !guardGeneratedAnswer(writeInput,salvaged)) {
         return { answer:salvaged, model:result.model, llmResult:result, fallback:{delivered:true} };
       }
     }
     if (violation) {
       return {
-        answer: fallbackAnswer,
+        answer: safeFallback(writeInput,fallbackAnswer),
         model: result.model,
         llmResult: result,
         fallback: { delivered: false, error: violation },
@@ -106,7 +152,7 @@ export async function safeWrite(llm: LlmProvider, input: LlmWriteInput, fallback
     return { answer: result.text, model: result.model, llmResult: result, fallback: { delivered: true } };
   } catch (error) {
     return {
-      answer: fallbackAnswer,
+      answer: safeFallback(input,fallbackAnswer),
       model: 'deterministic-fallback-v0.4',
       llmResult: null,
       fallback: { delivered: false, error: error instanceof Error ? error.message : String(error) },
