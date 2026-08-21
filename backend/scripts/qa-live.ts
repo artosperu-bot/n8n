@@ -28,6 +28,10 @@ function statusFromFindings(findings: QaFinding[]): QaLevel { if(findings.some(f
 function maxStatus(statuses: QaLevel[]): QaLevel { if(statuses.includes('RED'))return'RED';if(statuses.includes('YELLOW'))return'YELLOW';return'GREEN'; }
 function average(values:number[]):number{return values.length?Math.round(values.reduce((a,b)=>a+b,0)/values.length):0;}
 async function responseJson(response:Response):Promise<any>{const text=await response.text();if(!text)return{};try{return JSON.parse(text);}catch{return{error:text};}}
+function llmSteps(turn:QaScenarioResult['turns'][number]):any[]{
+  const debug=turn.observation.response?.debug??{};
+  return [debug.planner,debug.llm].filter(Boolean);
+}
 
 export async function runLiveQa(options: RunOptions = {}): Promise<{ report: QaReport; exitCode: number }> {
   const baseUrl=(options.baseUrl??process.env.QA_BASE_URL??'http://127.0.0.1:3000').replace(/\/$/,'');
@@ -49,8 +53,9 @@ export async function runLiveQa(options: RunOptions = {}): Promise<{ report: QaR
     scenarioResults.push({id:scenario.id,family:scenario.family,title:scenario.title,sessionId,status:maxStatus(turnResults.map(t=>t.status)),turns:turnResults});
   }
   const allTurns=scenarioResults.flatMap(s=>s.turns);const scenarioStatuses=scenarioResults.map(s=>s.status);
-  const usage=allTurns.reduce((acc,turn)=>{const llm=turn.observation.response?.debug?.llm??{};acc.inputTokens+=Number(llm.inputTokens??0);acc.outputTokens+=Number(llm.outputTokens??0);acc.totalTokens+=Number(llm.totalTokens??0);acc.cachedInputTokens+=Number(llm.cachedInputTokens??0);return acc;},{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0});
-  const report:QaReport={runId,startedAt:now.toISOString(),finishedAt:new Date().toISOString(),modes:health.modes??{},summary:{scenarios:scenarioResults.length,turns:allTurns.length,green:scenarioStatuses.filter(s=>s==='GREEN').length,yellow:scenarioStatuses.filter(s=>s==='YELLOW').length,red:scenarioStatuses.filter(s=>s==='RED').length},usage,latency:{averageRoundTripMs:average(allTurns.map(t=>t.observation.roundTripMs)),averageLlmMs:average(allTurns.map(t=>Number(t.observation.response?.debug?.llm?.durationMs)).filter(Number.isFinite))},scenarios:scenarioResults};
+  const allLlmSteps=allTurns.flatMap(llmSteps);
+  const usage=allLlmSteps.reduce((acc,llm)=>{acc.inputTokens+=Number(llm.inputTokens??0);acc.outputTokens+=Number(llm.outputTokens??0);acc.totalTokens+=Number(llm.totalTokens??0);acc.cachedInputTokens+=Number(llm.cachedInputTokens??0);return acc;},{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0});
+  const report:QaReport={runId,startedAt:now.toISOString(),finishedAt:new Date().toISOString(),modes:health.modes??{},summary:{scenarios:scenarioResults.length,turns:allTurns.length,green:scenarioStatuses.filter(s=>s==='GREEN').length,yellow:scenarioStatuses.filter(s=>s==='YELLOW').length,red:scenarioStatuses.filter(s=>s==='RED').length},usage,latency:{averageRoundTripMs:average(allTurns.map(t=>t.observation.roundTripMs)),averageLlmMs:average(allLlmSteps.map(x=>Number(x.durationMs)).filter(Number.isFinite))},scenarios:scenarioResults};
   const safeReport=sanitizeSecrets(report);if(options.writeArtifacts!==false){const outputDir=resolve(options.outputDir??'qa-results');await mkdir(outputDir,{recursive:true});await writeFile(resolve(outputDir,`${runId}.json`),`${JSON.stringify(safeReport,null,2)}\n`,'utf8');await writeFile(resolve(outputDir,`${runId}.md`),renderMarkdown(safeReport),'utf8');}
   logger.log(`STECH Live QA ${runId}`);logger.table(scenarioResults.map(s=>({status:s.status,family:s.family,case:s.id,session:s.sessionId})));logger.log(`GREEN=${report.summary.green} YELLOW=${report.summary.yellow} RED=${report.summary.red} | turns=${report.summary.turns} tokens=${report.usage.totalTokens}`);
   return{report:safeReport,exitCode:strict&&report.summary.red>0?1:0};
