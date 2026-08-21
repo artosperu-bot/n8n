@@ -122,6 +122,18 @@ function tokenSum(values:Array<number|null|undefined>):number|null {
   const nums=values.filter((x):x is number=>typeof x==='number'&&Number.isFinite(x));
   return nums.length?nums.reduce((a,b)=>a+b,0):null;
 }
+function spinContributionCode(previous:ConversationState,current:ConversationState,decision:TurnDecision):string|null {
+  const raw=fold(decision.spinContribution??'');
+  if(raw.includes('implic'))return 'IMPLICACION';
+  if(!previous.problem&&current.problem)return 'PROBLEMA';
+  if((!previous.useCase&&current.useCase)||(!previous.sector&&current.sector))return 'SITUACION';
+  const before=new Set(previous.priorities??[]);
+  if((current.priorities??[]).some(p=>!before.has(p)))return 'NECESIDAD_SOLUCION';
+  if(raw.includes('proble'))return 'PROBLEMA';
+  if(raw.includes('neces')||raw.includes('prioridad'))return 'NECESIDAD_SOLUCION';
+  if(raw)return 'SITUACION';
+  return null;
+}
 
 export class HybridConversationEngine {
   readonly #deps: Dependencies;
@@ -197,248 +209,263 @@ export class HybridConversationEngine {
     const messageId=input.messageId?.trim()||`backend:${crypto.randomUUID()}`;
     const requestId=messageId;
     const atomic=Boolean(this.#deps.conversations.beginTurn&&this.#deps.conversations.completeTurn);
-    if(atomic)await this.#deps.conversations.beginTurn!(input.sessionId,messageId,requestId);
+    let leaseAcquired=false;
+    if(atomic){
+      await this.#deps.conversations.beginTurn!(input.sessionId,messageId,requestId);
+      leaseAcquired=true;
+    }
 
-    const previous=await this.#deps.conversations.getState(input.sessionId);
-    const turn=(previous.turnCount??0)+1;
+    try {
+      const previous=await this.#deps.conversations.getState(input.sessionId);
+      const turn=(previous.turnCount??0)+1;
 
-    const facts=extractCommercialFacts(input.message,previous);
-    const budgetTurn=classifyBudgetTurn(input.message,{prevBudget:previous.budget??null});
-    const baseState:ConversationState={
-      ...previous,
-      budget:budgetTurn.budget?.max??previous.budget??null,
-      customerType:facts.customerType,
-      sector:facts.sector,
-      useCase:facts.useCase,
-      problem:facts.problem,
-      priorities:facts.priorities,
-      quantity:facts.quantity,
-      invoiceRequired:facts.invoiceRequired,
-      objection:budgetTurn.priceObjection?'precio':facts.objection,
-      purchaseSignal:facts.purchaseSignal,
-      spinFacts:facts.spinFacts,
-    };
+      const facts=extractCommercialFacts(input.message,previous);
+      const budgetTurn=classifyBudgetTurn(input.message,{prevBudget:previous.budget??null});
+      const baseState:ConversationState={
+        ...previous,
+        budget:budgetTurn.budget?.max??previous.budget??null,
+        customerType:facts.customerType,
+        sector:facts.sector,
+        useCase:facts.useCase,
+        problem:facts.problem,
+        priorities:facts.priorities,
+        quantity:facts.quantity,
+        invoiceRequired:facts.invoiceRequired,
+        objection:budgetTurn.priceObjection?'precio':facts.objection,
+        purchaseSignal:facts.purchaseSignal,
+        spinFacts:facts.spinFacts,
+      };
 
-    const deterministicDecision=fallbackDecision(input.message,baseState);
-    let planner:LlmDecisionResult|null=null;
-    let plannerFailure:string|undefined;
-    try{if(this.#deps.llm.decide)planner=await this.#deps.llm.decide({message:input.message,state:baseState});}
-    catch(error){plannerFailure=error instanceof Error?error.message:String(error);}
+      const deterministicDecision=fallbackDecision(input.message,baseState);
+      let planner:LlmDecisionResult|null=null;
+      let plannerFailure:string|undefined;
+      try{if(this.#deps.llm.decide)planner=await this.#deps.llm.decide({message:input.message,state:baseState});}
+      catch(error){plannerFailure=error instanceof Error?error.message:String(error);}
 
-    const rawDecision=planner?.decision??deterministicDecision;
-    const initialCandidates=await this.#searchCandidates(input.message,rawDecision.targetProduct);
-    const decision=validateTurnDecision(rawDecision,baseState,unique(initialCandidates.map(productName)),deterministicDecision);
-    const intent=normalizeIntent(decision.primaryIntent,baseState.budget??null);
+      const rawDecision=planner?.decision??deterministicDecision;
+      const initialCandidates=await this.#searchCandidates(input.message,rawDecision.targetProduct);
+      const decision=validateTurnDecision(rawDecision,baseState,unique(initialCandidates.map(productName)),deterministicDecision);
+      const intent=normalizeIntent(decision.primaryIntent,baseState.budget??null);
 
-    const commercialState:ConversationState={
-      ...baseState,
-      useCase:baseState.useCase??decision.customerNeed??null,
-      problem:baseState.problem??decision.customerProblem??null,
-      priorities:unique([...(baseState.priorities??[]),...(decision.priorities??[])]),
-      objection:baseState.objection??decision.objection??null,
-      spinFacts:unique([...(baseState.spinFacts??[]),decision.spinContribution]),
-    };
+      const commercialState:ConversationState={
+        ...baseState,
+        useCase:baseState.useCase??decision.customerNeed??null,
+        problem:baseState.problem??decision.customerProblem??null,
+        priorities:unique([...(baseState.priorities??[]),...(decision.priorities??[])]),
+        objection:baseState.objection??decision.objection??null,
+        spinFacts:unique([...(baseState.spinFacts??[]),decision.spinContribution]),
+      };
 
-    const target=decision.targetProduct??commercialState.selectedProduct??commercialState.recommendedProduct??commercialState.activeProduct??null;
-    let quote=await this.#quote(target,initialCandidates);
-    const requestedUnknown=Boolean(target&&!quote);
-    let recommendedProduct=commercialState.recommendedProduct??null;
-    let rag:RagEvidence[]=[];
-    let images:ProductImage[]=[];
-    let nba=decision.nextBestAction??nextBestAction(intent,commercialState);
-    let answer='';
-    let writerResult:Awaited<ReturnType<typeof safeWrite>>|null=null;
-    let handoff=['PURCHASE','HUMAN'].includes(intent)||nba==='ASSISTED_HANDOFF';
-    let handoffReason=handoff?(intent==='HUMAN'?'SOLICITUD_HUMANO':'CONTINUAR_VENTA'):null;
-    const sqlTools:string[]=[];
-    let route='HYBRID';
+      const target=decision.targetProduct??commercialState.selectedProduct??commercialState.recommendedProduct??commercialState.activeProduct??null;
+      let quote=await this.#quote(target,initialCandidates);
+      const requestedUnknown=Boolean(target&&!quote);
+      let recommendedProduct=commercialState.recommendedProduct??null;
+      let rag:RagEvidence[]=[];
+      let images:ProductImage[]=[];
+      let nba=decision.nextBestAction??nextBestAction(intent,commercialState);
+      let answer='';
+      let writerResult:Awaited<ReturnType<typeof safeWrite>>|null=null;
+      let handoff=['PURCHASE','HUMAN'].includes(intent)||nba==='ASSISTED_HANDOFF';
+      let handoffReason=handoff?(intent==='HUMAN'?'SOLICITUD_HUMANO':'CONTINUAR_VENTA'):null;
+      const sqlTools:string[]=[];
+      let route='HYBRID';
 
-    if(requestedUnknown&&intent!=='IMAGE'){
-      const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
-      const alternatives=await this.#rankCandidates(commercialState,query,commercialState.budget??99999999,target,2);
-      recommendedProduct=productName(alternatives[0]?.quote)??null;
-      rag=alternatives.flatMap(x=>x.evidence.slice(0,3));
-      nba=alternatives.length?'OFFER_ALTERNATIVES':'CLARIFY_OR_HANDOFF';
-      route=alternatives.length?'UNKNOWN_TO_ALTERNATIVES':'UNKNOWN_NO_ALTERNATIVE';
-      if(alternatives.length)sqlTools.push('dbo.sp_ListarCatalogoVenta');
-      const names=alternatives.map(x=>productName(x.quote)).filter(Boolean).join(' y ');
-      const recoveryPlan=alternatives.length
-        ? `El modelo solicitado ${target} no aparece en el catalogo verificado. Ofrece solamente estas alternativas reales: ${names}. Relacionalas con la necesidad conocida y explica por que pueden encajar. No menciones precio salvo que el cliente lo haya pedido.`
-        : 'No se encontro el modelo ni una alternativa suficientemente verificada. No inventes; ofrece revisar el catalogo o pasar con un asesor si corresponde.';
-      const fallback=alternatives.length?`No encuentro ${target} en el catálogo actual. Sí puedo ayudarte con ${names}.`:noEvidenceResponse();
-      writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},rag,deterministicAnswer:recoveryPlan,decision},fallback);
-      answer=writerResult.answer;
-    }else if(intent==='PRICE'){
-      sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_PRICE';answer=target?priceResponse(quote):'¿Qué modelo quieres consultar?';
-    }else if(intent==='STOCK'){
-      sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_STOCK';answer=target?stockResponse(quote,facts.quantity):'¿Qué modelo quieres consultar?';
-    }else if(intent==='IMAGE'){
-      sqlTools.push('dbo.sp_BuscarImagenesProductoVenta');route='SQL_IMAGES';
-      images=target&&this.#deps.erp.getProductImages?await this.#deps.erp.getProductImages(target,10).catch(()=>[]):[];
-      answer=imageResponse(images)||noEvidenceResponse();
-    }else if(intent==='POLICY'||intent==='WARRANTY'){
-      route='RAG_INSTITUTIONAL';
-      try{rag=this.#deps.rag.searchInstitutional?await this.#deps.rag.searchInstitutional(input.message,4):await this.#deps.rag.search(input.message,null);}catch{rag=[];}
-      const fallback=institutionalResponse(rag)??noEvidenceResponse();
-      writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:`Responde solo la politica consultada. N+1=${nba??'NINGUNO'}.`,decision},fallback);
-      answer=writerResult.answer;
-    }else if(intent==='COMPARE'){
-      route='RAG_COMPARISON';
-      const pair=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[]),...(decision.mentionedProducts??[])]).slice(0,2);
-      if(pair.length<2){answer='¿Qué dos modelos quieres comparar?';route='CLARIFICATION';}
-      else{
-        const sections=productEvidenceSections({primary:'COMPARE',attributes:decision.attributes},{...commercialState,comparisonProducts:pair});
-        for(const name of pair){const q=await this.#quote(name,initialCandidates);rag.push(...await this.#productEvidence(input.message,q,sections,4).catch(()=>[]));}
-        const plan=`Compara ${pair[0]} y ${pair[1]} con la misma cobertura, en 2 a 4 diferencias relevantes. Explica trade-off, vincula con la necesidad conocida y recomienda solo si hay suficiente contexto. N+1=${nba??'NINGUNO'}.`;
-        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,comparisonProducts:pair},rag,deterministicAnswer:plan,decision},rag.length?plan:noEvidenceResponse());
-        answer=writerResult.answer;
-      }
-    }else if(['PRODUCT_INFO','CAPABILITY','EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent)){
-      const recommendationTurn=['RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent);
-      if(recommendationTurn){
-        const maxBudget=commercialState.budget??(intent==='HANDLE_PRICE_OBJECTION'&&quote?.price!=null?Math.max(0,quote.price-0.01):99999999);
+      if(requestedUnknown&&intent!=='IMAGE'){
         const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
-        const ranks=await this.#rankCandidates(commercialState,query,maxBudget,intent==='HANDLE_PRICE_OBJECTION'?target:null,3);
-        if(ranks[0]){quote=ranks[0].quote;recommendedProduct=productName(quote);rag=ranks[0].evidence;}
-      }else if(quote){
-        const primary=intent==='CAPABILITY'?'ATTRIBUTE':semanticIntent(intent);
-        const sections=productEvidenceSections({primary,attributes:decision.attributes},commercialState);
-        rag=await this.#productEvidence(input.message,quote,sections,8).catch(()=>[]);
-      }
-      const subject=recommendedProduct??productName(quote)??target;
-      const plan=subject
-        ? `Responde lo actual usando solo evidencia verificada sobre ${subject}. Usa criterio comercial, SPIN/FAB/LAER solo si aporta y N+1=${nba??'NINGUNO'}. No repitas discovery y no menciones precio si no fue solicitado.`
-        : `Responde de forma breve. Si falta un solo dato que realmente cambia la recomendacion, pregunta solo ese. N+1=${nba??'NINGUNO'}.`;
-      const fallback=subject?`Puedo ayudarte a evaluar ${subject}, pero no voy a afirmar características que no tenga verificadas.`:'¿Qué aspecto es más importante para ti en el equipo?';
-      writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},quote,rag,deterministicAnswer:plan,decision},fallback);
-      answer=writerResult.answer;route=rag.length?'RAG_PRODUCT':'COMMERCIAL_REASONING';
-    }else if(intent==='PURCHASE'||intent==='HUMAN'){
-      const selected=decision.selectedProduct??target??commercialState.selectedProduct??recommendedProduct??commercialState.activeProduct??null;
-      quote=await this.#quote(selected,initialCandidates);answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:selected,recommendedProduct},quote);
-      handoff=true;handoffReason=intent==='HUMAN'?'SOLICITUD_HUMANO':'CONTINUAR_VENTA';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';
-    }else if(intent==='QUOTE'){
-      answer=quoteRequestResponse({...commercialState,queryTarget:target,recommendedProduct});route='QUOTE_DISCOVERY';
-      if(target&&facts.quantity){handoff=true;handoffReason='COTIZACION_LISTA_PARA_ASESOR';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';}
-    }else if(intent==='ORDER_STATUS'){
-      route='SQL_ORDER';sqlTools.push('dbo.sp_ConsultarPedido');
-      const {orderNumber,email}=extractOrderCredentials(input.message);
-      if(!orderNumber||!email||!this.#deps.erp.consultOrder){answer='Para revisar el pedido necesito el número de orden y el correo usado en la compra.';route='CLARIFICATION';}
-      else{
-        const order=await this.#deps.erp.consultOrder(orderNumber,email).catch(()=>null);
-        if(!order)answer='No pude confirmar ese pedido con los datos indicados.';
+        const alternatives=await this.#rankCandidates(commercialState,query,commercialState.budget??99999999,target,2);
+        recommendedProduct=productName(alternatives[0]?.quote)??null;
+        rag=alternatives.flatMap(x=>x.evidence.slice(0,3));
+        nba=alternatives.length?'OFFER_ALTERNATIVES':'CLARIFY_OR_HANDOFF';
+        route=alternatives.length?'UNKNOWN_TO_ALTERNATIVES':'UNKNOWN_NO_ALTERNATIVE';
+        if(alternatives.length)sqlTools.push('dbo.sp_ListarCatalogoVenta');
+        const names=alternatives.map(x=>productName(x.quote)).filter(Boolean).join(' y ');
+        const recoveryPlan=alternatives.length
+          ? `El modelo solicitado ${target} no aparece en el catalogo verificado. Ofrece solamente estas alternativas reales: ${names}. Relacionalas con la necesidad conocida y explica por que pueden encajar. No menciones precio salvo que el cliente lo haya pedido.`
+          : 'No se encontro el modelo ni una alternativa suficientemente verificada. No inventes; ofrece revisar el catalogo o pasar con un asesor si corresponde.';
+        const fallback=alternatives.length?`No encuentro ${target} en el catálogo actual. Sí puedo ayudarte con ${names}.`:noEvidenceResponse();
+        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},rag,deterministicAnswer:recoveryPlan,decision},fallback);
+        answer=writerResult.answer;
+      }else if(intent==='PRICE'){
+        sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_PRICE';answer=target?priceResponse(quote):'¿Qué modelo quieres consultar?';
+      }else if(intent==='STOCK'){
+        sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_STOCK';answer=target?stockResponse(quote,facts.quantity):'¿Qué modelo quieres consultar?';
+      }else if(intent==='IMAGE'){
+        sqlTools.push('dbo.sp_BuscarImagenesProductoVenta');route='SQL_IMAGES';
+        images=target&&this.#deps.erp.getProductImages?await this.#deps.erp.getProductImages(target,10).catch(()=>[]):[];
+        answer=imageResponse(images)||noEvidenceResponse();
+      }else if(intent==='POLICY'||intent==='WARRANTY'){
+        route='RAG_INSTITUTIONAL';
+        try{rag=this.#deps.rag.searchInstitutional?await this.#deps.rag.searchInstitutional(input.message,4):await this.#deps.rag.search(input.message,null);}catch{rag=[];}
+        const fallback=institutionalResponse(rag)??noEvidenceResponse();
+        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:`Responde solo la politica consultada. N+1=${nba??'NINGUNO'}.`,decision},fallback);
+        answer=writerResult.answer;
+      }else if(intent==='COMPARE'){
+        route='RAG_COMPARISON';
+        const pair=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[]),...(decision.mentionedProducts??[])]).slice(0,2);
+        if(pair.length<2){answer='¿Qué dos modelos quieres comparar?';route='CLARIFICATION';}
         else{
-          rag=[{text:JSON.stringify(order),source:'SQL_ORDER_VERIFIED',score:100}];
-          writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:'Resume únicamente el estado verificado del pedido; no agregues datos que no estén en la evidencia.',decision},'Encontré el pedido, pero no puedo resumir su estado con seguridad ahora.');
+          const sections=productEvidenceSections({primary:'COMPARE',attributes:decision.attributes},{...commercialState,comparisonProducts:pair});
+          for(const name of pair){const q=await this.#quote(name,initialCandidates);rag.push(...await this.#productEvidence(input.message,q,sections,4).catch(()=>[]));}
+          const plan=`Compara ${pair[0]} y ${pair[1]} con la misma cobertura, en 2 a 4 diferencias relevantes. Explica trade-off, vincula con la necesidad conocida y recomienda solo si hay suficiente contexto. N+1=${nba??'NINGUNO'}.`;
+          writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,comparisonProducts:pair},rag,deterministicAnswer:plan,decision},rag.length?plan:noEvidenceResponse());
           answer=writerResult.answer;
         }
+      }else if(['PRODUCT_INFO','CAPABILITY','EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent)){
+        const recommendationTurn=['RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent);
+        if(recommendationTurn){
+          const maxBudget=commercialState.budget??(intent==='HANDLE_PRICE_OBJECTION'&&quote?.price!=null?Math.max(0,quote.price-0.01):99999999);
+          const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
+          const ranks=await this.#rankCandidates(commercialState,query,maxBudget,intent==='HANDLE_PRICE_OBJECTION'?target:null,3);
+          if(ranks[0]){quote=ranks[0].quote;recommendedProduct=productName(quote);rag=ranks[0].evidence;}
+        }else if(quote){
+          const primary=intent==='CAPABILITY'?'ATTRIBUTE':semanticIntent(intent);
+          const sections=productEvidenceSections({primary,attributes:decision.attributes},commercialState);
+          rag=await this.#productEvidence(input.message,quote,sections,8).catch(()=>[]);
+        }
+        const subject=recommendedProduct??productName(quote)??target;
+        const plan=subject
+          ? `Responde lo actual usando solo evidencia verificada sobre ${subject}. Usa criterio comercial, SPIN/FAB/LAER solo si aporta y N+1=${nba??'NINGUNO'}. No repitas discovery y no menciones precio si no fue solicitado.`
+          : `Responde de forma breve. Si falta un solo dato que realmente cambia la recomendacion, pregunta solo ese. N+1=${nba??'NINGUNO'}.`;
+        const fallback=subject?`Puedo ayudarte a evaluar ${subject}, pero no voy a afirmar características que no tenga verificadas.`:'¿Qué aspecto es más importante para ti en el equipo?';
+        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},quote,rag,deterministicAnswer:plan,decision},fallback);
+        answer=writerResult.answer;route=rag.length?'RAG_PRODUCT':'COMMERCIAL_REASONING';
+      }else if(intent==='PURCHASE'||intent==='HUMAN'){
+        const selected=decision.selectedProduct??target??commercialState.selectedProduct??recommendedProduct??commercialState.activeProduct??null;
+        quote=await this.#quote(selected,initialCandidates);answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:selected,recommendedProduct},quote);
+        handoff=true;handoffReason=intent==='HUMAN'?'SOLICITUD_HUMANO':'CONTINUAR_VENTA';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';
+      }else if(intent==='QUOTE'){
+        answer=quoteRequestResponse({...commercialState,queryTarget:target,recommendedProduct});route='QUOTE_DISCOVERY';
+        if(target&&facts.quantity){handoff=true;handoffReason='COTIZACION_LISTA_PARA_ASESOR';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';}
+      }else if(intent==='ORDER_STATUS'){
+        route='SQL_ORDER';sqlTools.push('dbo.sp_ConsultarPedido');
+        const {orderNumber,email}=extractOrderCredentials(input.message);
+        if(!orderNumber||!email||!this.#deps.erp.consultOrder){answer='Para revisar el pedido necesito el número de orden y el correo usado en la compra.';route='CLARIFICATION';}
+        else{
+          const order=await this.#deps.erp.consultOrder(orderNumber,email).catch(()=>null);
+          if(!order)answer='No pude confirmar ese pedido con los datos indicados.';
+          else{
+            rag=[{text:JSON.stringify(order),source:'SQL_ORDER_VERIFIED',score:100}];
+            writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:'Resume únicamente el estado verificado del pedido; no agregues datos que no estén en la evidencia.',decision},'Encontré el pedido, pero no puedo resumir su estado con seguridad ahora.');
+            answer=writerResult.answer;
+          }
+        }
+      }else if(intent==='BUDGET_CONSTRAINT'&&commercialState.budget!=null){answer=`Listo, tomo S/ ${commercialState.budget} como tu tope.`;route='MEMORY_BUDGET';}
+      else if(intent==='GREETING'){answer='Hola, cuéntame qué equipo buscas o para qué lo necesitas.';route='GREETING';}
+      else if(intent==='CATEGORIES'&&this.#deps.erp.listCategories){const rows=await this.#deps.erp.listCategories().catch(()=>[]);answer=rows.slice(0,8).map(x=>x.name).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarCategoriasVenta');route='SQL_CATEGORIES';}
+      else if(intent==='SUBCATEGORIES'&&this.#deps.erp.listSubcategories){const rows=await this.#deps.erp.listSubcategories().catch(()=>[]);answer=rows.slice(0,8).map(x=>x.name).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarSubcategoriasVenta');route='SQL_SUBCATEGORIES';}
+      else if(intent==='CATALOG'&&this.#deps.erp.listCatalog){const rows=await this.#deps.erp.listCatalog({onlyWithStock:true}).catch(()=>[]);answer=rows.slice(0,6).map(x=>productName(x)).filter(Boolean).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarCatalogoVenta');route='SQL_CATALOG';}
+      else{
+        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag:[],deterministicAnswer:`Responde lo actual y usa N+1=${nba??'NINGUNO'} sin inventar ni repetir preguntas conocidas.`,decision},'Puedo ayudarte con productos, comparaciones, características, políticas o una compra.');
+        answer=writerResult.answer;route='GENERAL_COMMERCIAL';
       }
-    }else if(intent==='BUDGET_CONSTRAINT'&&commercialState.budget!=null){answer=`Listo, tomo S/ ${commercialState.budget} como tu tope.`;route='MEMORY_BUDGET';}
-    else if(intent==='GREETING'){answer='Hola, cuéntame qué equipo buscas o para qué lo necesitas.';route='GREETING';}
-    else if(intent==='CATEGORIES'&&this.#deps.erp.listCategories){const rows=await this.#deps.erp.listCategories().catch(()=>[]);answer=rows.slice(0,8).map(x=>x.name).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarCategoriasVenta');route='SQL_CATEGORIES';}
-    else if(intent==='SUBCATEGORIES'&&this.#deps.erp.listSubcategories){const rows=await this.#deps.erp.listSubcategories().catch(()=>[]);answer=rows.slice(0,8).map(x=>x.name).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarSubcategoriasVenta');route='SQL_SUBCATEGORIES';}
-    else if(intent==='CATALOG'&&this.#deps.erp.listCatalog){const rows=await this.#deps.erp.listCatalog({onlyWithStock:true}).catch(()=>[]);answer=rows.slice(0,6).map(x=>productName(x)).filter(Boolean).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarCatalogoVenta');route='SQL_CATALOG';}
-    else{
-      writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag:[],deterministicAnswer:`Responde lo actual y usa N+1=${nba??'NINGUNO'} sin inventar ni repetir preguntas conocidas.`,decision},'Puedo ayudarte con productos, comparaciones, características, políticas o una compra.');
-      answer=writerResult.answer;route='GENERAL_COMMERCIAL';
+
+      const selectedProduct=String(decision.referenceType??'').toUpperCase()==='SELECTION_REFERENT'
+        ?(decision.selectedProduct??commercialState.selectedProduct??commercialState.salientProduct??target)
+        :(decision.selectedProduct??commercialState.selectedProduct??null);
+      const explicitSwitch=decision.explicitSwitch&&Boolean(selectedProduct);
+      let activeProduct=commercialState.activeProduct??null;
+      if(!activeProduct&&quote)activeProduct=productName(quote);
+      if(explicitSwitch&&selectedProduct)activeProduct=selectedProduct;
+      const salientProduct=productName(quote)??decision.targetProduct??recommendedProduct??commercialState.salientProduct??activeProduct;
+      const comparisonProducts=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[])]).slice(0,2);
+      const targetResolvedQuote=quote;
+      const activeQuote=await this.#quote(activeProduct,initialCandidates);
+      const activeId=activeQuote?.productRagId??(same(activeProduct,previous.activeProduct)?previous.activeProductId:null)??null;
+      const activeCode=activeQuote?.productCode??(same(activeProduct,previous.activeProduct)?previous.activeProductCode:null)??null;
+      const origin=resolutionOrigin(decision.referenceType,explicitSwitch,Boolean(targetResolvedQuote?.productRagId),target,previous);
+
+      const nextState=reduceState(previous,{
+        contextVersion:previous.contextVersion??0,
+        activeProduct,
+        activeProductId:activeId,
+        activeProductCode:activeCode,
+        queryTarget:decision.targetProduct??productName(targetResolvedQuote)??commercialState.queryTarget??null,
+        salientProduct,
+        selectedProduct,
+        recommendedProduct,
+        comparisonProducts,
+        explicitSwitch,
+        budget:commercialState.budget??null,
+        lastIntent:intent,
+        secondaryIntents:decision.secondaryIntents,
+        lastRoute:route,
+        lastSqlTools:sqlTools,
+        requiresSql:decision.needsSql||sqlTools.length>0,
+        requiresRag:decision.needsProductRag||decision.needsInstitutionalRag||rag.length>0,
+        spinFacts:unique([...(commercialState.spinFacts??[]),decision.spinContribution]),
+        lastSpinContribution:spinContributionCode(previous,commercialState,decision),
+        lastNba:nba??null,
+        customerType:commercialState.customerType,
+        sector:commercialState.sector,
+        useCase:commercialState.useCase,
+        problem:commercialState.problem,
+        priorities:commercialState.priorities,
+        quantity:commercialState.quantity,
+        invoiceRequired:commercialState.invoiceRequired,
+        objection:commercialState.objection,
+        purchaseSignal:facts.purchaseSignal||intent==='PURCHASE',
+        commercialStage:stageFor(intent,decision.commercialStage),
+        commercialStrategy:strategyFor(intent),
+        handoffActive:handoff,
+        blockAutomaticReply:handoff,
+        handoffReason,
+        lastResolvedProductId:targetResolvedQuote?.productRagId??null,
+        lastResolvedProductCode:targetResolvedQuote?.productCode??null,
+        lastProductResolutionConfidence:targetResolvedQuote?.productRagId?decision.confidence:0,
+        lastProductResolutionOrigin:origin,
+        lastUserMessage:input.message,
+        lastAssistantMessage:answer,
+      });
+
+      const model=writerResult?.model??planner?.model??'stech-hybrid-deterministic';
+      const pUsage=planner?.usage;
+      const wUsage=writerResult?.llmResult?.usage;
+      const completionMeta={
+        messageId,requestId,conversationType:input.sessionId.startsWith('qa-')?'QA_LIVE':null,model,
+        inputTokens:tokenSum([pUsage?.inputTokens,wUsage?.inputTokens]),
+        outputTokens:tokenSum([pUsage?.outputTokens,wUsage?.outputTokens]),
+        totalTokens:tokenSum([pUsage?.totalTokens,wUsage?.totalTokens]),
+        cachedInputTokens:tokenSum([pUsage?.cachedInputTokens,wUsage?.cachedInputTokens]),
+        totalPrompts:(planner?1:0)+(writerResult?.llmResult?1:0),
+      };
+      if(atomic){
+        await this.#deps.conversations.completeTurn!(input.sessionId,input.message,answer,nextState,completionMeta);
+        leaseAcquired=false;
+      }else{
+        await this.#deps.conversations.appendMessage(input.sessionId,'user',input.message,completionMeta);
+        await this.#deps.conversations.saveState(input.sessionId,nextState);
+        await this.#deps.conversations.appendMessage(input.sessionId,'assistant',answer,completionMeta);
+      }
+
+      const plannerTelemetry=await this.#recordUsage(input.sessionId,turn,'SEMANTIC_PLAN',messageId,planner);
+      const writerTelemetry=await this.#recordUsage(input.sessionId,turn,'COMMERCIAL_WRITE',messageId,writerResult?.llmResult??null);
+      const telemetry=!plannerTelemetry.delivered?plannerTelemetry:writerTelemetry;
+      let automation:{delivered:boolean;error?:string}={delivered:false};
+      try{
+        automation=handoff
+          ?await this.#deps.automation.publish({type:'handoff.requested',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{product:selectedProduct??activeProduct,reason:handoffReason,context:nextState}})
+          :await this.#deps.automation.publish({type:'conversation.turn.completed',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{intent,route,product:activeProduct,nextBestAction:nba}});
+      }catch(error){automation={delivered:false,error:error instanceof Error?error.message:String(error)};}
+
+      return{
+        sessionId:input.sessionId,
+        answer,
+        state:{...nextState,contextVersion:(previous.contextVersion??0)+1},
+        debug:{
+          intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,queryTarget:nextState.queryTarget??null,explicitSwitch,budget:nextState.budget??null,priceObjection:budgetTurn.priceObjection,
+          erp:quote,images,ragSources:rag.map(x=>x.source),planner:plannerDebug(planner),
+          llm:writerResult?.llmResult?{model:writerResult.llmResult.model,inputTokens:writerResult.llmResult.usage.inputTokens,outputTokens:writerResult.llmResult.usage.outputTokens,totalTokens:writerResult.llmResult.usage.totalTokens,cachedInputTokens:writerResult.llmResult.usage.cachedInputTokens,durationMs:writerResult.llmResult.durationMs}:undefined,
+          plannerFallback:plannerFailure?{delivered:false,error:plannerFailure}:undefined,
+          writerFallback:writerResult?.fallback,totalDurationMs:Math.max(0,Math.round(performance.now()-started)),telemetry,automation,
+        },
+      };
+    } catch(error) {
+      if(leaseAcquired&&this.#deps.conversations.failTurn){
+        try{
+          await this.#deps.conversations.failTurn(input.sessionId,messageId,error instanceof Error?error.message:String(error));
+        }catch{}
+      }
+      throw error;
     }
-
-    const selectedProduct=String(decision.referenceType??'').toUpperCase()==='SELECTION_REFERENT'
-      ?(decision.selectedProduct??commercialState.selectedProduct??commercialState.salientProduct??target)
-      :(decision.selectedProduct??commercialState.selectedProduct??null);
-    const explicitSwitch=decision.explicitSwitch&&Boolean(selectedProduct);
-    let activeProduct=commercialState.activeProduct??null;
-    if(!activeProduct&&quote)activeProduct=productName(quote);
-    if(explicitSwitch&&selectedProduct)activeProduct=selectedProduct;
-    const salientProduct=productName(quote)??decision.targetProduct??recommendedProduct??commercialState.salientProduct??activeProduct;
-    const comparisonProducts=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[])]).slice(0,2);
-    const targetResolvedQuote=quote;
-    const activeQuote=await this.#quote(activeProduct,initialCandidates);
-    const activeId=activeQuote?.productRagId??(same(activeProduct,previous.activeProduct)?previous.activeProductId:null)??null;
-    const activeCode=activeQuote?.productCode??(same(activeProduct,previous.activeProduct)?previous.activeProductCode:null)??null;
-    const origin=resolutionOrigin(decision.referenceType,explicitSwitch,Boolean(targetResolvedQuote?.productRagId),target,previous);
-
-    const nextState=reduceState(previous,{
-      contextVersion:previous.contextVersion??0,
-      activeProduct,
-      activeProductId:activeId,
-      activeProductCode:activeCode,
-      queryTarget:decision.targetProduct??productName(targetResolvedQuote)??commercialState.queryTarget??null,
-      salientProduct,
-      selectedProduct,
-      recommendedProduct,
-      comparisonProducts,
-      explicitSwitch,
-      budget:commercialState.budget??null,
-      lastIntent:intent,
-      secondaryIntents:decision.secondaryIntents,
-      lastRoute:route,
-      lastSqlTools:sqlTools,
-      requiresSql:decision.needsSql||sqlTools.length>0,
-      requiresRag:decision.needsProductRag||decision.needsInstitutionalRag||rag.length>0,
-      spinFacts:unique([...(commercialState.spinFacts??[]),decision.spinContribution]),
-      lastNba:nba??null,
-      customerType:commercialState.customerType,
-      sector:commercialState.sector,
-      useCase:commercialState.useCase,
-      problem:commercialState.problem,
-      priorities:commercialState.priorities,
-      quantity:commercialState.quantity,
-      invoiceRequired:commercialState.invoiceRequired,
-      objection:commercialState.objection,
-      purchaseSignal:facts.purchaseSignal||intent==='PURCHASE',
-      commercialStage:stageFor(intent,decision.commercialStage),
-      commercialStrategy:strategyFor(intent),
-      handoffActive:handoff,
-      blockAutomaticReply:handoff,
-      handoffReason,
-      lastResolvedProductId:targetResolvedQuote?.productRagId??null,
-      lastResolvedProductCode:targetResolvedQuote?.productCode??null,
-      lastProductResolutionConfidence:targetResolvedQuote?.productRagId?decision.confidence:0,
-      lastProductResolutionOrigin:origin,
-      lastUserMessage:input.message,
-      lastAssistantMessage:answer,
-    });
-
-    const model=writerResult?.model??planner?.model??'stech-hybrid-deterministic';
-    const pUsage=planner?.usage;
-    const wUsage=writerResult?.llmResult?.usage;
-    const completionMeta={
-      messageId,requestId,conversationType:input.sessionId.startsWith('qa-')?'QA_LIVE':null,model,
-      inputTokens:tokenSum([pUsage?.inputTokens,wUsage?.inputTokens]),
-      outputTokens:tokenSum([pUsage?.outputTokens,wUsage?.outputTokens]),
-      totalTokens:tokenSum([pUsage?.totalTokens,wUsage?.totalTokens]),
-      cachedInputTokens:tokenSum([pUsage?.cachedInputTokens,wUsage?.cachedInputTokens]),
-      totalPrompts:(planner?1:0)+(writerResult?.llmResult?1:0),
-    };
-    if(atomic){
-      await this.#deps.conversations.completeTurn!(input.sessionId,input.message,answer,nextState,completionMeta);
-    }else{
-      await this.#deps.conversations.appendMessage(input.sessionId,'user',input.message,completionMeta);
-      await this.#deps.conversations.saveState(input.sessionId,nextState);
-      await this.#deps.conversations.appendMessage(input.sessionId,'assistant',answer,completionMeta);
-    }
-
-    const plannerTelemetry=await this.#recordUsage(input.sessionId,turn,'SEMANTIC_PLAN',messageId,planner);
-    const writerTelemetry=await this.#recordUsage(input.sessionId,turn,'COMMERCIAL_WRITE',messageId,writerResult?.llmResult??null);
-    const telemetry=!plannerTelemetry.delivered?plannerTelemetry:writerTelemetry;
-    let automation:{delivered:boolean;error?:string}={delivered:false};
-    try{
-      automation=handoff
-        ?await this.#deps.automation.publish({type:'handoff.requested',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{product:selectedProduct??activeProduct,reason:handoffReason,context:nextState}})
-        :await this.#deps.automation.publish({type:'conversation.turn.completed',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{intent,route,product:activeProduct,nextBestAction:nba}});
-    }catch(error){automation={delivered:false,error:error instanceof Error?error.message:String(error)};}
-
-    return{
-      sessionId:input.sessionId,
-      answer,
-      state:{...nextState,contextVersion:(previous.contextVersion??0)+1},
-      debug:{
-        intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,queryTarget:nextState.queryTarget??null,explicitSwitch,budget:nextState.budget??null,priceObjection:budgetTurn.priceObjection,
-        erp:quote,images,ragSources:rag.map(x=>x.source),planner:plannerDebug(planner),
-        llm:writerResult?.llmResult?{model:writerResult.llmResult.model,inputTokens:writerResult.llmResult.usage.inputTokens,outputTokens:writerResult.llmResult.usage.outputTokens,totalTokens:writerResult.llmResult.usage.totalTokens,cachedInputTokens:writerResult.llmResult.usage.cachedInputTokens,durationMs:writerResult.llmResult.durationMs}:undefined,
-        plannerFallback:plannerFailure?{delivered:false,error:plannerFailure}:undefined,
-        writerFallback:writerResult?.fallback,totalDurationMs:Math.max(0,Math.round(performance.now()-started)),telemetry,automation,
-      },
-    };
   }
 }
