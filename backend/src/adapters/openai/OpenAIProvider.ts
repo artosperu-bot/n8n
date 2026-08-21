@@ -127,7 +127,10 @@ export class OpenAIProvider implements LlmProvider {
       'No inventes hechos.',
       'Mencionar otro producto no significa cambiar; preferir un atributo tampoco; una selección explícita sí puede cambiar.',
       'No vuelvas a preguntar datos ya conocidos.',
-      'Propón el siguiente paso comercial más útil; si el cliente quiere comprar, avanza.',
+      'Propón solo un siguiente paso comercial útil y acotado.',
+      'nextBestAction DEBE ser exactamente uno de: ANSWER_ONLY, ASK_MISSING_FACT, OFFER_ALTERNATIVE, COMPARE, RECOMMEND, SOFT_CLOSE, ASSISTED_HANDOFF.',
+      'Usa ANSWER_ONLY cuando la pregunta factual ya puede responderse; ASK_MISSING_FACT solo si falta un dato que realmente cambiaría la decisión.',
+      'Si el cliente ya eligió, quiere comprar, cotizar o avanzar, usa ASSISTED_HANDOFF y nunca lo regreses a discovery.',
       'Devuelve SOLO JSON válido con estas claves: primaryIntent, secondaryIntents, targetProduct, mentionedProducts, referenceType, explicitSwitch, selectedProduct, comparisonProducts, attributes, customerNeed, customerProblem, priorities, objection, commercialStage, spinContribution, nextBestAction, confidence.',
       'Texto: string o null. Arrays: solo strings. No devuelvas objetos dentro de campos de texto o arrays.'
     ].join(' ');
