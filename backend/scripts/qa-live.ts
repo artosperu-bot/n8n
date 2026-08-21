@@ -2,16 +2,19 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { coreScenarios } from '../qa/scenarios/core.ts';
+import { journeyScenarios } from '../qa/scenarios/journeys.ts';
 import { createMessageId, createRunId, createSessionId } from '../qa/id.ts';
 import { evaluateCommercial } from '../qa/evaluators/commercial.ts';
 import { evaluateHard } from '../qa/evaluators/hard.ts';
 import { renderMarkdown, sanitizeSecrets } from '../qa/report/render.ts';
 import type { QaFinding, QaLevel, QaReport, QaScenario, QaScenarioResult, QaTurnObservation } from '../qa/types.ts';
 
+export type QaSuite = 'journeys' | 'core' | 'all';
 type Logger = Pick<Console, 'log' | 'table' | 'error'>;
 type RunOptions = {
   baseUrl?: string;
   scenarios?: QaScenario[];
+  suite?: QaSuite;
   fetcher?: typeof fetch;
   now?: Date;
   entropy?: string;
@@ -20,6 +23,18 @@ type RunOptions = {
   strict?: boolean;
   logger?: Logger;
 };
+
+export function selectScenarios(suite: QaSuite): QaScenario[] {
+  if (suite === 'core') return coreScenarios;
+  if (suite === 'all') return [...journeyScenarios, ...coreScenarios];
+  return journeyScenarios;
+}
+
+export function parseQaSuite(argv = process.argv.slice(2)): QaSuite {
+  const raw = argv.find(arg => arg.startsWith('--suite='))?.split('=')[1] ?? 'journeys';
+  if (raw === 'journeys' || raw === 'core' || raw === 'all') return raw;
+  throw new Error(`QA suite desconocida: ${raw}. Usa journeys, core o all.`);
+}
 
 function statusFromFindings(findings: QaFinding[]): QaLevel {
   if (findings.some(f => f.level === 'RED')) return 'RED';
@@ -46,7 +61,7 @@ async function responseJson(response: Response): Promise<any> {
 
 export async function runLiveQa(options: RunOptions = {}): Promise<{ report: QaReport; exitCode: number }> {
   const baseUrl = (options.baseUrl ?? process.env.QA_BASE_URL ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
-  const scenarios = options.scenarios ?? coreScenarios;
+  const scenarios = options.scenarios ?? selectScenarios(options.suite ?? parseQaSuite());
   const fetcher = options.fetcher ?? fetch;
   const now = options.now ?? new Date();
   const runId = createRunId(now, options.entropy);
@@ -157,7 +172,7 @@ export async function runLiveQa(options: RunOptions = {}): Promise<{ report: QaR
 
   logger.log(`STECH Live QA ${runId}`);
   logger.table(scenarioResults.map(s => ({ status: s.status, family: s.family, case: s.id, session: s.sessionId })));
-  logger.log(`GREEN=${report.summary.green} YELLOW=${report.summary.yellow} RED=${report.summary.red} | tokens=${report.usage.totalTokens}`);
+  logger.log(`GREEN=${report.summary.green} YELLOW=${report.summary.yellow} RED=${report.summary.red} | turns=${report.summary.turns} tokens=${report.usage.totalTokens}`);
 
   return { report: safeReport, exitCode: strict && report.summary.red > 0 ? 1 : 0 };
 }
