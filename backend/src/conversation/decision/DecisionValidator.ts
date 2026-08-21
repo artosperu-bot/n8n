@@ -174,15 +174,19 @@ export function validateTurnDecision(
     referenceType=fallbackReference;
   }
 
-  const uniqueSqlPurchase = fallbackIntent==='PURCHASE' && catalogCandidates.length===1;
-  if(uniqueSqlPurchase){
-    targetProduct=catalogCandidates[0];
+  const activeFold=fold(state.activeProduct??'');
+  const purchaseNewCandidates=catalogCandidates.filter(p=>!activeFold||fold(p)!==activeFold);
+  const sqlPurchaseTarget=fallbackIntent==='PURCHASE'
+    ? (purchaseNewCandidates.length===1 ? purchaseNewCandidates[0] : (!state.activeProduct&&catalogCandidates.length===1 ? catalogCandidates[0] : null))
+    : null;
+  if(sqlPurchaseTarget){
+    targetProduct=sqlPurchaseTarget;
     referenceType='SELECTION_REFERENT';
   }
 
   if (!targetProduct && catalogCandidates.length === 1) targetProduct = catalogCandidates[0];
 
-  if (referenceType === 'SELECTION_REFERENT' && recentSelection && !uniqueSqlPurchase) {
+  if (referenceType === 'SELECTION_REFERENT' && recentSelection && !sqlPurchaseTarget) {
     targetProduct = recentSelection;
   }
 
@@ -203,12 +207,12 @@ export function validateTurnDecision(
   const deterministicSelectionAuthorized = fallbackDecision?.explicitSwitch === true
     || ['SELECTION_REFERENT','EXPLICIT_PRODUCT_SWITCH'].includes(String(fallbackReference??''));
   const referentialSelectionAuthorized = !fallbackDecision && referenceType === 'SELECTION_REFERENT' && Boolean(recentSelection);
-  const selectionAuthorized = deterministicSelectionAuthorized || referentialSelectionAuthorized || uniqueSqlPurchase;
+  const selectionAuthorized = deterministicSelectionAuthorized || referentialSelectionAuthorized || Boolean(sqlPurchaseTarget);
   let selectedProduct = selectionAuthorized
-    ? (uniqueSqlPurchase ? targetProduct : knownCanonical(fallbackDecision?.selectedProduct ?? decision.selectedProduct ?? targetProduct, universe) ?? recentSelection)
+    ? (sqlPurchaseTarget ? targetProduct : knownCanonical(fallbackDecision?.selectedProduct ?? decision.selectedProduct ?? targetProduct, universe) ?? recentSelection)
     : knownCanonical(state.selectedProduct, universe);
 
-  if(referenceType==='SELECTION_REFERENT'&&recentSelection&&!uniqueSqlPurchase)selectedProduct=recentSelection;
+  if(referenceType==='SELECTION_REFERENT'&&recentSelection&&!sqlPurchaseTarget)selectedProduct=recentSelection;
   const explicitSwitch = Boolean(selectionAuthorized && selectedProduct && fold(selectedProduct)!==fold(state.activeProduct??''));
 
   const proposedNba = canonicalNba(decision.nextBestAction);
