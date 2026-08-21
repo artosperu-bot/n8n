@@ -32,6 +32,17 @@ function sameProduct(a:string|null|undefined,b:string|null|undefined):boolean{
   return Boolean(a&&b&&a.trim().toLocaleLowerCase()===b.trim().toLocaleLowerCase());
 }
 
+function topRecommendationTie(trace:any):boolean{
+  const ranked=Array.isArray(trace?.recommendation?.rankedCandidates)?trace.recommendation.rankedCandidates:[];
+  if(ranked.length<2)return false;
+  const a=ranked[0],b=ranked[1];
+  const scoreA=Number(a?.score),scoreB=Number(b?.score);
+  const confidenceA=Number(a?.confidence),confidenceB=Number(b?.confidence);
+  return Number.isFinite(scoreA)&&Number.isFinite(scoreB)
+    && Math.abs(scoreA-scoreB)<1e-9
+    && (!Number.isFinite(confidenceA)||!Number.isFinite(confidenceB)||Math.abs(confidenceA-confidenceB)<1e-9);
+}
+
 export function reduceState(previous:ConversationState,patch:StatePatch):ConversationState{
   const{spinResidual,spinFacts:patchSpinFacts,...canonicalPatch}=patch;
   const spinFacts=[...new Set([...(previous.spinFacts??[]),...(patchSpinFacts??[])])];
@@ -52,6 +63,7 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
   const currentRoute=String(canonicalPatch.lastRoute??'').toUpperCase();
   const trace=canonicalPatch.lastDecisionTrace as any;
   const recommendationWinner=String(trace?.recommendation?.winner??'').trim()||null;
+  const recommendationTopTie=topRecommendationTie(trace);
   const recommendationFocus=Boolean(
     currentRoute==='RAG_RECOMMENDATION'
     && ['RECOMMEND','RECOMMEND_WITHIN_BUDGET','EVALUATE_USE','HANDLE_PRICE_OBJECTION'].includes(currentIntent)
@@ -97,10 +109,12 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
     incoming:incomingProducts,
     after:afterProducts,
     recommendationWinner,
+    recommendationTopTie,
     consistency:{
       staleActiveDetected,
       activeMatchesRecommendation:recommendationWinner?sameProduct(next.activeProduct,recommendationWinner):null,
       selectedPreserved:next.selectedProduct===previous.selectedProduct||Boolean(canonicalPatch.explicitSwitch),
+      arbitraryWinnerRisk:recommendationTopTie,
     },
   };
 
@@ -109,7 +123,7 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
     (next.lastDecisionTrace as any).effectiveProduct=next.activeProduct??null;
   }
 
-  if(next.sessionId&&(staleActiveDetected||productFlowReason!=='STATE_PATCH')){
+  if(next.sessionId&&(staleActiveDetected||recommendationTopTie||productFlowReason!=='STATE_PATCH')){
     console.log(JSON.stringify({
       event:'STECH_PRODUCT_FLOW',
       sessionId:next.sessionId,
@@ -118,6 +132,7 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
       referenceType:(next.lastDecisionTrace as any)?.referenceType??null,
       reason:productFlowReason,
       recommendationWinner,
+      recommendationTopTie,
       before:beforeProducts,
       incoming:incomingProducts,
       after:afterProducts,
