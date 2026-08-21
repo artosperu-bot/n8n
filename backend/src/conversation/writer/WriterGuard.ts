@@ -57,6 +57,18 @@ function guardGeneratedAnswer(input: LlmWriteInput, answer: string): string | nu
   return null;
 }
 
+function stripTrailingQuestion(answer:string):string {
+  const text=answer.trim();
+  const inverted=text.indexOf('¿');
+  if(inverted>0)return text.slice(0,inverted).trim();
+  if(inverted===0)return '';
+  const questionEnd=text.lastIndexOf('?');
+  if(questionEnd<0)return text;
+  const before=text.slice(0,questionEnd);
+  const boundary=Math.max(before.lastIndexOf('.'),before.lastIndexOf('!'),before.lastIndexOf('\n'));
+  return boundary>=0?before.slice(0,boundary+1).trim():'';
+}
+
 export async function safeWrite(llm: LlmProvider, input: LlmWriteInput, fallbackAnswer: string): Promise<WriterGuardResult> {
   try {
     const writeInput: LlmWriteInput = {
@@ -65,6 +77,12 @@ export async function safeWrite(llm: LlmProvider, input: LlmWriteInput, fallback
     };
     const result = await llm.write(writeInput);
     const violation = guardGeneratedAnswer(input, result.text);
+    if (violation === 'NBA_ANSWER_ONLY_QUESTION') {
+      const salvaged=stripTrailingQuestion(result.text);
+      if(salvaged && !guardGeneratedAnswer(input,salvaged)) {
+        return { answer:salvaged, model:result.model, llmResult:result, fallback:{delivered:true} };
+      }
+    }
     if (violation) {
       return {
         answer: fallbackAnswer,
