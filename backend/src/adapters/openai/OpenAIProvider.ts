@@ -83,6 +83,7 @@ export class OpenAIProvider implements LlmProvider {
       lastIntent: state.lastIntent ?? null,
       lastNba: state.lastNba ?? null,
       lastUserMessage: state.lastUserMessage ?? null,
+      lastAssistantMessage: state.lastAssistantMessage ?? null,
     };
   }
 
@@ -121,24 +122,20 @@ export class OpenAIProvider implements LlmProvider {
   async decide(input: LlmDecisionInput): Promise<LlmDecisionResult> {
     const started = performance.now();
     const instructions = [
-      'Eres el analista semantico y comercial de STECH PERU.',
-      'Comprende el turno actual usando la memoria: intencion, referentes, necesidad, objecion, etapa comercial, SPIN invisible y N+1.',
-      'No inventes hechos de producto, precio, stock, garantia, politicas ni acciones; esos datos se verifican despues con SQL/RAG.',
-      'Una mencion de otro producto no implica cambio. Una preferencia de atributo tampoco. Una seleccion explicita si puede cambiar el producto.',
-      'Resuelve ese/el otro/el recomendado usando primero la seleccion y saliencia recientes; una recomendacion vieja no debe pisar una seleccion posterior.',
-      'Si el producto pedido no existe, conserva ese objetivo para que el sistema busque alternativas reales; no cierres la venta en un callejon sin salida.',
-      'SPIN es invisible: pregunta solo un dato si puede cambiar la recomendacion y nunca repitas lo ya conocido.',
-      'Cuando hay señal fuerte de compra, el N+1 debe avanzar compra/handoff, no reiniciar discovery.',
-      'primaryIntent SOLO puede ser: GREETING, PRODUCT_INFO, ATTRIBUTE, CAPABILITY, EVALUATE_USE, BUDGET_CONSTRAINT, RECOMMEND, RECOMMEND_WITHIN_BUDGET, COMPARE, PRICE_AVAILABILITY, PRICE, STOCK, IMAGES, IMAGE, POLICY, WARRANTY, OBJECTION, HANDLE_PRICE_OBJECTION, PURCHASE, HUMAN, QUOTE, CATALOG, CATEGORIES, SUBCATEGORIES, ORDER_STATUS, OTHER.',
-      'nextBestAction SOLO puede ser: ASK_NEED, CONTINUE_BY_NEED, ASK_USE, CONNECT_TO_USE, WAIT_FOR_NEXT_QUESTION, ASK_BUDGET, RECOMMEND_BY_NEED, EXPLAIN_FIT, RECOMMEND_BY_PRIORITY, ASK_PRIORITY, ADVANCE_IF_INTEREST, WAIT_FOR_PRODUCT_QUESTION, RETURN_TO_PRODUCT, ADDRESS_OBJECTION, ASSISTED_HANDOFF, GUIDE_SELECTION, DISCOVER_ONE_FACT, OFFER_ALTERNATIVES, CLARIFY_OR_HANDOFF, o null.',
-      'commercialStage SOLO puede ser INICIAL, DESCUBRIMIENTO, CONSIDERACION, EVALUACION, OBJECION, CIERRE, CIERRE_ASISTIDO o null.',
-      'Todos los campos de texto deben ser strings o null. Todos los arrays deben contener solamente strings; nunca devuelvas objetos dentro de esos campos.',
-      'Devuelve SOLO JSON valido con exactamente estas claves: primaryIntent, secondaryIntents, targetProduct, mentionedProducts, referenceType, explicitSwitch, selectedProduct, comparisonProducts, attributes, customerNeed, customerProblem, priorities, objection, commercialStage, spinContribution, nextBestAction, needsSql, needsProductRag, needsInstitutionalRag, confidence.'
+      'Eres el analista conversacional de STECH PERU.',
+      'Entiende qué quiere el cliente AHORA usando la historia reciente y la memoria conocida.',
+      'No inventes hechos.',
+      'Mencionar otro producto no significa cambiar; preferir un atributo tampoco; una selección explícita sí puede cambiar.',
+      'No vuelvas a preguntar datos ya conocidos.',
+      'Propón el siguiente paso comercial más útil; si el cliente quiere comprar, avanza.',
+      'Devuelve SOLO JSON válido con estas claves: primaryIntent, secondaryIntents, targetProduct, mentionedProducts, referenceType, explicitSwitch, selectedProduct, comparisonProducts, attributes, customerNeed, customerProblem, priorities, objection, commercialStage, spinContribution, nextBestAction, needsSql, needsProductRag, needsInstitutionalRag, confidence.',
+      'Texto: string o null. Arrays: solo strings. No devuelvas objetos dentro de campos de texto o arrays.'
     ].join(' ');
+    const history = (input.history ?? []).slice(-6).map(x => ({ role:x.role, content:x.content }));
     const json = await this.#responses({
       model: this.#model,
       instructions,
-      input: `CLIENTE:\n${input.message}\n\nMEMORIA_CANONICA:\n${JSON.stringify(this.#compactState(input.state))}`,
+      input: `CLIENTE:\n${input.message}\n\nHISTORIA_RECIENTE:\n${JSON.stringify(history)}\n\nMEMORIA_CANONICA:\n${JSON.stringify(this.#compactState(input.state))}`,
     });
     let rawText = this.#extractText(json).replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
     const first = rawText.indexOf('{');
@@ -160,15 +157,12 @@ export class OpenAIProvider implements LlmProvider {
     const evidence = (input.rag ?? []).slice(0, 8).map(x => x.text.replace(/\s+/g, ' ').slice(0, 700)).join('\n');
     const instructions = [
       'Eres el vendedor consultivo de STECH PERU por chat.',
-      'Puedes razonar comercialmente sobre la decision validada: prioriza necesidad real, explica trade-offs, resuelve objeciones, aplica SPIN/FAB/LAER de forma natural y avanza el N+1.',
-      'No inventes datos ni cambies hechos: precio, disponibilidad, garantia, caracteristicas, politicas y acciones solo pueden salir de evidencia verificada.',
-      'Si la evidencia no confirma un dato, dilo de forma breve y util; no completes huecos.',
-      'Una respuesta normalmente tiene 1 a 3 frases y maximo una pregunta util. No hagas interrogatorios ni cierres siempre con pregunta.',
-      'Demuestra empatia mediante criterio util, no repitiendo Entiendo/Perfecto constantemente.',
-      'Convierte caracteristica verificada -> efecto practico -> beneficio solo cuando sea relevante para la necesidad.',
-      'Nunca reveles cantidad cruda de stock. Nunca metas precio si no fue solicitado o autorizado por un flujo de cotizacion.',
-      'No digas UNKNOWN, INTENT, queryTarget, RAG ni lenguaje interno.',
-      'No prometas reservas, pedidos, cotizaciones, correos o llamadas que no esten confirmados como ejecutados.'
+      'Resuelve primero lo que el cliente pregunta y usa la decisión validada para continuar la venta.',
+      'Solo afirma hechos presentes en la evidencia verificada. Si falta un dato, dilo brevemente; no completes huecos.',
+      'Responde normalmente en 1 a 3 frases y como máximo una pregunta útil.',
+      'Usa SPIN, FAB o manejo de objeciones de forma natural, nunca como etiquetas.',
+      'Nunca reveles cantidad cruda de stock ni inventes acciones realizadas.',
+      'No uses lenguaje interno como UNKNOWN, INTENT, queryTarget o RAG.'
     ].join(' ');
     const json = await this.#responses({
       model: this.#model,
