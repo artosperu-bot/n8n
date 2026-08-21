@@ -56,7 +56,8 @@ function looksLikeNamedModel(message: string): boolean {
   return /\b[A-Z]{2,}[A-Z0-9-]*\d[A-Z0-9-]*\b/.test(message);
 }
 function stageFor(intent: string): string {
-  if (['PURCHASE','HUMAN','QUOTE'].includes(intent)) return 'CIERRE_ASISTIDO';
+  if (intent === 'PURCHASE') return 'CIERRE';
+  if (['HUMAN','QUOTE'].includes(intent)) return 'CIERRE_ASISTIDO';
   if (['HANDLE_PRICE_OBJECTION','OBJECTION'].includes(intent)) return 'OBJECION';
   if (['RECOMMEND','RECOMMEND_WITHIN_BUDGET','COMPARE'].includes(intent)) return 'EVALUACION';
   if (['PRICE','STOCK'].includes(intent)) return 'CONSIDERACION';
@@ -213,6 +214,7 @@ export class ConversationEngine {
     let forceNoLlm = reference.unknownNamedProduct;
     let handoffRequested = false;
     let handoffReason: string | null = null;
+    let reservationStage: ConversationState['reservationStage'] = previous.reservationStage ?? null;
 
     if (reference.unknownNamedProduct) {
       deterministicAnswer = noEvidenceResponse();
@@ -331,10 +333,20 @@ export class ConversationEngine {
         handoffRequested = true;
         handoffReason = 'SOLICITUD_HUMANO';
       } else {
-        deterministicAnswer = purchaseResponse({ ...previous, selectedProduct:target, queryTarget:target }, quote);
-        if (target && !(quote?.stock != null && quote.stock <= 0)) {
+        const quantity = commercial.quantity ?? previous.quantity ?? 1;
+        if (!target) {
+          deterministicAnswer = 'Claro. ¿Qué modelo quieres comprar?';
+        } else if (quote?.stock != null && quote.stock <= 0) {
+          deterministicAnswer = `Ahora ${target} no está disponible. Puedo ayudarte a revisar una alternativa disponible.`;
+        } else if (quantity >= 2) {
+          deterministicAnswer = purchaseResponse({ ...previous, selectedProduct:target, queryTarget:target, quantity }, quote);
           handoffRequested = true;
           handoffReason = 'CONTINUAR_VENTA';
+        } else {
+          deterministicAnswer = `Perfecto. Para iniciar la reserva de ${target}, envíame tu DNI o Carné de Extranjería.`;
+          handoffRequested = false;
+          handoffReason = null;
+          reservationStage = 'NEED_DOCUMENT';
         }
       }
       forceNoLlm = true;
@@ -416,6 +428,7 @@ export class ConversationEngine {
       purchaseSignal: intentPlan.primary === 'PURCHASE' ? true : commercial.purchaseSignal,
       commercialStage: stageFor(intent),
       commercialStrategy: strategyFor(intent),
+      reservationStage,
       handoffActive: handoffRequested,
       blockAutomaticReply: handoffRequested,
       handoffReason,
