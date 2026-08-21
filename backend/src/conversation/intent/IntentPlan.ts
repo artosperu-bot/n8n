@@ -57,7 +57,13 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(subcategorias?)\b/)) hits.push('SUBCATEGORIES');
   if (has(/\b(catalogo|que productos|que equipos|que modelos tienen|muestrame)\b/)) hits.push('CATALOG');
   if (has(/\b(compara|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)) hits.push('COMPARE');
-  if (has(/\b(recomienda|recomiendas|recomendacion|cual me conviene|que modelo me conviene|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica)\b/) || has(/\b(cual|que|qué)\b[^?.!]{0,45}\b(?:entra|cabe|queda)\b[^?.!]{0,35}\bpresupuesto\b/)) hits.push('RECOMMEND');
+  const recommendationLanguage = has(/\b(recomienda|recomiendas|recomendacion|cual me conviene|que modelo me conviene|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica)\b/)
+    || has(/\b(cual|que|qué)\b[^?.!]{0,45}\b(?:entra|cabe|queda)\b[^?.!]{0,35}\bpresupuesto\b/)
+    || has(/\b(?:el|la)\s+mas\s+(?:resistente|potente|economico|barato|rapido)\b/)
+    || has(/\b(?:cual|que)\b[^?.!]{0,40}\b(?:mejor|mayor)\s+(?:bateria|camara|rendimiento|resistencia|pantalla|memoria)\b/)
+    || has(/\b(?:cual|que)\b[^?.!]{0,30}\btiene\b[^?.!]{0,20}\b(?:la|el)\s+mejor\b/)
+    || has(/\bhay\s+(?:uno|un|algo|alguno)\b[^?.!]{0,25}\bmas\s+barato\b/);
+  if (recommendationLanguage) hits.push('RECOMMEND');
   if (has(/\b(quiero comprar|quiero comprarlo|quiero comprarla|comprarlo|comprarla|como compro|lo compro|la compro|me llevo (?:ese|esa|este|esta)|me quedo con|quiero (?:ese|esa|este|esta)|ya (?:ese|esa|este|esta) quiero|me decidi(?: por (?:ese|esa|este|esta))?|ya me decidi|lo quiero|la quiero|avanzar con la compra|quiero avanzar)\b/)
     || has(/\bya\s+(?:el|la)\s+(?:[a-z]*\d+[a-z0-9 -]{0,24}|\d{2,})\s+quiero\b/)) hits.push('PURCHASE');
   if (has(/\b(cotiza|cotizar|cotizacion|cotizarnos)\b/)) hits.push('QUOTE');
