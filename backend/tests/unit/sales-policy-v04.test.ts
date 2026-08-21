@@ -11,10 +11,21 @@ test('single attribute retrieves only the requested technical section', () => {
   assert.deepEqual(productEvidenceSections({ primary: 'ATTRIBUTE', attributes: ['BATERIA'] } as any, {}), ['BATERIA']);
 });
 
+test('technical aliases map to real Supabase product sections', () => {
+  assert.deepEqual(productEvidenceSections({ primary:'ATTRIBUTE', attributes:['NFC'] }, {}), ['CONECTIVIDAD','FUNCIONES']);
+  assert.deepEqual(productEvidenceSections({ primary:'ATTRIBUTE', attributes:['5G'] }, {}), ['REDES','CONECTIVIDAD']);
+  assert.deepEqual(productEvidenceSections({ primary:'ATTRIBUTE', attributes:['TERMICA'] }, {}), ['TERMICA']);
+  assert.deepEqual(productEvidenceSections({ primary:'ATTRIBUTE', attributes:['sensor de huella'] }, {}), ['SEGURIDAD','SENSORES']);
+});
+
 test('comparison prioritizes the customer criteria and limits evidence dimensions', () => {
   const sections = productEvidenceSections({ primary: 'COMPARE', attributes: [] } as any, { priorities: ['resistencia','bateria','camara','precio'] });
   assert.deepEqual(sections, ['RESISTENCIA','BATERIA','CAMARA']);
   assert.ok(sections.length <= 4);
+});
+
+test('comparison honors an explicit technical criterion before generic priorities', () => {
+  assert.deepEqual(productEvidenceSections({ primary:'COMPARE', attributes:['5G'] }, { priorities:['bateria'] }), ['REDES','CONECTIVIDAD']);
 });
 
 test('N+1 asks only the missing decision-changing fact', () => {
