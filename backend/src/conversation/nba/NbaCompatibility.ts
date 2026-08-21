@@ -20,12 +20,14 @@ const ALLOWED: Record<string, Set<string>> = {
   OTHER:new Set(['ANSWER_ONLY','ASK_MISSING_FACT','OFFER_ALTERNATIVE','COMPARE','RECOMMEND','SOFT_CLOSE']),
 };
 
+function purchaseAction(state:ConversationState):string{return (state.quantity??1)>=2?'ASSISTED_HANDOFF':'COLLECT_RESERVATION_DATA';}
+
 export function isNbaCompatible(intent:string, action:string|null|undefined, state:ConversationState={}):boolean {
   if (!action) return false;
   const i=String(intent??'').toUpperCase();
   const a=String(action??'').toUpperCase();
-  if (state.purchaseSignal===true) return a==='ASSISTED_HANDOFF';
-  if (['PURCHASE','HUMAN','QUOTE'].includes(i)) return a==='ASSISTED_HANDOFF';
+  if (state.purchaseSignal===true || i==='PURCHASE') return a===purchaseAction(state);
+  if (['HUMAN','QUOTE'].includes(i)) return a==='ASSISTED_HANDOFF';
   if (FACTUAL.has(i)) return a==='ANSWER_ONLY'||a==='SOFT_CLOSE';
   return ALLOWED[i]?.has(a) ?? ALLOWED.OTHER.has(a);
 }
@@ -36,9 +38,11 @@ export function compatibleNba(
   proposed:string|null,
   fallback:string|null,
 ):string|null {
-  if (state.purchaseSignal===true || ['PURCHASE','HUMAN','QUOTE'].includes(String(intent).toUpperCase())) return 'ASSISTED_HANDOFF';
+  const i=String(intent).toUpperCase();
+  if (state.purchaseSignal===true || i==='PURCHASE') return purchaseAction(state);
+  if (['HUMAN','QUOTE'].includes(i)) return 'ASSISTED_HANDOFF';
   if (isNbaCompatible(intent,proposed,state)) return proposed;
   if (isNbaCompatible(intent,fallback,state)) return fallback;
-  if (FACTUAL.has(String(intent).toUpperCase())) return 'ANSWER_ONLY';
+  if (FACTUAL.has(i)) return 'ANSWER_ONLY';
   return null;
 }
