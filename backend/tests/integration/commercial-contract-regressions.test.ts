@@ -44,8 +44,8 @@ test('mere mention of a second product does not force comparison or switch activ
   const llm:LlmProvider={
     async decide(_input:LlmDecisionInput){
       return result(baseDecision({
-        primaryIntent:'COMPARE', targetProduct:'Armor 22', mentionedProducts:['Armor 22'],
-        referenceType:'NAMED', comparisonProducts:['Armor X13','Armor 22'],
+        primaryIntent:'COMPARE', targetProduct:'Armor X13', mentionedProducts:['Armor 22'],
+        referenceType:'ACTIVE_PRODUCT_FALLBACK', comparisonProducts:['Armor 22'],
         needsSql:true, needsProductRag:true, nextBestAction:'GUIDE_SELECTION',
       }));
     },
