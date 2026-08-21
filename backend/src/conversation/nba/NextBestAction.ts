@@ -1,19 +1,34 @@
-export function nextBestAction(intent:string):string|null {
-  switch(intent){
-    case 'PRICE': return 'ADVANCE_IF_INTEREST';
-    case 'STOCK': return 'RESERVE_OR_CONTINUE';
+import type { ConversationState } from '../../domain/types.ts';
+
+export function nextBestAction(intent: string, state: ConversationState = {}): string | null {
+  switch (intent) {
+    case 'GREETING': return 'ASK_NEED';
+    case 'PRODUCT_INFO': return state.useCase ? 'CONTINUE_BY_NEED' : 'ASK_USE';
+    case 'ATTRIBUTE': return 'CONNECT_TO_USE';
+    case 'EVALUATE_USE':
+      if (!state.problem && !state.useCase) return 'ASK_USE';
+      if (state.budget == null) return 'ASK_BUDGET';
+      if (!state.activeProduct) return 'RECOMMEND_BY_NEED';
+      return 'EXPLAIN_FIT';
+    case 'RECOMMEND':
+    case 'RECOMMEND_WITHIN_BUDGET': return 'EXPLAIN_FIT';
+    case 'COMPARE': return (state.priorities ?? []).length ? 'RECOMMEND_BY_PRIORITY' : 'ASK_PRIORITY';
+    case 'PRICE_AVAILABILITY':
+    case 'PRICE':
+    case 'STOCK': return 'ADVANCE_IF_INTEREST';
+    case 'IMAGES':
     case 'IMAGE': return 'WAIT_FOR_PRODUCT_QUESTION';
-    case 'PURCHASE': return 'RESERVE_24H';
-    case 'QUOTE': return 'CONFIRM_PRODUCT_AND_QUANTITY';
-    case 'BUDGET_CONSTRAINT': return 'DISCOVER_USE_OR_CRITERION';
-    case 'RECOMMEND_WITHIN_BUDGET':
-    case 'RECOMMEND': return 'EXPLAIN_FIT';
-    case 'HANDLE_PRICE_OBJECTION': return 'OFFER_VERIFIED_ALTERNATIVE';
-    case 'COMPARE': return 'RECOMMEND_BY_NEED';
-    case 'CAPABILITY': return 'CONNECT_BENEFIT_TO_NEED';
-    case 'WARRANTY':
-    case 'POLICY': return 'RETURN_TO_PURCHASE';
-    case 'GREETING': return 'DISCOVER_NEED';
+    case 'POLICY':
+    case 'WARRANTY': return state.activeProduct ? 'RETURN_TO_PRODUCT' : 'ASK_PRODUCT';
+    case 'OBJECTION':
+    case 'HANDLE_PRICE_OBJECTION': return 'ADDRESS_OBJECTION';
+    case 'PURCHASE':
+    case 'HUMAN':
+    case 'QUOTE': return 'ASSISTED_HANDOFF';
+    case 'CATALOG':
+    case 'CATEGORIES':
+    case 'SUBCATEGORIES': return 'GUIDE_SELECTION';
+    case 'ORDER_STATUS': return null;
     default: return 'DISCOVER_ONE_FACT';
   }
 }
