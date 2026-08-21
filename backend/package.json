@@ -15,7 +15,8 @@
     "test:n8n": "node --env-file-if-exists=.env --experimental-strip-types scripts/test-n8n-gateway.ts",
     "qa:live": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=journeys",
     "qa:live:core": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=core",
-    "qa:live:all": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=all"
+    "qa:live:all": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=all",
+    "qa:golden100": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=golden100"
   },
   "dependencies": { "mssql": "^12.7.0" }
 }
