@@ -28,11 +28,23 @@ test('comparison honors an explicit technical criterion before generic prioritie
   assert.deepEqual(productEvidenceSections({ primary:'COMPARE', attributes:['5G'] }, { priorities:['bateria'] }), ['REDES','CONECTIVIDAD']);
 });
 
-test('N+1 asks only the missing decision-changing fact', () => {
-  assert.equal(nextBestAction('EVALUATE_USE', { problem: 'caidas_frecuentes', budget: null }), 'ASK_BUDGET');
-  assert.equal(nextBestAction('PRODUCT_INFO', { activeProduct: 'Armor X13' }), 'ASK_USE');
+test('contextual N+1 answers complete factual questions without a forced follow-up', () => {
+  assert.equal(nextBestAction('CAPABILITY', { activeProduct:'Armor X13' }), 'ANSWER_ONLY');
+  assert.equal(nextBestAction('PRICE', { activeProduct:'Armor X13' }), 'ANSWER_ONLY');
+  assert.equal(nextBestAction('STOCK', { activeProduct:'Armor X13' }), 'ANSWER_ONLY');
+  assert.equal(nextBestAction('POLICY', {}), 'ANSWER_ONLY');
 });
 
-test('purchase moves to assisted handoff, never automatic reservation', () => {
-  assert.equal(nextBestAction('PURCHASE', { purchaseSignal: true }), 'ASSISTED_HANDOFF');
+test('contextual N+1 asks only a decision-changing missing fact', () => {
+  assert.equal(nextBestAction('EVALUATE_USE', { problem:'caidas_frecuentes', budget:null }), 'ASK_MISSING_FACT');
+});
+
+test('recommendation and comparison choose bounded commercial actions', () => {
+  assert.equal(nextBestAction('RECOMMEND', { recommendedProduct:'Armor X13' }), 'SOFT_CLOSE');
+  assert.equal(nextBestAction('COMPARE', { comparisonProducts:['Armor X13','Armor 22'], priorities:['resistencia'] }), 'RECOMMEND');
+});
+
+test('strong purchase signal can never return to discovery', () => {
+  assert.equal(nextBestAction('OTHER', { purchaseSignal:true }), 'ASSISTED_HANDOFF');
+  assert.equal(nextBestAction('PURCHASE', { purchaseSignal:true }), 'ASSISTED_HANDOFF');
 });
