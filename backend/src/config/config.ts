@@ -14,6 +14,7 @@ export type AppConfig = {
   supabaseSessionTable: string;
   supabaseContextTable: string;
   supabaseConversationTable: string;
+  supabaseTokenMetricsTable: string;
   supabaseRagRpc: string;
   sqlServerHost?: string;
   sqlServerPort: number;
@@ -58,6 +59,7 @@ export function loadConfig(env: EnvLike = process.env): AppConfig {
     supabaseSessionTable: env.SUPABASE_SESSION_TABLE ?? 'ia_sesiones',
     supabaseContextTable: env.SUPABASE_CONTEXT_TABLE ?? 'ia_contexto',
     supabaseConversationTable: env.SUPABASE_CONVERSATION_TABLE ?? 'ia_conversaciones',
+    supabaseTokenMetricsTable: env.SUPABASE_TOKEN_METRICS_TABLE ?? 'ia_metricas_tokens',
     supabaseRagRpc: env.SUPABASE_RAG_RPC ?? 'match_documents',
     sqlServerHost: env.SQL_SERVER_HOST,
     sqlServerPort: Number(env.SQL_SERVER_PORT ?? 1433),
