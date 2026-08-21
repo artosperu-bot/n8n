@@ -32,6 +32,7 @@ export interface ConversationRepository {
     state: ConversationState,
     meta?: TurnCompletionMeta,
   ): Promise<void>;
+  failTurn?(sessionId: string, messageId: string, error: string): Promise<void>;
   getMessages(sessionId: string): Promise<Array<{ role: 'user' | 'assistant'; content: string; at: string }>>;
   reset(sessionId: string): Promise<void>;
 }
