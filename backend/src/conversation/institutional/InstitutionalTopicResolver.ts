@@ -13,7 +13,7 @@ export function resolveInstitutionalTopic(query:string):InstitutionalTopic|null 
   if(/\bdatos\b.*\b(compra|pedido|cierre)\b|\bque datos\b.*\bnecesit/.test(t))return{category:'pagos',subcategory:'datos_cierre_venta'};
 
   if(/\b(recojo|recoja|recoger|recogerlo|recogerla|retiro)\b|\bretirar\b.*\btienda\b/.test(t))return{category:'entrega',subcategory:'recojo_tienda'};
-  if(/\b(separar|separacion|reserva|reservar)\b/.test(t))return{category:'pedidos',subcategory:'reserva_separacion'};
+  if(/\b(separar|separarlo|separarla|separacion|reserva|reservar|reservarlo|reservarla)\b/.test(t))return{category:'pedidos',subcategory:'reserva_separacion'};
 
   if(/\breembolso\b|\bdevolucion\s+de\s+dinero\b/.test(t))return{category:'postventa',subcategory:'reembolsos'};
   if(/\bgarantia\b/.test(t)){
