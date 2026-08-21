@@ -52,3 +52,26 @@ test('live runner uses HTTP boundary, deterministic ids and aggregates planner p
   assert.equal(chats[0].sessionId, 'qa-20260821-001530-a7f2-PRICE-1');
   assert.equal(chats[0].messageId, 'qa-20260821-001530-a7f2:PRICE-1:t01');
 });
+
+test('Golden runner records a failed turn but still executes the rest of the journey',async()=>{
+  const chats:any[]=[];
+  let chatCount=0;
+  const fetcher:typeof fetch=async(url,init:any={})=>{
+    const target=String(url);
+    if(target.endsWith('/health'))return Response.json({status:'ok',modes:{llm:'openai',erp:'sql-bridge',persistence:'supabase',n8n:'n8n'}});
+    if(target.endsWith('/api/chat')){
+      const body=JSON.parse(String(init.body));chats.push(body);chatCount+=1;
+      if(chatCount===1)return Response.json({error:'simulated turn failure'},{status:500});
+      return Response.json({sessionId:body.sessionId,answer:'Listo.',state:{sessionId:body.sessionId,turnCount:1,lastIntent:'OTHER',lastNba:'ANSWER_ONLY'},debug:{intent:'OTHER',queryTarget:null,explicitSwitch:false,budget:null,priceObjection:false}});
+    }
+    throw new Error('unexpected request');
+  };
+  const {report}=await runLiveQa({
+    baseUrl:'http://test',fetcher,now:new Date('2026-08-21T00:15:30Z'),entropy:'cont',writeArtifacts:false,
+    logger:{log(){},table(){},error(){}} as any,
+    scenarios:[{id:'CONTINUE',family:'TRUTH',title:'continue',turns:[{message:'turno 1'},{message:'turno 2'},{message:'turno 3'}]}],
+  });
+  assert.equal(chats.length,3,'un RED no debe ocultar los turnos posteriores del journey');
+  assert.equal(report.results[0]?.turns.length,3);
+  assert.equal(report.summary.red,1);
+});
