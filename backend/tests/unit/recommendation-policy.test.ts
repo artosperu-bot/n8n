@@ -63,3 +63,20 @@ test('technical tie does not silently become cheapest-product preference when pr
   ],{priorities:['camara']});
   assert.deepEqual(rows.map(x=>x.quote.shortName),['FirstCandidate','CheaperCandidate']);
 });
+
+test('candidate with evidence for only one of four criteria cannot outrank broad evidence coverage',()=>{
+  const rows=rankRecommendations([
+    {quote:quote('Partial',700),evidence:[
+      ev('Partial','RESISTENCIA','Certificación IP68: Sí. Certificación IP69K: Sí. MIL-STD-810H: Sí. Resistencia a caídas: 2 m. Profundidad IP68: 2 m.',0.9),
+    ]},
+    {quote:quote('Covered',1100),evidence:[
+      ev('Covered','RESISTENCIA','Certificación IP68: Sí. Certificación IP69K: Sí. MIL-STD-810H: Sí. Resistencia a caídas: 1.5 m. Profundidad IP68: 1.5 m.',0.7),
+      ev('Covered','BATERIA','Capacidad de batería: 6600 mAh. Carga cableada: 33 W.',0.7),
+      ev('Covered','CAMARA','Cámara principal: 64 MP. Cámara nocturna: 64 MP.',0.7),
+      ev('Covered','MEMORIA','RAM física: 8 GB. Almacenamiento interno: 256 GB.',0.7),
+    ]},
+  ],{priorities:['resistencia','bateria','camara','memoria']});
+  assert.equal(rows[0]?.quote.shortName,'Covered');
+  assert.ok((rows[0]?.score??0)>(rows[1]?.score??0));
+  assert.ok((rows[0]?.confidence??0)>(rows[1]?.confidence??0));
+});
