@@ -126,6 +126,7 @@ export function validateTurnDecision(
   catalogCandidates: string[] = [],
   fallbackDecision?: TurnDecision,
 ): TurnDecision {
+  // 1/7 — SQL/catalog candidates are the canonical identity universe for this turn.
   const universe = unique([
     ...catalogCandidates,
     state.activeProduct,
@@ -162,22 +163,36 @@ export function validateTurnDecision(
   const recentSelection = knownCanonical(state.selectedProduct ?? state.salientProduct, universe);
   const knownDecisionTarget=knownCanonical(decision.targetProduct,universe);
   const knownFallbackTarget=knownCanonical(fallbackDecision?.targetProduct,universe);
+  const activeFold=fold(state.activeProduct??'');
+  const newCatalogCandidates=catalogCandidates.filter(p=>!activeFold||fold(p)!==activeFold);
+  const uniqueNewCatalogTarget=newCatalogCandidates.length===1?newCatalogCandidates[0]:null;
   let targetProduct = knownDecisionTarget ?? knownFallbackTarget;
 
+  // 2/7 — An explicit/current mention beats every older contextual product.
   if (currentMentions.length === 1) {
     targetProduct = currentMentions[0];
     if (!(fallbackDecision?.explicitSwitch === true)) referenceType = 'NAMED_QUERY_TARGET';
   }
 
-  if(currentMentions.length===0&&knownFallbackTarget&&['ACTIVE_PRODUCT_FALLBACK','RECOMMENDED_FALLBACK','RECOMMENDED_REFERENT','COMPARISON_ALTERNATIVE','SELECTION_REFERENT'].includes(String(fallbackReference??''))){
+  // 3/7 — If SQL found exactly one NEW product from the current message while the
+  // planner only repeated the active product, the current-message candidate wins.
+  const plannerOnlyRepeatedActive=Boolean(knownDecisionTarget&&state.activeProduct&&fold(knownDecisionTarget)===activeFold);
+  if(currentMentions.length===0&&uniqueNewCatalogTarget&&fallbackReference==='ACTIVE_PRODUCT_FALLBACK'&&(!knownDecisionTarget||plannerOnlyRepeatedActive)){
+    targetProduct=uniqueNewCatalogTarget;
+    referenceType='NAMED_QUERY_TARGET';
+  }
+
+  // 4/7 — The old active/recommended fallback is allowed only when this turn did
+  // not produce a canonical target. It must never overwrite a valid current target.
+  if(currentMentions.length===0&&!knownDecisionTarget&&!uniqueNewCatalogTarget&&knownFallbackTarget&&['ACTIVE_PRODUCT_FALLBACK','RECOMMENDED_FALLBACK','RECOMMENDED_REFERENT','COMPARISON_ALTERNATIVE','SELECTION_REFERENT'].includes(String(fallbackReference??''))){
     targetProduct=knownFallbackTarget;
     referenceType=fallbackReference;
   }
 
-  const activeFold=fold(state.activeProduct??'');
-  const purchaseNewCandidates=catalogCandidates.filter(p=>!activeFold||fold(p)!==activeFold);
+  // 5/7 — Purchase can select the single new SQL candidate, but only when it is
+  // unambiguous; multiple new candidates fail closed instead of guessing.
   const sqlPurchaseTarget=fallbackIntent==='PURCHASE'
-    ? (purchaseNewCandidates.length===1 ? purchaseNewCandidates[0] : (!state.activeProduct&&catalogCandidates.length===1 ? catalogCandidates[0] : null))
+    ? (newCatalogCandidates.length===1 ? newCatalogCandidates[0] : (!state.activeProduct&&catalogCandidates.length===1 ? catalogCandidates[0] : null))
     : null;
   if(sqlPurchaseTarget){
     targetProduct=sqlPurchaseTarget;
@@ -204,6 +219,8 @@ export function validateTurnDecision(
     if(looksLikeProductModel(rawUnknown)) targetProduct=rawUnknown;
   }
 
+  // 6/7 — A mention/query is not a purchase selection. selectedProduct changes
+  // only from an authorized selection signal or a unique purchase candidate.
   const deterministicSelectionAuthorized = fallbackDecision?.explicitSwitch === true
     || ['SELECTION_REFERENT','EXPLICIT_PRODUCT_SWITCH'].includes(String(fallbackReference??''));
   const referentialSelectionAuthorized = !fallbackDecision && referenceType === 'SELECTION_REFERENT' && Boolean(recentSelection);
@@ -225,8 +242,11 @@ export function validateTurnDecision(
     ...(state.comparisonProducts ?? []).map(p => knownCanonical(p, universe)),
   ]);
   const active = knownCanonical(state.activeProduct, universe);
-  if (active && currentMentions.length === 1 && !explicitSwitch && fold(active) !== fold(currentMentions[0])) {
-    comparisonProducts = unique([active, currentMentions[0], ...comparisonProducts]).slice(0,2);
+  // 7/7 — Mentioning another product beside the active one builds a comparison
+  // pair; it does not silently select/switch products unless selection was explicit.
+  const currentTurnTarget=knownCanonical(targetProduct,universe);
+  if (active && currentTurnTarget && !explicitSwitch && fold(active) !== fold(currentTurnTarget)) {
+    comparisonProducts = unique([active, currentTurnTarget, ...currentMentions, ...comparisonProducts]).slice(0,2);
   } else {
     comparisonProducts=comparisonProducts.slice(0,2);
   }
@@ -240,7 +260,9 @@ export function validateTurnDecision(
     primaryIntent,
     secondaryIntents: unique(decision.secondaryIntents ?? []).map(x => canonicalIntent(x)).filter((x): x is string => Boolean(x)),
     targetProduct,
-    mentionedProducts: currentMentions,
+    mentionedProducts:currentTurnTarget&&!sameStringListContains(currentMentions,currentTurnTarget)&&uniqueNewCatalogTarget&&fold(currentTurnTarget)===fold(uniqueNewCatalogTarget)
+      ? unique([...currentMentions,currentTurnTarget])
+      : currentMentions,
     referenceType,
     explicitSwitch,
     selectedProduct,
@@ -257,4 +279,8 @@ export function validateTurnDecision(
     needsInstitutionalRag: forcedInstitutionalRag(primaryIntent),
     confidence: Number.isFinite(decision.confidence) ? Math.max(0, Math.min(1, decision.confidence)) : 0.5,
   };
+}
+
+function sameStringListContains(values:string[],target:string):boolean{
+  return values.some(value=>fold(value)===fold(target));
 }
