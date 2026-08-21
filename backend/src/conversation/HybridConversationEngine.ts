@@ -28,6 +28,7 @@ type Dependencies = {
   automation: AutomationBus;
 };
 type CandidateRank = { quote: ProductQuote; evidence: RagEvidence[]; score: number; reasons:string[]; criteria:string[]; tradeoffs:string[]; confidence:number };
+type ReservationAdvance={stage:ConversationState['reservationStage'];document?:string;name?:string;address?:string;answer:string;nba:string;route:string};
 
 function unique(values: Array<unknown>): string[] {
   return [...new Set(values.filter((v):v is string=>typeof v==='string').map(v=>v.trim()).filter(Boolean))];
@@ -56,7 +57,8 @@ function semanticIntent(intent: string): string {
 }
 function stageFor(intent: string, proposed: string | null): string {
   if (proposed) return proposed;
-  if (['PURCHASE','HUMAN','QUOTE'].includes(intent)) return 'CIERRE_ASISTIDO';
+  if (intent === 'PURCHASE') return 'CIERRE';
+  if (['HUMAN','QUOTE'].includes(intent)) return 'CIERRE_ASISTIDO';
   if (intent === 'HANDLE_PRICE_OBJECTION') return 'OBJECION';
   if (['RECOMMEND','RECOMMEND_WITHIN_BUDGET','COMPARE'].includes(intent)) return 'EVALUACION';
   if (['PRICE','STOCK'].includes(intent)) return 'CONSIDERACION';
@@ -165,6 +167,33 @@ function isComparisonFollowup(message:string,state:ConversationState,decision:Tu
     || /^y\s+en\s+/.test(t)
     || (/^y\s+/.test(t)&&['COMPARE','CAPABILITY'].includes(String(state.lastIntent??'').toUpperCase()));
 }
+function explicitUnknownTarget(message:string,decision:TurnDecision):boolean{
+  const target=String(decision.targetProduct??'').trim();
+  if(!target)return false;
+  const named=(decision.mentionedProducts??[]).some(x=>same(x,target));
+  return named&&fold(message).includes(fold(target));
+}
+function reservationAdvance(state:ConversationState,message:string):ReservationAdvance|null{
+  const stage=state.reservationStage;
+  if(!stage)return null;
+  const raw=message.trim();
+  if(stage==='NEED_DOCUMENT'){
+    const value=raw.replace(/[\s.-]/g,'').toUpperCase();
+    if(!/^[A-Z0-9]{8,12}$/.test(value)||!/[0-9]{6}/.test(value))return{stage,answer:'Necesito un DNI o Carné de Extranjería válido para continuar la reserva.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
+    return{stage:'NEED_NAME',document:value,answer:'Gracias. Ahora indícame tus nombres y apellidos.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
+  }
+  if(stage==='NEED_NAME'){
+    const words=raw.split(/\s+/).filter(Boolean);
+    if(words.length<2||raw.length<5||!/^[\p{L}\s.'-]+$/u.test(raw))return{stage,answer:'Indícame tus nombres y apellidos completos para continuar.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
+    return{stage:'NEED_ADDRESS',name:raw,answer:'Perfecto. Finalmente, indícame la dirección para la reserva.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
+  }
+  if(stage==='NEED_ADDRESS'){
+    if(raw.length<6||!/\p{L}|\d/u.test(raw))return{stage,answer:'Necesito una dirección válida para continuar.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
+    return{stage:'READY',address:raw,answer:'Ya tengo los datos necesarios. La reserva todavía no está confirmada; falta registrar la operación autorizada.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};
+  }
+  if(stage==='READY')return{stage,answer:'La reserva aún no está confirmada. No voy a afirmar que existe hasta que la operación autorizada termine correctamente.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};
+  return{stage,answer:'La reserva ya quedó registrada previamente.',nba:'ANSWER_ONLY',route:'RESERVATION_CONFIRMED'};
+}
 
 export class HybridConversationEngine {
   readonly #deps: Dependencies;
@@ -254,6 +283,26 @@ export class HybridConversationEngine {
       const previous=await this.#deps.conversations.getState(input.sessionId);
       const turn=(previous.turnCount??0)+1;
 
+      const reservation=reservationAdvance(previous,input.message);
+      if(reservation){
+        const nextState=reduceState(previous,{
+          contextVersion:previous.contextVersion??0,
+          reservationStage:reservation.stage,
+          reservationDocument:reservation.document??previous.reservationDocument??null,
+          reservationCustomerName:reservation.name??previous.reservationCustomerName??null,
+          reservationAddress:reservation.address??previous.reservationAddress??null,
+          purchaseSignal:true,lastIntent:'PURCHASE',lastRoute:reservation.route,lastNba:reservation.nba,pendingCommercialAction:reservation.nba,
+          commercialStage:'CIERRE',commercialStrategy:'CIERRE_PROGRESIVO',handoffActive:false,blockAutomaticReply:false,handoffReason:null,
+          lastUserMessage:input.message,lastAssistantMessage:reservation.answer,
+        });
+        const completionMeta={messageId,requestId,conversationType:input.sessionId.startsWith('qa-')?'QA_LIVE':null,model:'stech-reservation-deterministic',inputTokens:null,outputTokens:null,totalTokens:null,cachedInputTokens:null,totalPrompts:0};
+        if(atomic){await this.#deps.conversations.completeTurn!(input.sessionId,input.message,reservation.answer,nextState,completionMeta);leaseAcquired=false;}
+        else{await this.#deps.conversations.appendMessage(input.sessionId,'user',input.message,completionMeta);await this.#deps.conversations.saveState(input.sessionId,nextState);await this.#deps.conversations.appendMessage(input.sessionId,'assistant',reservation.answer,completionMeta);}
+        let automation:{delivered:boolean;error?:string}={delivered:true};
+        try{automation=await this.#deps.automation.publish({type:'conversation.turn.completed',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{intent:'PURCHASE',route:reservation.route,product:previous.selectedProduct??previous.activeProduct??previous.recommendedProduct??null,nextBestAction:reservation.nba}});}catch(error){automation={delivered:false,error:error instanceof Error?error.message:String(error)};}
+        return{sessionId:input.sessionId,answer:reservation.answer,state:{...nextState,contextVersion:(previous.contextVersion??0)+1},debug:{intent:'PURCHASE',route:reservation.route,sqlTools:[],queryTarget:previous.selectedProduct??previous.queryTarget??previous.recommendedProduct??previous.activeProduct??null,explicitSwitch:false,budget:previous.budget??null,priceObjection:false,ragSources:[],nextBestAction:reservation.nba,handoff:false,handoffReason:null,telemetry:{delivered:true},automation,durationMs:Math.max(0,Math.round(performance.now()-started))}};
+      }
+
       const facts=extractCommercialFacts(input.message,previous);
       const budgetTurn=classifyBudgetTurn(input.message,{prevBudget:previous.budget??null});
       const baseState:ConversationState={
@@ -275,25 +324,10 @@ export class HybridConversationEngine {
       if(budgetTurn.budget&&!budgetTurn.priceObjection){
         const hasDecisionContext=Boolean(baseState.useCase||baseState.problem||(baseState.priorities?.length??0)>0);
         const budgetIntent=hasDecisionContext?'RECOMMEND_WITHIN_BUDGET':'BUDGET_CONSTRAINT';
-        deterministicDecision={
-          ...deterministicDecision,
-          primaryIntent:budgetIntent,
-          nextBestAction:nextBestAction(budgetIntent,baseState),
-          needsSql:budgetIntent==='RECOMMEND_WITHIN_BUDGET',
-          needsProductRag:budgetIntent==='RECOMMEND_WITHIN_BUDGET',
-          confidence:0.99,
-        };
+        deterministicDecision={...deterministicDecision,primaryIntent:budgetIntent,nextBestAction:nextBestAction(budgetIntent,baseState),needsSql:budgetIntent==='RECOMMEND_WITHIN_BUDGET',needsProductRag:budgetIntent==='RECOMMEND_WITHIN_BUDGET',confidence:0.99};
       }
       if(isComparisonFollowup(input.message,baseState,deterministicDecision)){
-        deterministicDecision={
-          ...deterministicDecision,
-          primaryIntent:'COMPARE',
-          comparisonProducts:(baseState.comparisonProducts??[]).slice(0,2),
-          nextBestAction:nextBestAction('COMPARE',baseState),
-          needsSql:true,
-          needsProductRag:true,
-          confidence:0.99,
-        };
+        deterministicDecision={...deterministicDecision,primaryIntent:'COMPARE',comparisonProducts:(baseState.comparisonProducts??[]).slice(0,2),nextBestAction:nextBestAction('COMPARE',baseState),needsSql:true,needsProductRag:true,confidence:0.99};
       }
       let planner:LlmDecisionResult|null=null;
       let plannerFailure:string|undefined;
@@ -302,41 +336,18 @@ export class HybridConversationEngine {
 
       const rawDecision=planner?.decision??deterministicDecision;
       const deterministicOverride=['POLICY','WARRANTY','PRICE','STOCK','CAPABILITY','IMAGE','PURCHASE','BUDGET_CONSTRAINT','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent);
-      const cameraImageConflict=['IMAGE','IMAGES'].includes(String(rawDecision.primaryIntent).toUpperCase())
-        && deterministicDecision.primaryIntent!=='IMAGE'
-        && deterministicDecision.attributes.includes('CAMARA');
-      const strongReference=['COMPARISON_ALTERNATIVE','RECOMMENDED_REFERENT','SELECTION_REFERENT'].includes(String(deterministicDecision.referenceType??'').toUpperCase())
-        && ['PRICE','STOCK','CAPABILITY','IMAGE','PURCHASE'].includes(deterministicDecision.primaryIntent);
-      const strongRecommendation=['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)
-        && /\b(mejor|mas|conviene|recomiend|alternativa|presupuesto)\b/.test(fold(input.message));
+      const cameraImageConflict=['IMAGE','IMAGES'].includes(String(rawDecision.primaryIntent).toUpperCase())&&deterministicDecision.primaryIntent!=='IMAGE'&&deterministicDecision.attributes.includes('CAMARA');
+      const strongReference=['COMPARISON_ALTERNATIVE','RECOMMENDED_REFERENT','SELECTION_REFERENT'].includes(String(deterministicDecision.referenceType??'').toUpperCase())&&['PRICE','STOCK','CAPABILITY','IMAGE','PURCHASE'].includes(deterministicDecision.primaryIntent);
+      const strongRecommendation=['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)&&/\b(mejor|mas|conviene|recomiend|alternativa|presupuesto)\b/.test(fold(input.message));
       const comparisonAuthority=deterministicDecision.primaryIntent==='COMPARE'&&(baseState.comparisonProducts?.length??0)>=2;
-      const needTargetConflict=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)
-        && !deterministicDecision.targetProduct
-        && Boolean(rawDecision.targetProduct);
+      const needTargetConflict=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)&&!deterministicDecision.targetProduct&&Boolean(rawDecision.targetProduct)&&!explicitUnknownTarget(input.message,rawDecision);
       const forceDeterministic=(rawDecision.primaryIntent==='OTHER'&&deterministicOverride)||cameraImageConflict||strongReference||strongRecommendation||comparisonAuthority||needTargetConflict;
-      const guardedDecision=forceDeterministic
-        ?{...rawDecision,
-          primaryIntent:deterministicDecision.primaryIntent,
-          targetProduct:deterministicDecision.targetProduct,
-          referenceType:deterministicDecision.referenceType,
-          selectedProduct:deterministicDecision.selectedProduct,
-          mentionedProducts:deterministicDecision.mentionedProducts,
-          comparisonProducts:deterministicDecision.comparisonProducts,
-          attributes:deterministicDecision.attributes,
-          nextBestAction:deterministicDecision.nextBestAction}
-        :rawDecision;
+      const guardedDecision=forceDeterministic?{...rawDecision,primaryIntent:deterministicDecision.primaryIntent,targetProduct:deterministicDecision.targetProduct,referenceType:deterministicDecision.referenceType,selectedProduct:deterministicDecision.selectedProduct,mentionedProducts:deterministicDecision.mentionedProducts,comparisonProducts:deterministicDecision.comparisonProducts,attributes:deterministicDecision.attributes,nextBestAction:deterministicDecision.nextBestAction}:rawDecision;
       const initialCandidates=await this.#searchCandidates(input.message,guardedDecision.targetProduct);
       const decision=validateTurnDecision(guardedDecision,baseState,unique(initialCandidates.map(productName)),deterministicDecision);
       const intent=normalizeIntent(decision.primaryIntent,baseState.budget??null);
 
-      const commercialState:ConversationState={
-        ...baseState,
-        useCase:baseState.useCase??decision.customerNeed??null,
-        problem:baseState.problem??decision.customerProblem??null,
-        priorities:unique([...(baseState.priorities??[]),...(decision.priorities??[])]),
-        objection:baseState.objection??decision.objection??null,
-        spinFacts:unique([...(baseState.spinFacts??[]),decision.spinContribution]),
-      };
+      const commercialState:ConversationState={...baseState,useCase:baseState.useCase??decision.customerNeed??null,problem:baseState.problem??decision.customerProblem??null,priorities:unique([...(baseState.priorities??[]),...(decision.priorities??[])]),objection:baseState.objection??decision.objection??null,spinFacts:unique([...(baseState.spinFacts??[]),decision.spinContribution])};
 
       const target=decision.targetProduct??commercialState.selectedProduct??commercialState.recommendedProduct??commercialState.activeProduct??null;
       let quote=await this.#quote(target,initialCandidates);
@@ -347,240 +358,114 @@ export class HybridConversationEngine {
       let nba=decision.nextBestAction??nextBestAction(intent,commercialState);
       let answer='';
       let writerResult:Awaited<ReturnType<typeof safeWrite>>|null=null;
-      let handoff=['PURCHASE','HUMAN'].includes(intent)||nba==='ASSISTED_HANDOFF';
+      let handoff=intent==='HUMAN'||nba==='ASSISTED_HANDOFF'||(intent==='PURCHASE'&&(commercialState.quantity??1)>=2);
       let handoffReason=handoff?(intent==='HUMAN'?'SOLICITUD_HUMANO':'CONTINUAR_VENTA'):null;
       const sqlTools:string[]=[];
       let route='HYBRID';
       let recommendationReasons:string[]=[];
       let recommendationCriteria:string[]=[];
       let recommendationTradeoffs:string[]=[];
+      let reservationStage=commercialState.reservationStage??null;
+      let reservationDocument=commercialState.reservationDocument??null;
+      let reservationCustomerName=commercialState.reservationCustomerName??null;
+      let reservationAddress=commercialState.reservationAddress??null;
+      const writerProducts=(extra:Array<string|null|undefined>=[])=>unique([...initialCandidates.map(productName),commercialState.activeProduct,commercialState.selectedProduct,commercialState.recommendedProduct,recommendedProduct,productName(quote),target,...extra]);
 
       if(requestedUnknown&&intent!=='IMAGE'){
         const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
         const alternatives=await this.#rankCandidates(commercialState,query,commercialState.budget??99999999,target,2);
         recommendedProduct=productName(alternatives[0]?.quote)??null;
         rag=alternatives.flatMap(x=>x.evidence.slice(0,3));
-        recommendationReasons=alternatives[0]?.reasons??[];
-        recommendationCriteria=alternatives[0]?.criteria??[];
-        recommendationTradeoffs=alternatives[0]?.tradeoffs??[];
-        nba=alternatives.length?'OFFER_ALTERNATIVE':'ASK_MISSING_FACT';
-        route=alternatives.length?'UNKNOWN_TO_ALTERNATIVES':'UNKNOWN_NO_ALTERNATIVE';
+        recommendationReasons=alternatives[0]?.reasons??[];recommendationCriteria=alternatives[0]?.criteria??[];recommendationTradeoffs=alternatives[0]?.tradeoffs??[];
+        nba=alternatives.length?'OFFER_ALTERNATIVE':'ASK_MISSING_FACT';route=alternatives.length?'UNKNOWN_TO_ALTERNATIVES':'UNKNOWN_NO_ALTERNATIVE';
         if(alternatives.length)sqlTools.push('dbo.sp_ListarCatalogoVenta');
-        const names=alternatives.map(x=>productName(x.quote)).filter(Boolean).join(' y ');
+        const alternativeNames=alternatives.map(x=>productName(x.quote)).filter((x):x is string=>Boolean(x));
+        const names=alternativeNames.join(' y ');
         const reasonText=recommendationReasons.length?` Prioriza la alternativa que mejor encaja por: ${recommendationReasons.join('; ')}.`:'';
-        const recoveryPlan=alternatives.length
-          ? `Ese modelo no figura disponible ahora. Presenta solamente estas alternativas reales: ${names}. Relaciónalas con la necesidad conocida y explica por qué pueden encajar.${reasonText} No menciones precio salvo que el cliente lo haya pedido.`
-          : 'No hay suficiente información para confirmar ese modelo o una alternativa adecuada. No inventes; ofrece revisar opciones reales o pasar con un asesor si corresponde.';
+        const recoveryPlan=alternatives.length?`Ese modelo no figura disponible ahora. Presenta solamente estas alternativas reales: ${names}. Relaciónalas con la necesidad conocida y explica por qué pueden encajar.${reasonText} No menciones precio salvo que el cliente lo haya pedido.`:'No hay suficiente información para confirmar ese modelo o una alternativa adecuada. No inventes; ofrece revisar opciones reales o pasar con un asesor si corresponde.';
         const fallback=alternatives.length?`Ese modelo no figura disponible ahora. Sí tenemos ${names} como alternativas.`:noEvidenceResponse();
-        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},rag,deterministicAnswer:recoveryPlan,decision},fallback);
-        answer=writerResult.answer;
+        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},rag,deterministicAnswer:recoveryPlan,decision,allowedProducts:writerProducts(alternativeNames)},fallback);answer=writerResult.answer;
       }else if(intent==='PRICE'){
         sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_PRICE';answer=target?priceResponse(quote):'¿Qué modelo quieres consultar?';
       }else if(intent==='STOCK'){
         sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_STOCK';answer=target?stockResponse(quote,facts.quantity):'¿Qué modelo quieres consultar?';
       }else if(intent==='IMAGE'){
-        sqlTools.push('dbo.sp_BuscarImagenesProductoVenta');route='SQL_IMAGES';
-        images=target&&this.#deps.erp.getProductImages?await this.#deps.erp.getProductImages(target,10).catch(()=>[]):[];
-        answer=imageResponse(images)||noEvidenceResponse();
+        sqlTools.push('dbo.sp_BuscarImagenesProductoVenta');route='SQL_IMAGES';images=target&&this.#deps.erp.getProductImages?await this.#deps.erp.getProductImages(target,10).catch(()=>[]):[];answer=imageResponse(images)||noEvidenceResponse();
       }else if(intent==='POLICY'||intent==='WARRANTY'){
-        route='RAG_INSTITUTIONAL';
-        try{rag=this.#deps.rag.searchInstitutional?await this.#deps.rag.searchInstitutional(input.message,4):await this.#deps.rag.search(input.message,null);}catch{rag=[];}
+        route='RAG_INSTITUTIONAL';try{rag=this.#deps.rag.searchInstitutional?await this.#deps.rag.searchInstitutional(input.message,4):await this.#deps.rag.search(input.message,null);}catch{rag=[];}
         const fallback=institutionalResponse(rag)??noEvidenceResponse();
-        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:`Responde primero la política consultada de forma clara y breve. N+1=${nba??'NINGUNO'}.`,decision},fallback);
-        answer=writerResult.answer;
+        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:`Responde primero la política consultada de forma clara y breve. N+1=${nba??'NINGUNO'}.`,decision,allowedProducts:writerProducts()},fallback);answer=writerResult.answer;
       }else if(intent==='COMPARE'){
-        route='RAG_COMPARISON';
-        const pair=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[]),...(decision.mentionedProducts??[])]).slice(0,2);
+        route='RAG_COMPARISON';const pair=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[]),...(decision.mentionedProducts??[])]).slice(0,2);
         if(pair.length<2){answer='¿Qué dos modelos quieres comparar?';route='CLARIFICATION';}
-        else{
-          const sections=productEvidenceSections({primary:'COMPARE',attributes:decision.attributes},{...commercialState,comparisonProducts:pair});
-          for(const name of pair){const q=await this.#quote(name,initialCandidates);rag.push(...await this.#productEvidence(input.message,q,sections,4).catch(()=>[]));}
-          const plan=`Compara ${pair[0]} y ${pair[1]} con la misma cobertura usando solo los datos disponibles. Resume 2 a 4 diferencias relevantes, explica el trade-off y vincúlalo con la necesidad conocida. Recomienda solo si existe evidencia suficiente. N+1=${nba??'NINGUNO'}.`;
-          writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,comparisonProducts:pair},rag,deterministicAnswer:plan,decision},rag.length?plan:noEvidenceResponse());
-          answer=writerResult.answer;
-        }
+        else{const sections=productEvidenceSections({primary:'COMPARE',attributes:decision.attributes},{...commercialState,comparisonProducts:pair});for(const name of pair){const q=await this.#quote(name,initialCandidates);rag.push(...await this.#productEvidence(input.message,q,sections,4).catch(()=>[]));}const plan=`Compara ${pair[0]} y ${pair[1]} con la misma cobertura usando solo los datos disponibles. Resume 2 a 4 diferencias relevantes, explica el trade-off y vincúlalo con la necesidad conocida. Recomienda solo si existe evidencia suficiente. N+1=${nba??'NINGUNO'}.`;writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,comparisonProducts:pair},rag,deterministicAnswer:plan,decision,allowedProducts:writerProducts(pair)},rag.length?plan:noEvidenceResponse());answer=writerResult.answer;}
       }else if(['PRODUCT_INFO','CAPABILITY','EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent)){
-        const recommendationTurn=['RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent);
+        const hasDecisionContext=Boolean(commercialState.useCase||commercialState.problem||(commercialState.priorities?.length??0)>0);
+        const recommendationTurn=['RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent)||(intent==='EVALUATE_USE'&&!target&&hasDecisionContext);
         if(recommendationTurn){
           const maxBudget=commercialState.budget??(intent==='HANDLE_PRICE_OBJECTION'&&quote?.price!=null?Math.max(0,quote.price-0.01):99999999);
           const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
           const ranks=await this.#rankCandidates(commercialState,query,maxBudget,intent==='HANDLE_PRICE_OBJECTION'?target:null,3);
-          if(ranks[0]){
-            quote=ranks[0].quote;recommendedProduct=productName(quote);rag=ranks[0].evidence;
-            recommendationReasons=ranks[0].reasons;recommendationCriteria=ranks[0].criteria;recommendationTradeoffs=ranks[0].tradeoffs;
-          }
-        }else if(quote){
-          const primary=intent==='CAPABILITY'?'ATTRIBUTE':semanticIntent(intent);
-          const sections=productEvidenceSections({primary,attributes:decision.attributes},commercialState);
-          rag=await this.#productEvidence(input.message,quote,sections,8).catch(()=>[]);
-        }
+          if(ranks[0]){quote=ranks[0].quote;recommendedProduct=productName(quote);rag=ranks[0].evidence;recommendationReasons=ranks[0].reasons;recommendationCriteria=ranks[0].criteria;recommendationTradeoffs=ranks[0].tradeoffs;if(intent==='EVALUATE_USE')nba='RECOMMEND';}
+        }else if(quote){const primary=intent==='CAPABILITY'?'ATTRIBUTE':semanticIntent(intent);const sections=productEvidenceSections({primary,attributes:decision.attributes},commercialState);rag=await this.#productEvidence(input.message,quote,sections,8).catch(()=>[]);}
         const subject=recommendedProduct??productName(quote)??target;
-        const recommendationGuidance=recommendationReasons.length
-          ? ` La recomendación se sostiene en estos hechos comparables: ${recommendationReasons.join('; ')}.${recommendationTradeoffs.length?` Considera además: ${recommendationTradeoffs.join('; ')}.`:''}`
-          :'';
-        const plan=subject
-          ? `Responde lo actual sobre ${subject} usando únicamente los datos disponibles. Explica el beneficio práctico para la necesidad del cliente y evita lenguaje interno.${recommendationGuidance} N+1=${nba??'NINGUNO'}. No repitas discovery y no menciones precio si no fue solicitado.`
-          : `Responde de forma breve. Si falta un solo dato que realmente cambia la recomendación, pregunta solo ese. N+1=${nba??'NINGUNO'}.`;
+        const recommendationGuidance=recommendationReasons.length?` La recomendación se sostiene en estos hechos comparables: ${recommendationReasons.join('; ')}.${recommendationTradeoffs.length?` Considera además: ${recommendationTradeoffs.join('; ')}.`:''}`:'';
+        const plan=subject?`Responde lo actual sobre ${subject} usando únicamente los datos disponibles. Explica el beneficio práctico para la necesidad del cliente y evita lenguaje interno.${recommendationGuidance} N+1=${nba??'NINGUNO'}. No repitas discovery y no menciones precio si no fue solicitado.`:`Responde de forma breve. Si falta un solo dato que realmente cambia la recomendación, pregunta solo ese. N+1=${nba??'NINGUNO'}.`;
         const fallback=subject?`Puedo ayudarte a evaluar ${subject}; prefiero no afirmar una característica que no tenga confirmada.`:'¿Qué aspecto es más importante para ti en el equipo?';
-        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},quote,rag,deterministicAnswer:plan,decision},fallback);
-        answer=writerResult.answer;route=rag.length?'RAG_PRODUCT':'COMMERCIAL_REASONING';
+        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},quote,rag,deterministicAnswer:plan,decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts()},fallback);answer=writerResult.answer;route=recommendationTurn&&recommendedProduct?'RAG_RECOMMENDATION':rag.length?'RAG_PRODUCT':'COMMERCIAL_REASONING';
       }else if(intent==='PURCHASE'){
         const selected=decision.selectedProduct??commercialState.selectedProduct??target??recommendedProduct??commercialState.activeProduct??null;
-        quote=await this.#quote(selected,initialCandidates);answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:selected,recommendedProduct},quote);
-        handoff=true;handoffReason='CONTINUAR_VENTA';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';
+        quote=await this.#quote(selected,initialCandidates);
+        if((commercialState.quantity??1)>=2){answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:selected,recommendedProduct},quote);handoff=true;handoffReason='CONTINUAR_VENTA';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';}
+        else if(!selected){answer='Claro. ¿Qué modelo quieres comprar?';handoff=false;handoffReason=null;nba='ASK_MISSING_FACT';route='CLARIFICATION';}
+        else if(quote?.stock!=null&&quote.stock<=0){answer=`Ahora ${selected} no está disponible. Puedo ayudarte a revisar una alternativa disponible.`;handoff=false;handoffReason=null;nba='OFFER_ALTERNATIVE';route='PURCHASE_NO_STOCK';}
+        else{answer=`Perfecto. Para iniciar la reserva de ${selected}, envíame tu DNI o Carné de Extranjería.`;handoff=false;handoffReason=null;nba='COLLECT_RESERVATION_DATA';route='RESERVATION_DATA';reservationStage='NEED_DOCUMENT';}
       }else if(intent==='HUMAN'){
-        const selected=decision.selectedProduct??commercialState.selectedProduct??null;
-        const handoffFocus=selected??decision.targetProduct??recommendedProduct??commercialState.activeProduct??null;
-        quote=await this.#quote(handoffFocus,initialCandidates);answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:handoffFocus,recommendedProduct},quote);
-        handoff=true;handoffReason='SOLICITUD_HUMANO';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';
+        const selected=decision.selectedProduct??commercialState.selectedProduct??null;const handoffFocus=selected??decision.targetProduct??recommendedProduct??commercialState.activeProduct??null;quote=await this.#quote(handoffFocus,initialCandidates);answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:handoffFocus,recommendedProduct},quote);handoff=true;handoffReason='SOLICITUD_HUMANO';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';
       }else if(intent==='QUOTE'){
-        answer=quoteRequestResponse({...commercialState,queryTarget:target,recommendedProduct});route='QUOTE_DISCOVERY';
-        if(target&&facts.quantity){handoff=true;handoffReason='COTIZACION_LISTA_PARA_ASESOR';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';}
+        answer=quoteRequestResponse({...commercialState,queryTarget:target,recommendedProduct});route='QUOTE_DISCOVERY';if(target&&facts.quantity){handoff=true;handoffReason='COTIZACION_LISTA_PARA_ASESOR';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';}
       }else if(intent==='ORDER_STATUS'){
-        route='SQL_ORDER';sqlTools.push('dbo.sp_ConsultarPedido');
-        const {orderNumber,email}=extractOrderCredentials(input.message);
+        route='SQL_ORDER';sqlTools.push('dbo.sp_ConsultarPedido');const {orderNumber,email}=extractOrderCredentials(input.message);
         if(!orderNumber||!email||!this.#deps.erp.consultOrder){answer='Para revisar el pedido necesito el número de orden y el correo usado en la compra.';route='CLARIFICATION';}
-        else{
-          const order=await this.#deps.erp.consultOrder(orderNumber,email).catch(()=>null);
-          if(!order)answer='No pude confirmar ese pedido con los datos indicados.';
-          else{
-            rag=[{text:JSON.stringify(order),source:'SQL_ORDER_VERIFIED',score:100}];
-            writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:'Resume únicamente el estado confirmado del pedido; no agregues datos que no estén en la información recibida.',decision},'Encontré el pedido, pero no puedo resumir su estado con seguridad ahora.');
-            answer=writerResult.answer;
-          }
-        }
+        else{const order=await this.#deps.erp.consultOrder(orderNumber,email).catch(()=>null);if(!order)answer='No pude confirmar ese pedido con los datos indicados.';else{rag=[{text:JSON.stringify(order),source:'SQL_ORDER_VERIFIED',score:100}];writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:'Resume únicamente el estado confirmado del pedido; no agregues datos que no estén en la información recibida.',decision,allowedProducts:writerProducts()},'Encontré el pedido, pero no puedo resumir su estado con seguridad ahora.');answer=writerResult.answer;}}
       }else if(intent==='BUDGET_CONSTRAINT'&&commercialState.budget!=null){answer=`Listo, tomo S/ ${commercialState.budget} como tu tope.`;route='MEMORY_BUDGET';}
       else if(intent==='GREETING'){answer='Hola, cuéntame qué equipo buscas o para qué lo necesitas.';route='GREETING';}
       else if(intent==='CATEGORIES'&&this.#deps.erp.listCategories){const rows=await this.#deps.erp.listCategories().catch(()=>[]);answer=rows.slice(0,8).map(x=>x.name).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarCategoriasVenta');route='SQL_CATEGORIES';}
       else if(intent==='SUBCATEGORIES'&&this.#deps.erp.listSubcategories){const rows=await this.#deps.erp.listSubcategories().catch(()=>[]);answer=rows.slice(0,8).map(x=>x.name).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarSubcategoriasVenta');route='SQL_SUBCATEGORIES';}
       else if(intent==='CATALOG'&&this.#deps.erp.listCatalog){const rows=await this.#deps.erp.listCatalog({onlyWithStock:true}).catch(()=>[]);answer=rows.slice(0,6).map(x=>productName(x)).filter(Boolean).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarCatalogoVenta');route='SQL_CATALOG';}
-      else{
-        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag:[],deterministicAnswer:`Responde lo actual y usa N+1=${nba??'NINGUNO'} sin inventar ni repetir preguntas conocidas.`,decision},'Puedo ayudarte con productos, comparaciones, características, políticas o una compra.');
-        answer=writerResult.answer;route='GENERAL_COMMERCIAL';
-      }
+      else{writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag:[],deterministicAnswer:`Responde lo actual y usa N+1=${nba??'NINGUNO'} sin inventar ni repetir preguntas conocidas.`,decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts()},'Puedo ayudarte con productos, comparaciones, características, políticas o una compra.');answer=writerResult.answer;route='GENERAL_COMMERCIAL';}
 
-      const selectedProduct=String(decision.referenceType??'').toUpperCase()==='SELECTION_REFERENT'
-        ?(decision.selectedProduct??commercialState.selectedProduct??commercialState.salientProduct??target)
-        :(decision.selectedProduct??commercialState.selectedProduct??null);
+      const selectedProduct=String(decision.referenceType??'').toUpperCase()==='SELECTION_REFERENT'?(decision.selectedProduct??commercialState.selectedProduct??commercialState.salientProduct??target):(decision.selectedProduct??commercialState.selectedProduct??null);
       const explicitSwitch=decision.explicitSwitch&&Boolean(selectedProduct);
-      let activeProduct=commercialState.activeProduct??null;
-      if(!activeProduct&&quote)activeProduct=productName(quote);
-      if(explicitSwitch&&selectedProduct)activeProduct=selectedProduct;
+      let activeProduct=commercialState.activeProduct??null;if(!activeProduct&&quote)activeProduct=productName(quote);if(explicitSwitch&&selectedProduct)activeProduct=selectedProduct;
       const salientProduct=productName(quote)??decision.targetProduct??recommendedProduct??commercialState.salientProduct??activeProduct;
       const comparisonProducts=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[])]).slice(0,2);
-      const targetResolvedQuote=quote;
-      const activeQuote=await this.#quote(activeProduct,initialCandidates);
-      const activeId=activeQuote?.productRagId??(same(activeProduct,previous.activeProduct)?previous.activeProductId:null)??null;
-      const activeCode=activeQuote?.productCode??(same(activeProduct,previous.activeProduct)?previous.activeProductCode:null)??null;
+      const targetResolvedQuote=quote;const activeQuote=await this.#quote(activeProduct,initialCandidates);
+      const activeId=activeQuote?.productRagId??(same(activeProduct,previous.activeProduct)?previous.activeProductId:null)??null;const activeCode=activeQuote?.productCode??(same(activeProduct,previous.activeProduct)?previous.activeProductCode:null)??null;
       const origin=resolutionOrigin(decision.referenceType,explicitSwitch,Boolean(targetResolvedQuote?.productRagId),target,previous);
 
       const nextState=reduceState(previous,{
-        contextVersion:previous.contextVersion??0,
-        activeProduct,
-        activeProductId:activeId,
-        activeProductCode:activeCode,
-        queryTarget:decision.targetProduct??productName(targetResolvedQuote)??commercialState.queryTarget??null,
-        salientProduct,
-        selectedProduct,
-        recommendedProduct,
-        comparisonProducts,
-        explicitSwitch,
-        budget:commercialState.budget??null,
-        lastIntent:intent,
-        secondaryIntents:decision.secondaryIntents,
-        lastRoute:route,
-        lastSqlTools:sqlTools,
-        requiresSql:decision.needsSql||sqlTools.length>0,
-        requiresRag:decision.needsProductRag||decision.needsInstitutionalRag||rag.length>0,
-        spinFacts:unique([...(commercialState.spinFacts??[]),decision.spinContribution]),
-        lastSpinContribution:spinContributionCode(previous,commercialState,decision),
-        lastNba:nba??null,
-        customerType:commercialState.customerType,
-        sector:commercialState.sector,
-        useCase:commercialState.useCase,
-        problem:commercialState.problem,
-        priorities:commercialState.priorities,
-        quantity:commercialState.quantity,
-        invoiceRequired:commercialState.invoiceRequired,
-        objection:commercialState.objection,
-        purchaseSignal:facts.purchaseSignal||intent==='PURCHASE',
-        commercialStage:stageFor(intent,decision.commercialStage),
-        commercialStrategy:strategyFor(intent),
-        handoffActive:handoff,
-        blockAutomaticReply:handoff,
-        handoffReason,
-        lastResolvedProductId:targetResolvedQuote?.productRagId??null,
-        lastResolvedProductCode:targetResolvedQuote?.productCode??null,
-        lastProductResolutionConfidence:targetResolvedQuote?.productRagId?decision.confidence:0,
-        lastProductResolutionOrigin:origin,
-        lastUserMessage:input.message,
-        lastAssistantMessage:answer,
+        contextVersion:previous.contextVersion??0,activeProduct,activeProductId:activeId,activeProductCode:activeCode,
+        queryTarget:decision.targetProduct??productName(targetResolvedQuote)??commercialState.queryTarget??null,salientProduct,selectedProduct,recommendedProduct,comparisonProducts,explicitSwitch,
+        budget:commercialState.budget??null,lastIntent:intent,secondaryIntents:decision.secondaryIntents,lastRoute:route,lastSqlTools:sqlTools,requiresSql:decision.needsSql||sqlTools.length>0,requiresRag:decision.needsProductRag||decision.needsInstitutionalRag||rag.length>0,
+        spinFacts:unique([...(commercialState.spinFacts??[]),decision.spinContribution]),lastSpinContribution:spinContributionCode(previous,commercialState,decision),lastNba:nba??null,pendingCommercialAction:nba??null,
+        customerType:commercialState.customerType,sector:commercialState.sector,useCase:commercialState.useCase,problem:commercialState.problem,priorities:commercialState.priorities,quantity:commercialState.quantity,invoiceRequired:commercialState.invoiceRequired,objection:commercialState.objection,purchaseSignal:facts.purchaseSignal||intent==='PURCHASE',
+        commercialStage:stageFor(intent,decision.commercialStage),commercialStrategy:strategyFor(intent),reservationStage,reservationDocument,reservationCustomerName,reservationAddress,
+        handoffActive:handoff,blockAutomaticReply:handoff,handoffReason,lastResolvedProductId:targetResolvedQuote?.productRagId??null,lastResolvedProductCode:targetResolvedQuote?.productCode??null,lastProductResolutionConfidence:targetResolvedQuote?.productRagId?decision.confidence:0,lastProductResolutionOrigin:origin,lastUserMessage:input.message,lastAssistantMessage:answer,
       });
 
-      const model=writerResult?.model??planner?.model??'stech-hybrid-deterministic';
-      const pUsage=planner?.usage;
-      const wUsage=writerResult?.llmResult?.usage;
-      const completionMeta={
-        messageId,requestId,conversationType:input.sessionId.startsWith('qa-')?'QA_LIVE':null,model,
-        inputTokens:tokenSum([pUsage?.inputTokens,wUsage?.inputTokens]),
-        outputTokens:tokenSum([pUsage?.outputTokens,wUsage?.outputTokens]),
-        totalTokens:tokenSum([pUsage?.totalTokens,wUsage?.totalTokens]),
-        cachedInputTokens:tokenSum([pUsage?.cachedInputTokens,wUsage?.cachedInputTokens]),
-        totalPrompts:(planner?1:0)+(writerResult?.llmResult?1:0),
-      };
-      if(atomic){
-        await this.#deps.conversations.completeTurn!(input.sessionId,input.message,answer,nextState,completionMeta);
-        leaseAcquired=false;
-      }else{
-        await this.#deps.conversations.appendMessage(input.sessionId,'user',input.message,completionMeta);
-        await this.#deps.conversations.saveState(input.sessionId,nextState);
-        await this.#deps.conversations.appendMessage(input.sessionId,'assistant',answer,completionMeta);
-      }
+      const model=writerResult?.model??planner?.model??'stech-hybrid-deterministic';const pUsage=planner?.usage;const wUsage=writerResult?.llmResult?.usage;
+      const completionMeta={messageId,requestId,conversationType:input.sessionId.startsWith('qa-')?'QA_LIVE':null,model,inputTokens:tokenSum([pUsage?.inputTokens,wUsage?.inputTokens]),outputTokens:tokenSum([pUsage?.outputTokens,wUsage?.outputTokens]),totalTokens:tokenSum([pUsage?.totalTokens,wUsage?.totalTokens]),cachedInputTokens:tokenSum([pUsage?.cachedInputTokens,wUsage?.cachedInputTokens]),totalPrompts:(planner?1:0)+(writerResult?.llmResult?1:0)};
+      if(atomic){await this.#deps.conversations.completeTurn!(input.sessionId,input.message,answer,nextState,completionMeta);leaseAcquired=false;}
+      else{await this.#deps.conversations.appendMessage(input.sessionId,'user',input.message,completionMeta);await this.#deps.conversations.saveState(input.sessionId,nextState);await this.#deps.conversations.appendMessage(input.sessionId,'assistant',answer,completionMeta);}
 
-      const plannerTelemetry=await this.#recordUsage(input.sessionId,turn,'SEMANTIC_PLAN',messageId,planner);
-      const writerTelemetry=await this.#recordUsage(input.sessionId,turn,'COMMERCIAL_WRITE',messageId,writerResult?.llmResult??null);
-      const telemetry=!plannerTelemetry.delivered?plannerTelemetry:writerTelemetry;
+      const plannerTelemetry=await this.#recordUsage(input.sessionId,turn,'SEMANTIC_PLAN',messageId,planner);const writerTelemetry=await this.#recordUsage(input.sessionId,turn,'COMMERCIAL_WRITE',messageId,writerResult?.llmResult??null);const telemetry=!plannerTelemetry.delivered?plannerTelemetry:writerTelemetry;
       let automation:{delivered:boolean;error?:string}={delivered:false};
-      try{
-        const handoffProduct=selectedProduct??(intent==='QUOTE'?target:null);
-        automation=handoff
-          ?await this.#deps.automation.publish({
-            type:'handoff.requested',
-            occurredAt:new Date().toISOString(),
-            sessionId:input.sessionId,
-            payload:{
-              product:handoffProduct,
-              selectedProduct:selectedProduct??null,
-              activeProduct:activeProduct??null,
-              recommendedProduct:recommendedProduct??null,
-              comparisonProducts,
-              quantity:nextState.quantity??null,
-              invoiceRequired:nextState.invoiceRequired??null,
-              reason:handoffReason,
-              context:nextState,
-            },
-          })
-          :await this.#deps.automation.publish({type:'conversation.turn.completed',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{intent,route,product:activeProduct,nextBestAction:nba}});
-      }catch(error){automation={delivered:false,error:error instanceof Error?error.message:String(error)};}
+      try{const handoffProduct=selectedProduct??(intent==='QUOTE'?target:null);automation=handoff?await this.#deps.automation.publish({type:'handoff.requested',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{product:handoffProduct,selectedProduct:selectedProduct??null,activeProduct:activeProduct??null,recommendedProduct:recommendedProduct??null,comparisonProducts,quantity:nextState.quantity??null,invoiceRequired:nextState.invoiceRequired??null,reason:handoffReason,context:nextState}}):await this.#deps.automation.publish({type:'conversation.turn.completed',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{intent,route,product:activeProduct,nextBestAction:nba}});}catch(error){automation={delivered:false,error:error instanceof Error?error.message:String(error)};}
 
-      return{
-        sessionId:input.sessionId,
-        answer,
-        state:{...nextState,contextVersion:(previous.contextVersion??0)+1},
-        debug:{
-          intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,
-          queryTarget:decision.targetProduct??target,activeProduct,salientProduct,selectedProduct,recommendedProduct,comparisonProducts,
-          requestedUnknown,ragCount:rag.length,imageCount:images.length,nextBestAction:nba,
-          handoff,handoffReason,recommendationCriteria,recommendationReasons,recommendationTradeoffs,
-          planner:plannerDebug(planner),plannerFailure,
-          writer:writerResult?{model:writerResult.model,fallback:writerResult.fallback}:undefined,
-          telemetry,automation,durationMs:Math.max(0,Math.round(performance.now()-started)),
-        },
-      };
+      return{sessionId:input.sessionId,answer,state:{...nextState,contextVersion:(previous.contextVersion??0)+1},debug:{intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,queryTarget:decision.targetProduct??target,activeProduct,salientProduct,selectedProduct,recommendedProduct,comparisonProducts,explicitSwitch,budget:commercialState.budget??null,priceObjection:budgetTurn.priceObjection,erp:quote,images,requestedUnknown,ragSources:unique(rag.map(x=>x.source)),ragCount:rag.length,imageCount:images.length,nextBestAction:nba,handoff,handoffReason,recommendationCriteria,recommendationReasons,recommendationTradeoffs,planner:plannerDebug(planner),plannerFailure,writer:writerResult?{model:writerResult.model,fallback:writerResult.fallback}:undefined,telemetry,automation,durationMs:Math.max(0,Math.round(performance.now()-started))}};
     } catch(error) {
-      if(leaseAcquired&&this.#deps.conversations.failTurn){
-        try{await this.#deps.conversations.failTurn(input.sessionId,messageId,error instanceof Error?error.message:String(error));}catch{}
-      }
+      if(leaseAcquired&&this.#deps.conversations.failTurn){try{await this.#deps.conversations.failTurn(input.sessionId,messageId,error instanceof Error?error.message:String(error));}catch{}}
       throw error;
     }
   }
