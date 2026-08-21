@@ -35,3 +35,13 @@ test('maps security, SIM and physical language to canonical attribute families',
   assert.equal(physical.primary, 'ATTRIBUTE');
   assert.ok(physical.attributes.includes('FISICO'));
 });
+
+test('camera-use wording is not confused with a request to show product images', () => {
+  const result = resolveIntentPlan('quiero un celular con buena camara para tomar fotos para redes');
+  assert.notEqual(result.primary, 'IMAGES');
+  assert.ok(result.attributes.includes('CAMARA'));
+});
+
+test('explicit short model purchase wording is recognized as purchase', () => {
+  assert.equal(resolveIntentPlan('ya el 22 quiero').primary, 'PURCHASE');
+});
