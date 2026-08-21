@@ -44,3 +44,16 @@ test('ANSWER_ONLY keeps the grounded answer and removes an appended follow-up qu
   assert.equal(r.fallback.delivered,true);
   assert.equal(r.fallback.error,undefined);
 });
+
+test('rejects speculative tradeoffs that are not present in verified evidence',async()=>{
+  const r=await safeWrite(llm('El Armor 22 tiene más resolución nocturna; probablemente también consume más batería.'),{
+    ...base,
+    allowedProducts:['Armor 22','Armor X13'],
+    rag:[
+      {text:'Armor 22: cámara principal 64 MP. Cámara nocturna 64 MP.',source:'TEST',productId:'P-A22',section:'CAMARA',domain:'PRODUCT'},
+      {text:'Armor X13: cámara principal 50 MP. Cámara nocturna 24 MP.',source:'TEST',productId:'P-X13',section:'CAMARA',domain:'PRODUCT'},
+    ],
+  } as any,'Armor 22 tiene mayor resolución nocturna en los datos comparados.');
+  assert.equal(r.answer,'Armor 22 tiene mayor resolución nocturna en los datos comparados.');
+  assert.equal(r.fallback.error,'UNSUPPORTED_SPECULATION');
+});
