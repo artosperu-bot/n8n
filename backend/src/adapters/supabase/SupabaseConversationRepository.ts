@@ -18,6 +18,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
   readonly #conversationTable: string;
   readonly #fetcher: typeof fetch;
   readonly #pendingTurnId = new Map<string, string>();
+  readonly #pendingMessageId = new Map<string, string | null>();
+  readonly #pendingRequestId = new Map<string, string | null>();
   readonly #lastState = new Map<string, ConversationState>();
 
   constructor(options: Options) {
@@ -30,24 +32,14 @@ export class SupabaseConversationRepository implements ConversationRepository {
   }
 
   #headers(extra: Record<string, string> = {}) {
-    return {
-      apikey: this.#key,
-      authorization: `Bearer ${this.#key}`,
-      'content-type': 'application/json',
-      ...extra,
-    };
+    return { apikey: this.#key, authorization: `Bearer ${this.#key}`, 'content-type': 'application/json', ...extra };
   }
 
   async #ensureSession(sessionId: string): Promise<void> {
     const body = [{ session_id: sessionId, canal: sessionId.startsWith('qa-') ? 'qa_live' : 'backend' }];
-    const r = await this.#fetcher(
-      `${this.#url}/rest/v1/${this.#sessionTable}?on_conflict=session_id`,
-      {
-        method: 'POST',
-        headers: this.#headers({ Prefer: 'resolution=ignore-duplicates' }),
-        body: JSON.stringify(body),
-      },
-    );
+    const r = await this.#fetcher(`${this.#url}/rest/v1/${this.#sessionTable}?on_conflict=session_id`, {
+      method: 'POST', headers: this.#headers({ Prefer: 'resolution=ignore-duplicates' }), body: JSON.stringify(body),
+    });
     if (!r.ok) throw new Error(`Supabase session ensure HTTP ${r.status}`);
   }
 
@@ -59,12 +51,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const r = await this.#fetcher(q, { headers: this.#headers() });
     if (!r.ok) throw new Error(`Supabase state read HTTP ${r.status}`);
     const rows: any[] = await r.json();
-    return rows[0]?.contexto ?? {
-      sessionId,
-      turnCount: 0,
-      comparisonProducts: [],
-      spinFacts: [],
-    };
+    return rows[0]?.contexto ?? { sessionId, turnCount: 0, comparisonProducts: [], spinFacts: [], priorities: [] };
   }
 
   async saveState(sessionId: string, state: ConversationState): Promise<void> {
@@ -72,31 +59,35 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const normalized = { ...state, sessionId };
     const body = [{
       session_id: sessionId,
+      canal: sessionId.startsWith('qa-') ? 'qa_live' : 'backend',
       contexto: normalized,
       ultima_intencion: normalized.lastIntent ?? null,
+      ultima_accion: normalized.lastNba ?? null,
+      ultima_ruta: normalized.lastIntent ?? null,
+      ultimo_mensaje_cliente: normalized.lastUserMessage ?? null,
+      ultima_respuesta_bot: normalized.lastAssistantMessage ?? null,
+      actividad_activa: normalized.useCase ?? normalized.sector ?? null,
+      problema_activo: normalized.problem ?? null,
       presupuesto_activo: normalized.budget ?? null,
+      cantidad_activa: normalized.quantity ?? null,
+      objecion_activa: normalized.objection ?? null,
+      senal_compra: normalized.purchaseSignal ?? false,
+      accion_pendiente: normalized.lastNba ?? null,
+      ultimo_message_id: this.#pendingMessageId.get(sessionId) ?? null,
+      ultimo_request_id: this.#pendingRequestId.get(sessionId) ?? null,
+      ultimo_turno_fecha: new Date().toISOString(),
       producto_activo_origen: 'STECH_BACKEND',
       updated_by: 'stech_backend',
       updated_at: new Date().toISOString(),
     }];
-    const r = await this.#fetcher(
-      `${this.#url}/rest/v1/${this.#contextTable}?on_conflict=session_id`,
-      {
-        method: 'POST',
-        headers: this.#headers({ Prefer: 'resolution=merge-duplicates' }),
-        body: JSON.stringify(body),
-      },
-    );
+    const r = await this.#fetcher(`${this.#url}/rest/v1/${this.#contextTable}?on_conflict=session_id`, {
+      method: 'POST', headers: this.#headers({ Prefer: 'resolution=merge-duplicates' }), body: JSON.stringify(body),
+    });
     if (!r.ok) throw new Error(`Supabase state write HTTP ${r.status}`);
     this.#lastState.set(sessionId, structuredClone(normalized));
   }
 
-  async appendMessage(
-    sessionId: string,
-    role: 'user' | 'assistant',
-    content: string,
-    meta: ConversationMessageMeta = {},
-  ): Promise<void> {
+  async appendMessage(sessionId: string, role: 'user' | 'assistant', content: string, meta: ConversationMessageMeta = {}): Promise<void> {
     await this.#ensureSession(sessionId);
     const isQa = sessionId.startsWith('qa-');
 
@@ -112,15 +103,15 @@ export class SupabaseConversationRepository implements ConversationRepository {
         fecha: new Date().toISOString(),
       }];
       const r = await this.#fetcher(`${this.#url}/rest/v1/${this.#conversationTable}`, {
-        method: 'POST',
-        headers: this.#headers({ Prefer: 'return=representation' }),
-        body: JSON.stringify(body),
+        method: 'POST', headers: this.#headers({ Prefer: 'return=representation' }), body: JSON.stringify(body),
       });
       if (!r.ok) throw new Error(`Supabase conversation user write HTTP ${r.status}`);
       const rows: any[] = await r.json();
       const id = String(rows[0]?.id ?? '');
       if (!id) throw new Error('Supabase conversation insert returned no id');
       this.#pendingTurnId.set(sessionId, id);
+      this.#pendingMessageId.set(sessionId, meta.messageId ?? null);
+      this.#pendingRequestId.set(sessionId, meta.requestId ?? null);
       return;
     }
 
@@ -135,14 +126,9 @@ export class SupabaseConversationRepository implements ConversationRepository {
       cambio_producto_explicito: state?.explicitSwitch ?? false,
       ...(meta.model ? { modelo: meta.model } : {}),
     };
-    const r = await this.#fetcher(
-      `${this.#url}/rest/v1/${this.#conversationTable}?id=eq.${encodeURIComponent(turnId)}`,
-      {
-        method: 'PATCH',
-        headers: this.#headers(),
-        body: JSON.stringify(body),
-      },
-    );
+    const r = await this.#fetcher(`${this.#url}/rest/v1/${this.#conversationTable}?id=eq.${encodeURIComponent(turnId)}`, {
+      method: 'PATCH', headers: this.#headers(), body: JSON.stringify(body),
+    });
     if (!r.ok) throw new Error(`Supabase conversation assistant write HTTP ${r.status}`);
     this.#pendingTurnId.delete(sessionId);
   }
@@ -157,25 +143,20 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const rows: any[] = await r.json();
     const out: Array<{ role: 'user' | 'assistant'; content: string; at: string }> = [];
     for (const row of rows) {
-      if (row.mensaje_cliente != null) {
-        out.push({ role: 'user', content: String(row.mensaje_cliente), at: String(row.fecha ?? '') });
-      }
-      if (row.respuesta_bot != null) {
-        out.push({ role: 'assistant', content: String(row.respuesta_bot), at: String(row.fecha ?? '') });
-      }
+      if (row.mensaje_cliente != null) out.push({ role: 'user', content: String(row.mensaje_cliente), at: String(row.fecha ?? '') });
+      if (row.respuesta_bot != null) out.push({ role: 'assistant', content: String(row.respuesta_bot), at: String(row.fecha ?? '') });
     }
     return out;
   }
 
   async reset(sessionId: string): Promise<void> {
     for (const table of [this.#conversationTable, this.#contextTable]) {
-      const r = await this.#fetcher(
-        `${this.#url}/rest/v1/${table}?session_id=eq.${encodeURIComponent(sessionId)}`,
-        { method: 'DELETE', headers: this.#headers() },
-      );
+      const r = await this.#fetcher(`${this.#url}/rest/v1/${table}?session_id=eq.${encodeURIComponent(sessionId)}`, { method: 'DELETE', headers: this.#headers() });
       if (!r.ok) throw new Error(`Supabase reset HTTP ${r.status}`);
     }
     this.#pendingTurnId.delete(sessionId);
+    this.#pendingMessageId.delete(sessionId);
+    this.#pendingRequestId.delete(sessionId);
     this.#lastState.delete(sessionId);
   }
 }
