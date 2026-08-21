@@ -41,11 +41,17 @@ const STAGES = new Set(['INICIAL','DESCUBRIMIENTO','CONSIDERACION','EVALUACION',
 function unique(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.map(v => String(v ?? '').trim()).filter(Boolean))];
 }
-function canonical(value: string | null | undefined, universe: string[]): string | null {
+function knownCanonical(value: string | null | undefined, universe: string[]): string | null {
   const raw = String(value ?? '').trim();
   if (!raw) return null;
   const f = fold(raw);
-  return universe.find(p => fold(p) === f || fold(p).includes(f) || f.includes(fold(p))) ?? raw;
+  return universe.find(p => fold(p) === f || fold(p).includes(f) || f.includes(fold(p))) ?? null;
+}
+function looksLikeProductModel(value:string|null|undefined):boolean {
+  const raw=String(value??'').trim();
+  if(!raw||raw.length>48)return false;
+  const t=fold(raw);
+  return /[a-z]/.test(t)&&/\d/.test(t)&&t.split(/\s+/).length<=5;
 }
 function canonicalIntent(value: string | null | undefined): string | null {
   const v = String(value ?? '').trim().toUpperCase();
@@ -93,6 +99,9 @@ export function validateTurnDecision(
   catalogCandidates: string[] = [],
   fallbackDecision?: TurnDecision,
 ): TurnDecision {
+  // Only SQL/catalog candidates and already-canonical memory can authorize a
+  // product identity. Raw planner strings are deliberately excluded so an LLM
+  // cannot create a new product identity simply by repeating its own guess.
   const universe = unique([
     ...catalogCandidates,
     state.activeProduct,
@@ -101,53 +110,49 @@ export function validateTurnDecision(
     state.selectedProduct,
     state.recommendedProduct,
     ...(state.comparisonProducts ?? []),
-    ...(decision.mentionedProducts ?? []),
-    ...(decision.comparisonProducts ?? []),
   ]);
 
   const fallbackIntent = canonicalIntent(fallbackDecision?.primaryIntent);
   const fallbackReference = canonicalReference(fallbackDecision?.referenceType, null);
-  const fallbackTarget = canonical(fallbackDecision?.targetProduct, universe);
   const decisionAttributes = unique((decision.attributes ?? []).map(x => String(x).toUpperCase()));
   const fallbackAttributes = unique((fallbackDecision?.attributes ?? []).map(x => String(x).toUpperCase()));
-  const currentMentions = unique((decision.mentionedProducts ?? []).map(p => canonical(p, universe)))
-    .filter(p => catalogCandidates.some(c => fold(c) === fold(p)));
+  const currentMentions = unique([
+    ...(decision.mentionedProducts ?? []).map(p => knownCanonical(p, universe)),
+    ...(fallbackDecision?.mentionedProducts ?? []).map(p => knownCanonical(p, universe)),
+  ]).filter(p => catalogCandidates.some(c => fold(c) === fold(p)) || universe.some(c=>fold(c)===fold(p)));
 
   let primaryIntent = canonicalIntent(decision.primaryIntent)
     ?? fallbackIntent
     ?? 'OTHER';
 
-  if (primaryIntent === 'COMPARE' && fallbackIntent !== 'COMPARE' && currentMentions.length < 2) {
+  if (primaryIntent === 'COMPARE' && fallbackIntent !== 'COMPARE' && currentMentions.length < 2 && (state.comparisonProducts?.length ?? 0) < 2) {
     primaryIntent = fallbackIntent ?? 'OTHER';
   }
 
-  // A direct lexical attribute request is more specific than a generic LLM
-  // PRODUCT_INFO/EVALUATE_USE classification. Keep the deterministic attribute
-  // family so RAG retrieves the exact section (SIM, FISICO, SEGURIDAD, etc.).
   const specificAttributeAuthority = fallbackIntent === 'CAPABILITY' && fallbackAttributes.length > 0;
   if (specificAttributeAuthority && ['PRODUCT_INFO','OTHER','EVALUATE_USE'].includes(primaryIntent)) {
     primaryIntent = 'CAPABILITY';
   }
 
   let referenceType = canonicalReference(decision.referenceType, fallbackDecision?.referenceType);
-  const recentSelection = canonical(state.selectedProduct ?? state.salientProduct, universe);
-  let targetProduct = canonical(decision.targetProduct, universe);
-  let selectedProduct = canonical(decision.selectedProduct, universe);
+  const recentSelection = knownCanonical(state.selectedProduct ?? state.salientProduct, universe);
+  const knownDecisionTarget=knownCanonical(decision.targetProduct,universe);
+  const knownFallbackTarget=knownCanonical(fallbackDecision?.targetProduct,universe);
+  let targetProduct = knownDecisionTarget ?? knownFallbackTarget;
 
   if (currentMentions.length === 1) {
     targetProduct = currentMentions[0];
-    if (!decision.explicitSwitch) referenceType = 'NAMED_QUERY_TARGET';
+    if (!(fallbackDecision?.explicitSwitch === true)) referenceType = 'NAMED_QUERY_TARGET';
   }
 
-  if (!targetProduct && catalogCandidates.length === 1) targetProduct = canonical(catalogCandidates[0], universe);
+  if (!targetProduct && catalogCandidates.length === 1) targetProduct = catalogCandidates[0];
 
   if (referenceType === 'SELECTION_REFERENT' && recentSelection) {
     targetProduct = recentSelection;
-    selectedProduct = recentSelection;
   }
 
-  if (!state.activeProduct && fallbackReference === 'RECOMMENDED_FALLBACK' && fallbackTarget) {
-    targetProduct = fallbackTarget;
+  if (!state.activeProduct && fallbackReference === 'RECOMMENDED_FALLBACK' && knownFallbackTarget) {
+    targetProduct = knownFallbackTarget;
     referenceType = 'RECOMMENDED_FALLBACK';
   }
 
@@ -155,27 +160,51 @@ export function validateTurnDecision(
     referenceType = fallbackReference;
   }
 
-  const explicitSwitch = decision.explicitSwitch === true && Boolean(selectedProduct);
+  // A genuinely unknown named model (e.g. Armor 30) remains a lookup target so
+  // the catalog recovery path can offer real alternatives. Generic need text
+  // such as “cámara resistente para fotos…” is never promoted to product id.
+  if (!targetProduct) {
+    const rawUnknown=String(fallbackDecision?.targetProduct ?? decision.targetProduct ?? '').trim();
+    if(looksLikeProductModel(rawUnknown)) targetProduct=rawUnknown;
+  }
+
+  const deterministicSelectionAuthorized = fallbackDecision?.explicitSwitch === true
+    || ['SELECTION_REFERENT','EXPLICIT_PRODUCT_SWITCH'].includes(String(fallbackReference??''));
+  const referentialSelectionAuthorized = !fallbackDecision && referenceType === 'SELECTION_REFERENT' && Boolean(recentSelection);
+  const selectionAuthorized = deterministicSelectionAuthorized || referentialSelectionAuthorized;
+  let selectedProduct = selectionAuthorized
+    ? knownCanonical(fallbackDecision?.selectedProduct ?? decision.selectedProduct ?? targetProduct, universe) ?? recentSelection
+    : knownCanonical(state.selectedProduct, universe);
+
+  if(referenceType==='SELECTION_REFERENT'&&recentSelection)selectedProduct=recentSelection;
+  const explicitSwitch = Boolean(selectionAuthorized && selectedProduct && fold(selectedProduct)!==fold(state.activeProduct??''));
+
   const proposedNba = canonicalNba(decision.nextBestAction);
   const fallbackNba = canonicalNba(fallbackDecision?.nextBestAction);
   const nextBestAction = compatibleNba(primaryIntent,state,proposedNba,fallbackNba);
 
-  let comparisonProducts = unique((decision.comparisonProducts?.length ? decision.comparisonProducts : state.comparisonProducts ?? []).map(p => canonical(p, universe)));
-  const active = canonical(state.activeProduct, universe);
+  let comparisonProducts = unique([
+    ...(decision.comparisonProducts ?? []).map(p => knownCanonical(p, universe)),
+    ...(fallbackDecision?.comparisonProducts ?? []).map(p => knownCanonical(p, universe)),
+    ...(state.comparisonProducts ?? []).map(p => knownCanonical(p, universe)),
+  ]);
+  const active = knownCanonical(state.activeProduct, universe);
   if (active && currentMentions.length === 1 && !explicitSwitch && fold(active) !== fold(currentMentions[0])) {
     comparisonProducts = unique([active, currentMentions[0], ...comparisonProducts]).slice(0,2);
+  } else {
+    comparisonProducts=comparisonProducts.slice(0,2);
   }
 
   const attributes = primaryIntent === 'CAPABILITY' && specificAttributeAuthority
     ? fallbackAttributes
     : decisionAttributes;
-  const targetNeedsResolution = Boolean(targetProduct && !catalogCandidates.some(p => fold(p) === fold(targetProduct!)));
+  const targetNeedsResolution = Boolean(targetProduct && !universe.some(p => fold(p) === fold(targetProduct!)));
   return {
     ...decision,
     primaryIntent,
     secondaryIntents: unique(decision.secondaryIntents ?? []).map(x => canonicalIntent(x)).filter((x): x is string => Boolean(x)),
     targetProduct,
-    mentionedProducts: unique((decision.mentionedProducts ?? []).map(p => canonical(p, universe))),
+    mentionedProducts: currentMentions,
     referenceType,
     explicitSwitch,
     selectedProduct,
