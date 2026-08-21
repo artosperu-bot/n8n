@@ -13,6 +13,7 @@ import { validateTurnDecision } from './decision/DecisionValidator.ts';
 import { resolveInstitutionalTopic } from './institutional/InstitutionalTopicResolver.ts';
 import { resolveIntentPlan } from './intent/IntentPlan.ts';
 import { nextBestAction } from './nba/NextBestAction.ts';
+import { rankRecommendations } from './recommendation/RecommendationPolicy.ts';
 import { resolveReference } from './reference/ReferenceResolver.ts';
 import { reduceState } from './state/StateReducer.ts';
 import { safeWrite } from './writer/WriterGuard.ts';
@@ -26,7 +27,7 @@ type Dependencies = {
   llm: LlmProvider;
   automation: AutomationBus;
 };
-type CandidateRank = { quote: ProductQuote; evidence: RagEvidence[]; score: number };
+type CandidateRank = { quote: ProductQuote; evidence: RagEvidence[]; score: number; reasons:string[]; criteria:string[]; tradeoffs:string[]; confidence:number };
 
 function unique(values: Array<unknown>): string[] {
   return [...new Set(values.filter((v):v is string=>typeof v==='string').map(v=>v.trim()).filter(Boolean))];
@@ -146,6 +147,24 @@ function spinContributionCode(previous:ConversationState,current:ConversationSta
   if(raw)return 'SITUACION';
   return null;
 }
+function recommendationSections(state:ConversationState):string[]{
+  const base=productEvidenceSections({primary:'RECOMMEND'},state);
+  const use=fold(state.useCase??'');
+  const problem=fold(state.problem??'');
+  const extra:string[]=[];
+  if(/delivery|repart|logistica/.test(use))extra.push('BATERIA','RESISTENCIA','POSICIONAMIENTO','REDES','CONECTIVIDAD');
+  if(/campo|construccion|obra|tecnico/.test(use))extra.push('RESISTENCIA','BATERIA');
+  if(/caida|durabilidad/.test(problem))extra.push('RESISTENCIA');
+  if(/autonomia/.test(problem))extra.push('BATERIA');
+  return unique([...base,...extra]).slice(0,6);
+}
+function isComparisonFollowup(message:string,state:ConversationState,decision:TurnDecision):boolean{
+  if((state.comparisonProducts?.length??0)<2||!(decision.attributes?.length))return false;
+  const t=fold(message);
+  return /\b(cual|que)\b[^?.!]{0,55}\b(mejor|gana|conviene)\b/.test(t)
+    || /^y\s+en\s+/.test(t)
+    || (/^y\s+/.test(t)&&['COMPARE','CAPABILITY'].includes(String(state.lastIntent??'').toUpperCase()));
+}
 
 export class HybridConversationEngine {
   readonly #deps: Dependencies;
@@ -195,14 +214,18 @@ export class HybridConversationEngine {
       .filter(q=>q.price==null||q.price<=maxBudget)
       .filter(q=>q.stock==null||q.stock>0)
       .filter(q=>!same(productName(q),exclude));
-    const sections=productEvidenceSections({primary:'RECOMMEND'},state);
-    const ranked:CandidateRank[]=[];
+    const sections=recommendationSections(state);
+    const candidates:Array<{quote:ProductQuote;evidence:RagEvidence[]}>=[];
     for(const quote of options.slice(0,20)){
-      const evidence=await this.#productEvidence(query,quote,sections,5).catch(()=>[]);
-      ranked.push({quote,evidence,score:evidence.reduce((n,e)=>n+Number(e.score??0),0)});
+      const evidence=await this.#productEvidence(query,quote,sections,Math.max(5,sections.length)).catch(()=>[]);
+      candidates.push({quote,evidence});
     }
-    ranked.sort((a,b)=>b.score-a.score||Number(a.quote.price??Infinity)-Number(b.quote.price??Infinity));
-    return ranked.slice(0,max);
+    return rankRecommendations(candidates,{
+      priorities:state.priorities??[],
+      useCase:state.useCase??null,
+      problem:state.problem??null,
+      maxBudget,
+    }).slice(0,max).map(x=>({quote:x.quote,evidence:x.evidence,score:x.score,reasons:x.reasons,criteria:x.criteria,tradeoffs:x.tradeoffs,confidence:x.confidence}));
   }
 
   async #recordUsage(sessionId:string,turn:number,route:string,messageId:string|null,result:{model:string;usage:any;durationMs:number}|null):Promise<{delivered:boolean;error?:string}>{
@@ -261,6 +284,17 @@ export class HybridConversationEngine {
           confidence:0.99,
         };
       }
+      if(isComparisonFollowup(input.message,baseState,deterministicDecision)){
+        deterministicDecision={
+          ...deterministicDecision,
+          primaryIntent:'COMPARE',
+          comparisonProducts:(baseState.comparisonProducts??[]).slice(0,2),
+          nextBestAction:nextBestAction('COMPARE',baseState),
+          needsSql:true,
+          needsProductRag:true,
+          confidence:0.99,
+        };
+      }
       let planner:LlmDecisionResult|null=null;
       let plannerFailure:string|undefined;
       try{if(this.#deps.llm.decide)planner=await this.#deps.llm.decide({message:input.message,state:baseState});}
@@ -271,13 +305,23 @@ export class HybridConversationEngine {
       const cameraImageConflict=['IMAGE','IMAGES'].includes(String(rawDecision.primaryIntent).toUpperCase())
         && deterministicDecision.primaryIntent!=='IMAGE'
         && deterministicDecision.attributes.includes('CAMARA');
-      const guardedDecision=(rawDecision.primaryIntent==='OTHER'&&deterministicOverride)||cameraImageConflict
+      const strongReference=['COMPARISON_ALTERNATIVE','RECOMMENDED_REFERENT','SELECTION_REFERENT'].includes(String(deterministicDecision.referenceType??'').toUpperCase())
+        && ['PRICE','STOCK','CAPABILITY','IMAGE','PURCHASE'].includes(deterministicDecision.primaryIntent);
+      const strongRecommendation=['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)
+        && /\b(mejor|mas|conviene|recomiend|alternativa|presupuesto)\b/.test(fold(input.message));
+      const comparisonAuthority=deterministicDecision.primaryIntent==='COMPARE'&&(baseState.comparisonProducts?.length??0)>=2;
+      const needTargetConflict=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)
+        && !deterministicDecision.targetProduct
+        && Boolean(rawDecision.targetProduct);
+      const forceDeterministic=(rawDecision.primaryIntent==='OTHER'&&deterministicOverride)||cameraImageConflict||strongReference||strongRecommendation||comparisonAuthority||needTargetConflict;
+      const guardedDecision=forceDeterministic
         ?{...rawDecision,
           primaryIntent:deterministicDecision.primaryIntent,
           targetProduct:deterministicDecision.targetProduct,
           referenceType:deterministicDecision.referenceType,
           selectedProduct:deterministicDecision.selectedProduct,
           mentionedProducts:deterministicDecision.mentionedProducts,
+          comparisonProducts:deterministicDecision.comparisonProducts,
           attributes:deterministicDecision.attributes,
           nextBestAction:deterministicDecision.nextBestAction}
         :rawDecision;
@@ -307,20 +351,27 @@ export class HybridConversationEngine {
       let handoffReason=handoff?(intent==='HUMAN'?'SOLICITUD_HUMANO':'CONTINUAR_VENTA'):null;
       const sqlTools:string[]=[];
       let route='HYBRID';
+      let recommendationReasons:string[]=[];
+      let recommendationCriteria:string[]=[];
+      let recommendationTradeoffs:string[]=[];
 
       if(requestedUnknown&&intent!=='IMAGE'){
         const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
         const alternatives=await this.#rankCandidates(commercialState,query,commercialState.budget??99999999,target,2);
         recommendedProduct=productName(alternatives[0]?.quote)??null;
         rag=alternatives.flatMap(x=>x.evidence.slice(0,3));
+        recommendationReasons=alternatives[0]?.reasons??[];
+        recommendationCriteria=alternatives[0]?.criteria??[];
+        recommendationTradeoffs=alternatives[0]?.tradeoffs??[];
         nba=alternatives.length?'OFFER_ALTERNATIVE':'ASK_MISSING_FACT';
         route=alternatives.length?'UNKNOWN_TO_ALTERNATIVES':'UNKNOWN_NO_ALTERNATIVE';
         if(alternatives.length)sqlTools.push('dbo.sp_ListarCatalogoVenta');
         const names=alternatives.map(x=>productName(x.quote)).filter(Boolean).join(' y ');
+        const reasonText=recommendationReasons.length?` Prioriza la alternativa que mejor encaja por: ${recommendationReasons.join('; ')}.`:'';
         const recoveryPlan=alternatives.length
-          ? `El modelo solicitado ${target} no aparece en el catalogo verificado. Ofrece solamente estas alternativas reales: ${names}. Relacionalas con la necesidad conocida y explica por que pueden encajar. No menciones precio salvo que el cliente lo haya pedido.`
-          : 'No se encontro el modelo ni una alternativa suficientemente verificada. No inventes; ofrece revisar el catalogo o pasar con un asesor si corresponde.';
-        const fallback=alternatives.length?`No encuentro ${target} en el catálogo actual. Sí puedo ayudarte con ${names}.`:noEvidenceResponse();
+          ? `Ese modelo no figura disponible ahora. Presenta solamente estas alternativas reales: ${names}. Relaciónalas con la necesidad conocida y explica por qué pueden encajar.${reasonText} No menciones precio salvo que el cliente lo haya pedido.`
+          : 'No hay suficiente información para confirmar ese modelo o una alternativa adecuada. No inventes; ofrece revisar opciones reales o pasar con un asesor si corresponde.';
+        const fallback=alternatives.length?`Ese modelo no figura disponible ahora. Sí tenemos ${names} como alternativas.`:noEvidenceResponse();
         writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},rag,deterministicAnswer:recoveryPlan,decision},fallback);
         answer=writerResult.answer;
       }else if(intent==='PRICE'){
@@ -335,7 +386,7 @@ export class HybridConversationEngine {
         route='RAG_INSTITUTIONAL';
         try{rag=this.#deps.rag.searchInstitutional?await this.#deps.rag.searchInstitutional(input.message,4):await this.#deps.rag.search(input.message,null);}catch{rag=[];}
         const fallback=institutionalResponse(rag)??noEvidenceResponse();
-        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:`Responde solo la politica consultada. N+1=${nba??'NINGUNO'}.`,decision},fallback);
+        writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:`Responde primero la política consultada de forma clara y breve. N+1=${nba??'NINGUNO'}.`,decision},fallback);
         answer=writerResult.answer;
       }else if(intent==='COMPARE'){
         route='RAG_COMPARISON';
@@ -344,7 +395,7 @@ export class HybridConversationEngine {
         else{
           const sections=productEvidenceSections({primary:'COMPARE',attributes:decision.attributes},{...commercialState,comparisonProducts:pair});
           for(const name of pair){const q=await this.#quote(name,initialCandidates);rag.push(...await this.#productEvidence(input.message,q,sections,4).catch(()=>[]));}
-          const plan=`Compara ${pair[0]} y ${pair[1]} con la misma cobertura, en 2 a 4 diferencias relevantes. Explica trade-off, vincula con la necesidad conocida y recomienda solo si hay suficiente contexto. N+1=${nba??'NINGUNO'}.`;
+          const plan=`Compara ${pair[0]} y ${pair[1]} con la misma cobertura usando solo los datos disponibles. Resume 2 a 4 diferencias relevantes, explica el trade-off y vincúlalo con la necesidad conocida. Recomienda solo si existe evidencia suficiente. N+1=${nba??'NINGUNO'}.`;
           writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,comparisonProducts:pair},rag,deterministicAnswer:plan,decision},rag.length?plan:noEvidenceResponse());
           answer=writerResult.answer;
         }
@@ -354,17 +405,23 @@ export class HybridConversationEngine {
           const maxBudget=commercialState.budget??(intent==='HANDLE_PRICE_OBJECTION'&&quote?.price!=null?Math.max(0,quote.price-0.01):99999999);
           const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
           const ranks=await this.#rankCandidates(commercialState,query,maxBudget,intent==='HANDLE_PRICE_OBJECTION'?target:null,3);
-          if(ranks[0]){quote=ranks[0].quote;recommendedProduct=productName(quote);rag=ranks[0].evidence;}
+          if(ranks[0]){
+            quote=ranks[0].quote;recommendedProduct=productName(quote);rag=ranks[0].evidence;
+            recommendationReasons=ranks[0].reasons;recommendationCriteria=ranks[0].criteria;recommendationTradeoffs=ranks[0].tradeoffs;
+          }
         }else if(quote){
           const primary=intent==='CAPABILITY'?'ATTRIBUTE':semanticIntent(intent);
           const sections=productEvidenceSections({primary,attributes:decision.attributes},commercialState);
           rag=await this.#productEvidence(input.message,quote,sections,8).catch(()=>[]);
         }
         const subject=recommendedProduct??productName(quote)??target;
+        const recommendationGuidance=recommendationReasons.length
+          ? ` La recomendación se sostiene en estos hechos comparables: ${recommendationReasons.join('; ')}.${recommendationTradeoffs.length?` Considera además: ${recommendationTradeoffs.join('; ')}.`:''}`
+          :'';
         const plan=subject
-          ? `Responde lo actual usando solo evidencia verificada sobre ${subject}. Usa criterio comercial, SPIN/FAB/LAER solo si aporta y N+1=${nba??'NINGUNO'}. No repitas discovery y no menciones precio si no fue solicitado.`
-          : `Responde de forma breve. Si falta un solo dato que realmente cambia la recomendacion, pregunta solo ese. N+1=${nba??'NINGUNO'}.`;
-        const fallback=subject?`Puedo ayudarte a evaluar ${subject}, pero no voy a afirmar características que no tenga verificadas.`:'¿Qué aspecto es más importante para ti en el equipo?';
+          ? `Responde lo actual sobre ${subject} usando únicamente los datos disponibles. Explica el beneficio práctico para la necesidad del cliente y evita lenguaje interno.${recommendationGuidance} N+1=${nba??'NINGUNO'}. No repitas discovery y no menciones precio si no fue solicitado.`
+          : `Responde de forma breve. Si falta un solo dato que realmente cambia la recomendación, pregunta solo ese. N+1=${nba??'NINGUNO'}.`;
+        const fallback=subject?`Puedo ayudarte a evaluar ${subject}; prefiero no afirmar una característica que no tenga confirmada.`:'¿Qué aspecto es más importante para ti en el equipo?';
         writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:{...commercialState,recommendedProduct},quote,rag,deterministicAnswer:plan,decision},fallback);
         answer=writerResult.answer;route=rag.length?'RAG_PRODUCT':'COMMERCIAL_REASONING';
       }else if(intent==='PURCHASE'){
@@ -388,7 +445,7 @@ export class HybridConversationEngine {
           if(!order)answer='No pude confirmar ese pedido con los datos indicados.';
           else{
             rag=[{text:JSON.stringify(order),source:'SQL_ORDER_VERIFIED',score:100}];
-            writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:'Resume únicamente el estado verificado del pedido; no agregues datos que no estén en la evidencia.',decision},'Encontré el pedido, pero no puedo resumir su estado con seguridad ahora.');
+            writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:'Resume únicamente el estado confirmado del pedido; no agregues datos que no estén en la información recibida.',decision},'Encontré el pedido, pero no puedo resumir su estado con seguridad ahora.');
             answer=writerResult.answer;
           }
         }
@@ -514,7 +571,8 @@ export class HybridConversationEngine {
           intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,
           queryTarget:decision.targetProduct??target,activeProduct,salientProduct,selectedProduct,recommendedProduct,comparisonProducts,
           requestedUnknown,ragCount:rag.length,imageCount:images.length,nextBestAction:nba,
-          handoff,handoffReason,planner:plannerDebug(planner),plannerFailure,
+          handoff,handoffReason,recommendationCriteria,recommendationReasons,recommendationTradeoffs,
+          planner:plannerDebug(planner),plannerFailure,
           writer:writerResult?{model:writerResult.model,fallback:writerResult.fallback}:undefined,
           telemetry,automation,durationMs:Math.max(0,Math.round(performance.now()-started)),
         },
