@@ -24,8 +24,8 @@ function sectionsForAttribute(attribute:string):string[] {
   if(/procesador|cpu|gpu|rendimiento|juego/.test(t))return['RENDIMIENTO'];
   if(/pantalla|display|hz|resolucion/.test(t))return['PANTALLA'];
   if(/sim|esim/.test(t))return['SIM','REDES'];
-  if(/sensor|giroscop|brujula|proximidad/.test(t))return['SENSORES','FUNCIONES'];
   if(/huella|face|facial|seguridad/.test(t))return['SEGURIDAD','SENSORES'];
+  if(/sensor|giroscop|brujula|proximidad/.test(t))return['SENSORES','FUNCIONES'];
   if(/wifi|bluetooth|gps|usb|otg|conect/.test(t))return['CONECTIVIDAD','FUNCIONES'];
   if(/audio|parlante|speaker|microfono/.test(t))return['AUDIO'];
   if(/android|sistema|os\b/.test(t))return['SISTEMA'];
