@@ -27,8 +27,8 @@ type Dependencies = {
 };
 type CandidateRank = { quote: ProductQuote; evidence: RagEvidence[]; score: number };
 
-function unique(values: Array<string | null | undefined>): string[] {
-  return [...new Set(values.map(v => String(v ?? '').trim()).filter(Boolean))];
+function unique(values: Array<unknown>): string[] {
+  return [...new Set(values.filter((v):v is string=>typeof v==='string').map(v=>v.trim()).filter(Boolean))];
 }
 function productName(q: ProductQuote | null | undefined): string | null {
   return q ? String(q.shortName ?? q.product).trim() || null : null;
@@ -110,6 +110,18 @@ function extractOrderCredentials(message:string):{orderNumber:string|null;email:
   const orderNumber=message.match(/\b(?:pedido|orden)\s*(?:n(?:ro|°)?\.?|#)?\s*([A-Z0-9-]{4,})\b/i)?.[1] ?? null;
   return {orderNumber,email};
 }
+function resolutionOrigin(referenceType:string|null|undefined, explicitSwitch:boolean, resolved:boolean, target:string|null, previous:ConversationState):string {
+  if(!resolved)return 'SIN_RESOLVER';
+  const ref=String(referenceType??'').toUpperCase();
+  if(explicitSwitch||ref==='SELECTION_REFERENT')return 'SELECCION_USUARIO';
+  if(['RECOMMENDED_REFERENT','COMPARISON_ALTERNATIVE','RECOMMENDED_FALLBACK'].includes(ref))return 'REFERENCIA_CONTEXTO';
+  if(ref==='ACTIVE_PRODUCT_FALLBACK'||same(target,previous.activeProduct))return 'PRODUCTO_ACTIVO';
+  return 'MENSAJE_ACTUAL';
+}
+function tokenSum(values:Array<number|null|undefined>):number|null {
+  const nums=values.filter((x):x is number=>typeof x==='number'&&Number.isFinite(x));
+  return nums.length?nums.reduce((a,b)=>a+b,0):null;
+}
 
 export class HybridConversationEngine {
   readonly #deps: Dependencies;
@@ -182,9 +194,13 @@ export class HybridConversationEngine {
     if(!input.sessionId?.trim())throw new Error('sessionId is required');
     if(!input.message?.trim())throw new Error('message is required');
 
+    const messageId=input.messageId?.trim()||`backend:${crypto.randomUUID()}`;
+    const requestId=messageId;
+    const atomic=Boolean(this.#deps.conversations.beginTurn&&this.#deps.conversations.completeTurn);
+    if(atomic)await this.#deps.conversations.beginTurn!(input.sessionId,messageId,requestId);
+
     const previous=await this.#deps.conversations.getState(input.sessionId);
     const turn=(previous.turnCount??0)+1;
-    await this.#deps.conversations.appendMessage(input.sessionId,'user',input.message,{messageId:input.messageId??null,requestId:input.messageId??null,conversationType:input.sessionId.startsWith('qa-')?'QA_LIVE':null});
 
     const facts=extractCommercialFacts(input.message,previous);
     const budgetTurn=classifyBudgetTurn(input.message,{prevBudget:previous.budget??null});
@@ -203,17 +219,17 @@ export class HybridConversationEngine {
       spinFacts:facts.spinFacts,
     };
 
+    const deterministicDecision=fallbackDecision(input.message,baseState);
     let planner:LlmDecisionResult|null=null;
     let plannerFailure:string|undefined;
     try{if(this.#deps.llm.decide)planner=await this.#deps.llm.decide({message:input.message,state:baseState});}
     catch(error){plannerFailure=error instanceof Error?error.message:String(error);}
 
-    const rawDecision=planner?.decision??fallbackDecision(input.message,baseState);
+    const rawDecision=planner?.decision??deterministicDecision;
     const initialCandidates=await this.#searchCandidates(input.message,rawDecision.targetProduct);
-    const decision=validateTurnDecision(rawDecision,baseState,unique(initialCandidates.map(productName)));
+    const decision=validateTurnDecision(rawDecision,baseState,unique(initialCandidates.map(productName)),deterministicDecision);
     const intent=normalizeIntent(decision.primaryIntent,baseState.budget??null);
 
-    // Model understanding enriches missing commercial memory but cannot overwrite known deterministic facts.
     const commercialState:ConversationState={
       ...baseState,
       useCase:baseState.useCase??decision.customerNeed??null,
@@ -262,7 +278,7 @@ export class HybridConversationEngine {
       answer=imageResponse(images)||noEvidenceResponse();
     }else if(intent==='POLICY'||intent==='WARRANTY'){
       route='RAG_INSTITUTIONAL';
-      rag=this.#deps.rag.searchInstitutional?await this.#deps.rag.searchInstitutional(input.message,4):await this.#deps.rag.search(input.message,null);
+      try{rag=this.#deps.rag.searchInstitutional?await this.#deps.rag.searchInstitutional(input.message,4):await this.#deps.rag.search(input.message,null);}catch{rag=[];}
       const fallback=institutionalResponse(rag)??noEvidenceResponse();
       writerResult=await safeWrite(this.#deps.llm,{message:input.message,intent,state:commercialState,rag,deterministicAnswer:`Responde solo la politica consultada. N+1=${nba??'NINGUNO'}.`,decision},fallback);
       answer=writerResult.answer;
@@ -326,7 +342,7 @@ export class HybridConversationEngine {
       answer=writerResult.answer;route='GENERAL_COMMERCIAL';
     }
 
-    const selectedProduct=String(decision.referenceType??'').toUpperCase()==='SELECTION'
+    const selectedProduct=String(decision.referenceType??'').toUpperCase()==='SELECTION_REFERENT'
       ?(decision.selectedProduct??commercialState.selectedProduct??commercialState.salientProduct??target)
       :(decision.selectedProduct??commercialState.selectedProduct??null);
     const explicitSwitch=decision.explicitSwitch&&Boolean(selectedProduct);
@@ -335,13 +351,18 @@ export class HybridConversationEngine {
     if(explicitSwitch&&selectedProduct)activeProduct=selectedProduct;
     const salientProduct=productName(quote)??decision.targetProduct??recommendedProduct??commercialState.salientProduct??activeProduct;
     const comparisonProducts=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[])]).slice(0,2);
-    const resolvedQuote=quote??await this.#quote(activeProduct,initialCandidates);
+    const targetResolvedQuote=quote;
+    const activeQuote=await this.#quote(activeProduct,initialCandidates);
+    const activeId=activeQuote?.productRagId??(same(activeProduct,previous.activeProduct)?previous.activeProductId:null)??null;
+    const activeCode=activeQuote?.productCode??(same(activeProduct,previous.activeProduct)?previous.activeProductCode:null)??null;
+    const origin=resolutionOrigin(decision.referenceType,explicitSwitch,Boolean(targetResolvedQuote?.productRagId),target,previous);
 
     const nextState=reduceState(previous,{
+      contextVersion:previous.contextVersion??0,
       activeProduct,
-      activeProductId:resolvedQuote?.productRagId??previous.activeProductId??null,
-      activeProductCode:resolvedQuote?.productCode??previous.activeProductCode??null,
-      queryTarget:requestedUnknown?null:(productName(quote)??decision.targetProduct??commercialState.queryTarget??null),
+      activeProductId:activeId,
+      activeProductCode:activeCode,
+      queryTarget:decision.targetProduct??productName(targetResolvedQuote)??commercialState.queryTarget??null,
       salientProduct,
       selectedProduct,
       recommendedProduct,
@@ -370,19 +391,35 @@ export class HybridConversationEngine {
       handoffActive:handoff,
       blockAutomaticReply:handoff,
       handoffReason,
-      lastResolvedProductId:resolvedQuote?.productRagId??null,
-      lastResolvedProductCode:resolvedQuote?.productCode??null,
-      lastProductResolutionConfidence:decision.confidence,
-      lastProductResolutionOrigin:planner?'GPT5_MINI_VALIDATED_SQL':'DETERMINISTIC_FALLBACK',
+      lastResolvedProductId:targetResolvedQuote?.productRagId??null,
+      lastResolvedProductCode:targetResolvedQuote?.productCode??null,
+      lastProductResolutionConfidence:targetResolvedQuote?.productRagId?decision.confidence:0,
+      lastProductResolutionOrigin:origin,
       lastUserMessage:input.message,
       lastAssistantMessage:answer,
     });
 
-    await this.#deps.conversations.saveState(input.sessionId,nextState);
-    await this.#deps.conversations.appendMessage(input.sessionId,'assistant',answer,{messageId:input.messageId??null,requestId:input.messageId??null,conversationType:input.sessionId.startsWith('qa-')?'QA_LIVE':null,model:writerResult?.model??planner?.model??'stech-hybrid-deterministic'});
+    const model=writerResult?.model??planner?.model??'stech-hybrid-deterministic';
+    const pUsage=planner?.usage;
+    const wUsage=writerResult?.llmResult?.usage;
+    const completionMeta={
+      messageId,requestId,conversationType:input.sessionId.startsWith('qa-')?'QA_LIVE':null,model,
+      inputTokens:tokenSum([pUsage?.inputTokens,wUsage?.inputTokens]),
+      outputTokens:tokenSum([pUsage?.outputTokens,wUsage?.outputTokens]),
+      totalTokens:tokenSum([pUsage?.totalTokens,wUsage?.totalTokens]),
+      cachedInputTokens:tokenSum([pUsage?.cachedInputTokens,wUsage?.cachedInputTokens]),
+      totalPrompts:(planner?1:0)+(writerResult?.llmResult?1:0),
+    };
+    if(atomic){
+      await this.#deps.conversations.completeTurn!(input.sessionId,input.message,answer,nextState,completionMeta);
+    }else{
+      await this.#deps.conversations.appendMessage(input.sessionId,'user',input.message,completionMeta);
+      await this.#deps.conversations.saveState(input.sessionId,nextState);
+      await this.#deps.conversations.appendMessage(input.sessionId,'assistant',answer,completionMeta);
+    }
 
-    const plannerTelemetry=await this.#recordUsage(input.sessionId,turn,'SEMANTIC_PLAN',input.messageId??null,planner);
-    const writerTelemetry=await this.#recordUsage(input.sessionId,turn,'COMMERCIAL_WRITE',input.messageId??null,writerResult?.llmResult??null);
+    const plannerTelemetry=await this.#recordUsage(input.sessionId,turn,'SEMANTIC_PLAN',messageId,planner);
+    const writerTelemetry=await this.#recordUsage(input.sessionId,turn,'COMMERCIAL_WRITE',messageId,writerResult?.llmResult??null);
     const telemetry=!plannerTelemetry.delivered?plannerTelemetry:writerTelemetry;
     let automation:{delivered:boolean;error?:string}={delivered:false};
     try{
@@ -394,7 +431,7 @@ export class HybridConversationEngine {
     return{
       sessionId:input.sessionId,
       answer,
-      state:nextState,
+      state:{...nextState,contextVersion:(previous.contextVersion??0)+1},
       debug:{
         intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,queryTarget:nextState.queryTarget??null,explicitSwitch,budget:nextState.budget??null,priceObjection:budgetTurn.priceObjection,
         erp:quote,images,ragSources:rag.map(x=>x.source),planner:plannerDebug(planner),
