@@ -1,5 +1,5 @@
 export type QaLevel = 'GREEN' | 'YELLOW' | 'RED';
-export type QaFamily = 'TRUTH' | 'REFERENCE' | 'INTENT' | 'COMMERCIAL' | 'CLOSING' | 'RELIABILITY';
+export type QaFamily = 'TRUTH' | 'REFERENCE' | 'INTENT' | 'COMMERCIAL' | 'CLOSING' | 'RELIABILITY' | 'COMPARISON' | 'INSTITUTIONAL' | 'POLICY';
 
 export type QaExpected = {
   intent?: string;
