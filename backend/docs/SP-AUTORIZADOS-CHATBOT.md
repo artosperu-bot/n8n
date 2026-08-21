@@ -67,6 +67,33 @@ El diseño de cierre deberá contemplar el flujo de **reserva 24h** usando `dbo.
 
 Hasta implementar y probar ese flujo, no se debe afirmar que una reserva ya fue creada.
 
+### Contrato de captura de datos para reserva normal de 1 unidad
+
+Cuando el cliente ya haya manifestado una intención clara de compra y el producto esté resuelto por el contexto, el chatbot deberá solicitar **sí o sí** únicamente estos tres datos visibles al cliente, en este orden lógico:
+
+1. **DNI o Carné de Extranjería**
+2. **Nombres y apellidos**
+3. **Dirección**
+
+Reglas asociadas:
+
+- Estos tres datos deben persistirse/enviarse al flujo de reserva conforme al contrato del SP autorizado.
+- No volver a preguntar el producto si ya está resuelto por la conversación.
+- Para el flujo normal de reserva se asume **1 unidad**; no se debe preguntar cantidad como parte de la captura estándar.
+- Si el cliente expresa que desea **2 o más unidades**, salir del flujo estándar de reserva de una unidad y derivar a un asesor para continuar condiciones/cantidad/cotización.
+- Teléfono/WhatsApp **no se solicita por ahora en este flujo conversacional**. En producción se prevé obtenerlo automáticamente desde el canal de WhatsApp; durante QA/local debe omitirse como pregunta al cliente hasta definir el mecanismo técnico correspondiente.
+- Los campos técnicos adicionales que el SP pueda requerir no deben convertirse automáticamente en preguntas al cliente. Deben completarse desde contexto, configuración del canal o lógica interna cuando corresponda.
+- No pedir nuevamente un dato que ya esté disponible y validado en el estado de la conversación.
+- La reserva solo puede declararse creada después de una ejecución exitosa y verificable de `dbo.sp_IA_RegistrarReserva24h_Idempotente`.
+
+### Secuencia comercial esperada para 1 unidad
+
+`señal fuerte de compra → producto ya resuelto → pedir DNI/CE → pedir nombres y apellidos → pedir dirección → ejecutar reserva idempotente → confirmar resultado real`
+
+Si el cliente pide 2 o más unidades:
+
+`señal fuerte de compra + cantidad >= 2 → handoff a asesor con contexto preservado`
+
 ## Observaciones comerciales pendientes para la próxima iteración
 
 Estas observaciones quedan anotadas, **pero no se implementan en este cambio documental**:
@@ -81,6 +108,7 @@ Estas observaciones quedan anotadas, **pero no se implementan en este cambio doc
 ## Estado de implementación
 
 - Whitelist documentada: **SÍ**
+- Contrato de captura de reserva documentado: **SÍ**
 - Código modificado en este cambio: **NO**
 - Flujo de reserva conectado al backend: **PENDIENTE DE LA SIGUIENTE ITERACIÓN**
 - Writer comercial/neuroventas ajustado: **PENDIENTE DE LA SIGUIENTE ITERACIÓN**
