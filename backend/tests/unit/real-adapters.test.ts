@@ -47,8 +47,19 @@ test('OpenAI adapter sends deterministic evidence through Responses API', async 
     intent: 'PRICE',
     state: { queryTarget: 'Armor 22' },
     deterministicAnswer: 'Armor 22: S/ 1299.',
+    decision: {
+      primaryIntent:'PRICE', secondaryIntents:[], targetProduct:'Armor 22', mentionedProducts:[], referenceType:'ACTIVE_PRODUCT_FALLBACK',
+      explicitSwitch:false, selectedProduct:null, comparisonProducts:[], attributes:[], customerNeed:null, customerProblem:null,
+      priorities:[], objection:null, commercialStage:'CONSIDERACION', spinContribution:null, nextBestAction:'ANSWER_ONLY',
+      needsSql:true, needsProductRag:false, needsInstitutionalRag:false, confidence:0.99,
+    },
   });
   assert.equal(result.text, 'Respuesta final');
   assert.match(body.input, /S\/ 1299/);
   assert.match(body.instructions, /no inventes/i);
+  assert.match(body.instructions, /corto y humano/i);
+  assert.match(body.instructions, /ANSWER_ONLY/i);
+  assert.match(body.instructions, /sin (?:hacer )?pregunta/i);
+  assert.match(body.instructions, /ASSISTED_HANDOFF/i);
+  assert.match(body.instructions, /no (?:digas|afirmes).*(?:reserva|pedido).*(?:confirmad|realizad)/i);
 });
