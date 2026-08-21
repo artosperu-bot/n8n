@@ -46,7 +46,7 @@ Contrato real utilizado:
 - `ia_conversaciones`: cada turno comienza insertando `mensaje_cliente` con `respuesta_bot=NULL`; al terminar se actualiza la misma fila con respuesta, intención, producto, presupuesto y modelo LLM. Las pruebas QA guardan `message_id`, `request_id` y `tipo_conversacion='QA_LIVE'`.
 - `ia_metricas_tokens`: una fila por llamada LLM con sesión, turno, ruta/intención, modelo, tokens y duración.
 
-Esto preserva el mensaje del cliente incluso si una dependencia posterior falla antes de producir respuesta.
+Esto preserva el mensaje del cliente incluso si una dependencia posterior falla antes de producir respuesta. La telemetría es **best-effort**: si falla únicamente la escritura en `ia_metricas_tokens`, el turno comercial continúa, queda observable en `debug.telemetry` y Live QA lo clasifica como YELLOW; medir tokens nunca debe bloquear una venta.
 
 ## 4. RAG
 
@@ -99,7 +99,7 @@ Cada corrida genera un `runId` `qa-YYYYMMDD-HHmmss-xxxx`; cada escenario tiene u
 El runner evalúa por separado:
 
 - hard gates: HTTP, intent, referencia, producto activo, switch, presupuesto y consistencia de precio/stock contra la evidencia ERP recibida;
-- commercial gates: exceso de preguntas, longitud, lenguaje robótico/meta, empatía ante objeción, ausencia de NBA, contexto del cliente y delivery n8n;
+- commercial gates: exceso de preguntas, longitud, lenguaje robótico/meta, empatía ante objeción, ausencia de NBA, contexto del cliente, persistencia de telemetría y delivery n8n;
 - telemetría: tokens y latencia por turno y agregados por corrida.
 
 Los YELLOW/RED son evidencia para buscar causa raíz; el runner no modifica automáticamente la lógica del bot.
