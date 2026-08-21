@@ -124,3 +124,11 @@ test('short catalog alias from planner is canonicalized instead of persisting ra
   assert.deepEqual(r.comparisonProducts,['Armor X13','Armor 22']);
   assert.ok(!r.mentionedProducts.includes('22'));
 });
+
+test('ambiguous factual followup keeps canonical active product even if planner proposes another target',()=>{
+  const planner=decision({primaryIntent:'STOCK',targetProduct:'Armor X12 Pro',mentionedProducts:[],referenceType:'ACTIVE_PRODUCT_FALLBACK'});
+  const deterministic=decision({primaryIntent:'STOCK',targetProduct:'Armor X13',mentionedProducts:[],referenceType:'ACTIVE_PRODUCT_FALLBACK',nextBestAction:'ANSWER_ONLY'});
+  const r=validateTurnDecision(planner,{activeProduct:'Armor X13'},['Armor X12 Pro'],deterministic);
+  assert.equal(r.targetProduct,'Armor X13');
+  assert.equal(r.selectedProduct,null);
+});
