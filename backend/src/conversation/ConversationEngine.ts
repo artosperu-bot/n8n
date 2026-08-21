@@ -97,17 +97,22 @@ export class ConversationEngine {
     });
 
     const llmResult = await this.deps.llm.write({ message: input.message, intent, state, quote, rag, deterministicAnswer });
-    await this.deps.telemetry.recordLlmUsage({
-      sessionId: input.sessionId,
-      turn: turnNumber,
-      route: intent,
-      model: llmResult.model,
-      inputTokens: llmResult.usage.inputTokens,
-      outputTokens: llmResult.usage.outputTokens,
-      cachedTokens: llmResult.usage.cachedInputTokens,
-      durationMs: llmResult.durationMs,
-      messageId: input.messageId ?? null,
-    });
+    let telemetry: { delivered: boolean; error?: string } = { delivered: true };
+    try {
+      await this.deps.telemetry.recordLlmUsage({
+        sessionId: input.sessionId,
+        turn: turnNumber,
+        route: intent,
+        model: llmResult.model,
+        inputTokens: llmResult.usage.inputTokens,
+        outputTokens: llmResult.usage.outputTokens,
+        cachedTokens: llmResult.usage.cachedInputTokens,
+        durationMs: llmResult.durationMs,
+        messageId: input.messageId ?? null,
+      });
+    } catch (error) {
+      telemetry = { delivered: false, error: error instanceof Error ? error.message : String(error) };
+    }
 
     await this.deps.conversations.saveState(input.sessionId, state);
     await this.deps.conversations.appendMessage(input.sessionId, 'assistant', llmResult.text, { model: llmResult.model });
@@ -139,6 +144,7 @@ export class ConversationEngine {
           durationMs: llmResult.durationMs,
         },
         totalDurationMs: Math.max(0, Math.round(performance.now() - turnStarted)),
+        telemetry,
         automation
       }
     };
