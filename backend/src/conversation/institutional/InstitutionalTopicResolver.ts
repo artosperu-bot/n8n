@@ -8,11 +8,11 @@ export function resolveInstitutionalTopic(query:string):InstitutionalTopic|null 
   if(/\bcontra\s*entrega\b|\bcontraentrega\b/.test(t))return{category:'pagos',subcategory:'contraentrega'};
   if(/\b(medios?|formas?)\s+de\s+pago\b|\byape\b|\bplin\b|\btransferencia\b|\btarjeta\b/.test(t))return{category:'pagos',subcategory:'medios_pago'};
   if(/\b(validar|validacion|verificar|verificacion)\b.*\bpago\b|\bpago\b.*\b(validar|verificar)\b/.test(t))return{category:'pagos',subcategory:'validacion_pago'};
-  if(/\b(confirmar|confirmacion)\b.*\b(pedido|compra)\b/.test(t))return{category:'pagos',subcategory:'confirmacion_pedido'};
+  if(/\b(confirmar|confirmo|confirmamos|confirmado|confirmada|confirmacion)\b.*\b(pedido|compra)\b/.test(t))return{category:'pagos',subcategory:'confirmacion_pedido'};
   if(/\b(cancelar|cancelacion|anular)\b.*\b(pedido|compra)\b/.test(t))return{category:'pagos',subcategory:'cancelacion_pedido'};
   if(/\bdatos\b.*\b(compra|pedido|cierre)\b|\bque datos\b.*\bnecesit/.test(t))return{category:'pagos',subcategory:'datos_cierre_venta'};
 
-  if(/\brecoj[oaer]*\b|\brecoger\b|\bretiro\b.*\btienda\b/.test(t))return{category:'entrega',subcategory:'recojo_tienda'};
+  if(/\b(recojo|recoja|recoger|recogerlo|recogerla|retiro)\b|\bretirar\b.*\btienda\b/.test(t))return{category:'entrega',subcategory:'recojo_tienda'};
   if(/\b(separar|separacion|reserva|reservar)\b/.test(t))return{category:'pedidos',subcategory:'reserva_separacion'};
 
   if(/\breembolso\b|\bdevolucion\s+de\s+dinero\b/.test(t))return{category:'postventa',subcategory:'reembolsos'};
