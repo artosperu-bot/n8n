@@ -107,7 +107,8 @@ export async function runLiveQa(options: RunOptions = {}): Promise<{ report: QaR
       const status=statusFromFindings(findings);turnResults.push({turn:index+1,message:turn.message,status,observation,findings,oracle});
       if(observation.persisted?.state?.contextVersion!=null){const v=Number(observation.persisted.state.contextVersion);if(Number.isFinite(v))previousPersistedVersion=v;}
       if(oracle)oracleState={...oracleState,...oracle.expectedStateDelta,turnCount:(oracleState.turnCount??0)+1};
-      if(!observation.ok||observation.response?.error)break;
+      // A failed turn is evidence, not a reason to hide the rest of the journey.
+      // Keep the last durable persisted version and continue with deterministic message ids.
     }
     scenarioResults.push({id:scenario.id,family:scenario.family,title:scenario.title,sessionId,status:maxStatus(turnResults.map(t=>t.status)),turns:turnResults});
   }
