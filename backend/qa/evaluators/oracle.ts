@@ -5,6 +5,25 @@ function same(a:unknown,b:unknown):boolean{return String(a??'').trim().toLocaleL
 function numbers(text:string):string[]{return [...new Set((text.match(/\b\d+(?:[.,]\d+)?\b/g)??[]).map(x=>x.replace(',','.')))];}
 function containsNumber(text:string,value:string):boolean{return text.replace(/(?<=\d)[,.](?=\d{3}(?:\D|$))/g,'').includes(value.replace(/\.00$/,''));}
 
+export function evaluatePersistence(observation:QaTurnObservation,previousVersion:number|null):QaFinding[]{
+  const findings:QaFinding[]=[];
+  if(!observation.ok)return findings;
+  const persisted=observation.persisted;
+  if(!persisted?.state||!Array.isArray(persisted.messages)){
+    findings.push({level:'RED',code:'PERSISTED_SESSION_MISSING',message:'No se pudo leer la sesión persistida después del turno.',rootCause:'PERSISTENCE'});
+    return findings;
+  }
+  const messages=persisted.messages;
+  const lastUser=[...messages].reverse().find(x=>x.role==='user');
+  const lastAssistant=[...messages].reverse().find(x=>x.role==='assistant');
+  if(lastUser?.content!==observation.request.message)findings.push({level:'RED',code:'PERSISTED_USER_MISMATCH',message:'El último mensaje de usuario persistido no coincide con el turno.',rootCause:'PERSISTENCE'});
+  if(lastAssistant?.content!==String(observation.response?.answer??''))findings.push({level:'RED',code:'PERSISTED_ASSISTANT_MISMATCH',message:'La respuesta persistida no coincide con la respuesta entregada.',rootCause:'PERSISTENCE'});
+  const version=Number(persisted.state.contextVersion??NaN);
+  if(!Number.isFinite(version))findings.push({level:'RED',code:'CONTEXT_VERSION_MISSING',message:'La sesión persistida no expone context_version válido.',rootCause:'PERSISTENCE'});
+  else if(previousVersion!=null&&version!==previousVersion+1)findings.push({level:'RED',code:'CONTEXT_VERSION_GAP',message:`context_version esperado=${previousVersion+1} actual=${version}`,rootCause:'PERSISTENCE'});
+  return findings;
+}
+
 export function evaluateOracle(card:OracleCard,observation:QaTurnObservation):QaFinding[]{
   const findings:QaFinding[]=[];
   if(!observation.ok)return findings;
