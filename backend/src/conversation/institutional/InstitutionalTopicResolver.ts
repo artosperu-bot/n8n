@@ -7,7 +7,7 @@ export function resolveInstitutionalTopic(query:string):InstitutionalTopic|null 
 
   if(/\bcontra\s*entrega\b|\bcontraentrega\b/.test(t))return{category:'pagos',subcategory:'contraentrega'};
   if(/\b(medios?|formas?)\s+de\s+pago\b|\byape\b|\bplin\b|\btransferencia\b|\btarjeta\b/.test(t))return{category:'pagos',subcategory:'medios_pago'};
-  if(/\b(validar|validacion|verificar|verificacion)\b.*\bpago\b|\bpago\b.*\b(validar|verificar)\b/.test(t))return{category:'pagos',subcategory:'validacion_pago'};
+  if(/\b(validar|validan|validamos|validacion|verificar|verifican|verificamos|verificacion)\b.*\bpago\b|\bpago\b.*\b(validar|validan|validamos|verificar|verifican|verificamos)\b/.test(t))return{category:'pagos',subcategory:'validacion_pago'};
   if(/\b(confirmar|confirmo|confirmamos|confirmado|confirmada|confirmacion)\b.*\b(pedido|compra)\b/.test(t))return{category:'pagos',subcategory:'confirmacion_pedido'};
   if(/\b(cancelar|cancelacion|anular)\b.*\b(pedido|compra)\b/.test(t))return{category:'pagos',subcategory:'cancelacion_pedido'};
   if(/\bdatos\b.*\b(compra|pedido|cierre)\b|\bque datos\b.*\bnecesit/.test(t))return{category:'pagos',subcategory:'datos_cierre_venta'};
@@ -16,6 +16,7 @@ export function resolveInstitutionalTopic(query:string):InstitutionalTopic|null 
   if(/\b(separar|separarlo|separarla|separacion|reserva|reservar|reservarlo|reservarla)\b/.test(t))return{category:'pedidos',subcategory:'reserva_separacion'};
 
   if(/\breembolso\b|\bdevolucion\s+de\s+dinero\b/.test(t))return{category:'postventa',subcategory:'reembolsos'};
+  if(/\b(?:si\s+)?(?:falla|fallo|fallara|falla)\b[^.!?]{0,50}\b(?:cambian|cambiar|cambio|reparan|reparar|reemplazan|reemplazar)\b|\b(?:cambian|cambiar|reparan|reparar|reemplazan|reemplazar)\b[^.!?]{0,50}\b(?:si\s+)?(?:falla|fallo)\b/.test(t))return{category:'garantia',subcategory:'evaluacion_y_resultado'};
   if(/\bgarantia\b/.test(t)){
     if(/\b(cambian|cambio|falla|fallo|reparan|resultado|evaluan|evaluacion)\b/.test(t))return{category:'garantia',subcategory:'evaluacion_y_resultado'};
     return{category:'postventa',subcategory:'garantia_general'};
@@ -28,7 +29,7 @@ export function resolveInstitutionalTopic(query:string):InstitutionalTopic|null 
   if(/\b(procedimiento|proceso|como hago)\b.*\b(postventa|reclamo|garantia|devol)/.test(t))return{category:'postventa',subcategory:'postventa_procedimiento'};
   if(/\bpostventa\b/.test(t))return{category:'postventa',subcategory:'postventa_general'};
 
-  if(/\bhorario\b|\ba que hora\b|\bque hora.*atienden\b/.test(t))return{category:'ubicacion',subcategory:'horario'};
+  if(/\bhorario\b|\ba (?:que|q) hora\b|\bhasta (?:que|q) hora\b|\b(?:que|q) hora[^.!?]{0,30}\batienden\b/.test(t))return{category:'ubicacion',subcategory:'horario'};
   if(/\b(donde queda|direccion|ubicacion|tienda fisica|local)\b/.test(t))return{category:'ubicacion',subcategory:'direccion'};
 
   if(/\benvio\b|\benvios\b|\blima\b|\bprovincia\b|\barequipa\b|\btrujillo\b|\bcusco\b/.test(t)){
