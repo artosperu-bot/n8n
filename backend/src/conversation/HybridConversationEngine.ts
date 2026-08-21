@@ -249,8 +249,11 @@ export class HybridConversationEngine {
       catch(error){plannerFailure=error instanceof Error?error.message:String(error);}
 
       const rawDecision=planner?.decision??deterministicDecision;
-      const initialCandidates=await this.#searchCandidates(input.message,rawDecision.targetProduct);
-      const decision=validateTurnDecision(rawDecision,baseState,unique(initialCandidates.map(productName)),deterministicDecision);
+      const guardedDecision=rawDecision.primaryIntent==='OTHER'&&['POLICY','WARRANTY'].includes(deterministicDecision.primaryIntent)
+        ?{...rawDecision,primaryIntent:deterministicDecision.primaryIntent}
+        :rawDecision;
+      const initialCandidates=await this.#searchCandidates(input.message,guardedDecision.targetProduct);
+      const decision=validateTurnDecision(guardedDecision,baseState,unique(initialCandidates.map(productName)),deterministicDecision);
       const intent=normalizeIntent(decision.primaryIntent,baseState.budget??null);
 
       const commercialState:ConversationState={
