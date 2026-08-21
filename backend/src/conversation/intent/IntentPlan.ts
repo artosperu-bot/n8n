@@ -32,6 +32,16 @@ const ATTRS: Array<[RegExp, string]> = [
 
 function unique<T>(values: T[]): T[] { return [...new Set(values)]; }
 
+function isDirectImageRequest(t:string):boolean {
+  const hasImage=/\b(foto|fotos|imagen|imagenes)\b/.test(t);
+  if(!hasImage)return false;
+  const captureUse=/\b(tomar|sacar|capturar|subir|subirlas|publicar)\b[^.!?]{0,45}\b(foto|fotos|imagen|imagenes)\b|\b(foto|fotos)\b[^.!?]{0,45}\b(redes|trabajo|trabajos|clientes)\b/.test(t);
+  if(captureUse)return false;
+  return /\b(manda|mandame|enviame|envia|muestra|muestrame|pasame|pasa|quiero ver|ver)\b[^.!?]{0,35}\b(foto|fotos|imagen|imagenes)\b/.test(t)
+    || /^(?:foto|fotos|imagen|imagenes)(?:\s+(?:ps|pues|porfa|por favor))?[?.!]*$/.test(t)
+    || /^(?:foto|fotos|imagen|imagenes)\s+(?:del?|de la)\s+/.test(t);
+}
+
 export function resolveIntentPlan(message: string): IntentPlan {
   const t = fold(message);
   const hits: SemanticIntent[] = [];
@@ -39,14 +49,15 @@ export function resolveIntentPlan(message: string): IntentPlan {
 
   if (has(/\b(precio|cuanto cuesta|cuanto vale|cuanto esta|cuanto sale|cuanto ta|a cuanto esta|a cuanto sale|costo)\b/)) hits.push('PRICE_AVAILABILITY');
   if (has(/\b(stock|stk|disponible|disponibilidad|hay unidades|tienen unidades|queda stock|quedan unidades)\b/)) hits.push('STOCK');
-  if (has(/\b(foto|fotos|imagen|imagenes)\b/)) hits.push('IMAGES');
+  if (isDirectImageRequest(t)) hits.push('IMAGES');
   if (has(/\b(pedido|orden)\b/) && has(/\b(consultar|estado|seguimiento|ver|revisar|donde)\b/)) hits.push('ORDER_STATUS');
   if (has(/\b(categorias?)\b/)) hits.push('CATEGORIES');
   if (has(/\b(subcategorias?)\b/)) hits.push('SUBCATEGORIES');
   if (has(/\b(catalogo|que productos|que equipos|que modelos tienen|muestrame)\b/)) hits.push('CATALOG');
   if (has(/\b(compara|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)) hits.push('COMPARE');
   if (has(/\b(recomienda|recomiendas|recomendacion|cual me conviene|que modelo me conviene|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica)\b/) || has(/\b(cual|que|qué)\b[^?.!]{0,45}\b(?:entra|cabe|queda)\b[^?.!]{0,35}\bpresupuesto\b/)) hits.push('RECOMMEND');
-  if (has(/\b(quiero comprar|quiero comprarlo|quiero comprarla|comprarlo|comprarla|como compro|lo compro|la compro|me llevo (?:ese|esa|este|esta)|me quedo con|quiero (?:ese|esa|este|esta)|ya (?:ese|esa|este|esta) quiero|me decidi(?: por (?:ese|esa|este|esta))?|ya me decidi|lo quiero|la quiero|avanzar con la compra|quiero avanzar)\b/)) hits.push('PURCHASE');
+  if (has(/\b(quiero comprar|quiero comprarlo|quiero comprarla|comprarlo|comprarla|como compro|lo compro|la compro|me llevo (?:ese|esa|este|esta)|me quedo con|quiero (?:ese|esa|este|esta)|ya (?:ese|esa|este|esta) quiero|me decidi(?: por (?:ese|esa|este|esta))?|ya me decidi|lo quiero|la quiero|avanzar con la compra|quiero avanzar)\b/)
+    || has(/\bya\s+(?:el|la)\s+(?:[a-z]*\d+[a-z0-9 -]{0,24}|\d{2,})\s+quiero\b/)) hits.push('PURCHASE');
   if (has(/\b(cotiza|cotizar|cotizacion|cotizarnos)\b/)) hits.push('QUOTE');
   if (has(/\b(asesor|humano|persona|vendedor)\b/)) hits.push('HUMAN');
   if (has(/\b(caro|sale de mi presupuesto|fuera de mi presupuesto|no confio|me preocupa|esperaba|descuento|otra tienda[^.!?]{0,60}(?:barato|economico)|mas barato)\b/)) hits.push('OBJECTION');
@@ -57,7 +68,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const explicitProductInfo = has(/\b(info|informacion|caracteristicas|especificaciones|ficha|cuentame|hablame)\b/) && has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);
   const browsingProduct = has(/\b(estoy viendo|quiero ver|revisando|ahora si quiero ver|muestrame el)\b/) && has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);
   const productInfo = explicitProductInfo || browsingProduct;
-  const use = has(/\b(trabajo|trabajar|construccion|campo|tecnico|juego|juegos|gaming|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para)\b/);
+  const use = has(/\b(trabajo|trabajar|construccion|campo|tecnico|juego|juegos|gaming|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para|delivery)\b/);
 
   if (productInfo) hits.push('PRODUCT_INFO');
   if (use) hits.push('EVALUATE_USE');
@@ -65,7 +76,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (/^(hola|buenas|buenos dias|buenas tardes|buenas noches)[\s!.,¿?]*$/.test(t)) hits.push('GREETING');
 
   const intents = unique(hits);
-  const declarativeNeed = use && has(/\b(necesito|necesitamos|busco|quiero algo)\b/) && !/[?¿]/.test(message);
+  const declarativeNeed = use && has(/\b(necesito|necesitamos|busco|quiero algo|quiero un|quiero una)\b/) && !/[?¿]/.test(message);
   const precedence: SemanticIntent[] = declarativeNeed
     ? ['PURCHASE','QUOTE','PRICE_AVAILABILITY','STOCK','COMPARE','RECOMMEND','EVALUATE_USE','IMAGES','WARRANTY','POLICY','ATTRIBUTE','PRODUCT_INFO','OBJECTION','HUMAN','OTHER']
     : ['ORDER_STATUS','PURCHASE','QUOTE','PRICE_AVAILABILITY','STOCK','COMPARE','RECOMMEND','IMAGES','CATEGORIES','SUBCATEGORIES','CATALOG','WARRANTY','POLICY','PRODUCT_INFO','OBJECTION','EVALUATE_USE','ATTRIBUTE','HUMAN','GREETING','OTHER'];
