@@ -29,10 +29,7 @@ function sectionsForAttribute(attribute:string):string[] {
   return[];
 }
 
-function sectionsForPriority(priority:string):string[]{
-  return sectionsForAttribute(priority);
-}
-
+function sectionsForPriority(priority:string):string[]{return sectionsForAttribute(priority);}
 function inferredSections(state:ConversationState):string[]{
   const use=fold(state.useCase??state.sector??'');
   const problem=fold(state.problem??'');
@@ -49,14 +46,14 @@ function inferredSections(state:ConversationState):string[]{
 
 export function productEvidenceSections(intent: IntentLike, state: ConversationState): string[] {
   if (intent.primary === 'PRODUCT_INFO') return [...FICHA];
-  if (intent.primary === 'ATTRIBUTE' && intent.attributes?.length) {
-    return unique(intent.attributes.flatMap(sectionsForAttribute)).slice(0,5);
-  }
+  if (intent.primary === 'ATTRIBUTE' && intent.attributes?.length) return unique(intent.attributes.flatMap(sectionsForAttribute)).slice(0,5);
   if (intent.primary === 'COMPARE') {
     const explicit=unique((intent.attributes??[]).flatMap(sectionsForAttribute));
     if(explicit.length)return explicit.slice(0,5);
-    const priorities = unique((state.priorities ?? []).flatMap(sectionsForPriority));
-    return unique([...priorities,...inferredSections(state),...['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA']]).slice(0, 6);
+    const priorities=unique((state.priorities??[]).flatMap(sectionsForPriority));
+    if(priorities.length)return priorities.slice(0,4);
+    const inferred=unique(inferredSections(state));
+    return (inferred.length?inferred:['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA']).slice(0,4);
   }
   if (intent.primary === 'EVALUATE_USE' || intent.primary === 'RECOMMEND' || intent.primary === 'OBJECTION') {
     const priorities = unique((state.priorities ?? []).flatMap(sectionsForPriority));
