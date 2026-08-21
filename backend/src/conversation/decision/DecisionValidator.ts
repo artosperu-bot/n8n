@@ -1,6 +1,7 @@
 import type { ConversationState } from '../../domain/types.ts';
 import type { TurnDecision } from '../../ports/LlmProvider.ts';
 import { fold } from '../../shared/text.ts';
+import { compatibleNba } from '../nba/NbaCompatibility.ts';
 
 const INTENTS = new Set([
   'GREETING','PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','BUDGET_CONSTRAINT',
@@ -13,8 +14,6 @@ const NBAS = new Set([
   'ANSWER_ONLY','ASK_MISSING_FACT','OFFER_ALTERNATIVE','COMPARE','RECOMMEND','SOFT_CLOSE','ASSISTED_HANDOFF',
 ]);
 
-// Normalize legacy planner vocabulary into the bounded N+1 contract. This is a
-// compatibility guard only: nothing downstream receives the legacy action names.
 const NBA_ALIASES: Record<string,string> = {
   ASK_NEED:'ASK_MISSING_FACT',
   ASK_USE:'ASK_MISSING_FACT',
@@ -146,10 +145,9 @@ export function validateTurnDecision(
   }
 
   const explicitSwitch = decision.explicitSwitch === true && Boolean(selectedProduct);
-  const purchaseLike = ['PURCHASE','HUMAN','QUOTE'].includes(primaryIntent) || state.purchaseSignal === true;
   const proposedNba = canonicalNba(decision.nextBestAction);
   const fallbackNba = canonicalNba(fallbackDecision?.nextBestAction);
-  const nextBestAction = purchaseLike ? 'ASSISTED_HANDOFF' : (proposedNba ?? fallbackNba);
+  const nextBestAction = compatibleNba(primaryIntent,state,proposedNba,fallbackNba);
 
   let comparisonProducts = unique((decision.comparisonProducts?.length ? decision.comparisonProducts : state.comparisonProducts ?? []).map(p => canonical(p, universe)));
   const active = canonical(state.activeProduct, universe);
