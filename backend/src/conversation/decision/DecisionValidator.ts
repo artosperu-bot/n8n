@@ -41,11 +41,38 @@ const STAGES = new Set(['INICIAL','DESCUBRIMIENTO','CONSIDERACION','EVALUACION',
 function unique(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.map(v => String(v ?? '').trim()).filter(Boolean))];
 }
+function editDistance(a:string,b:string):number {
+  const rows=a.length+1,cols=b.length+1;
+  const d=Array.from({length:rows},()=>Array<number>(cols).fill(0));
+  for(let i=0;i<rows;i++)d[i][0]=i;
+  for(let j=0;j<cols;j++)d[0][j]=j;
+  for(let i=1;i<rows;i++)for(let j=1;j<cols;j++){
+    const cost=a[i-1]===b[j-1]?0:1;
+    d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+cost);
+    if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);
+  }
+  return d[a.length][b.length];
+}
+function fuzzyCanonical(raw:string,universe:string[]):string|null {
+  const parts=fold(raw).match(/[a-z0-9]+/g)??[];
+  const model=parts.find(x=>/\d/.test(x));
+  if(!model)return null;
+  const scored=universe.map(product=>{
+    const p=fold(product).match(/[a-z0-9]+/g)??[];
+    const modelMatch=p.includes(model)?3:0;
+    const family=p.filter(x=>!/[0-9]/.test(x)&&x.length>=4);
+    const familyMatch=family.some(word=>parts.some(q=>q===word||(q.length>=4&&editDistance(q,word)<=1)))?1:0;
+    return {product,score:modelMatch+familyMatch};
+  }).filter(x=>x.score>=3).sort((a,b)=>b.score-a.score);
+  if(!scored.length)return null;
+  if(scored[1]&&scored[1].score===scored[0].score)return null;
+  return scored[0].product;
+}
 function knownCanonical(value: string | null | undefined, universe: string[]): string | null {
   const raw = String(value ?? '').trim();
   if (!raw) return null;
   const f = fold(raw);
-  return universe.find(p => fold(p) === f || fold(p).includes(f) || f.includes(fold(p))) ?? null;
+  return universe.find(p => fold(p) === f || fold(p).includes(f) || f.includes(fold(p))) ?? fuzzyCanonical(raw,universe);
 }
 function looksLikeProductModel(value:string|null|undefined):boolean {
   const raw=String(value??'').trim();
@@ -99,9 +126,6 @@ export function validateTurnDecision(
   catalogCandidates: string[] = [],
   fallbackDecision?: TurnDecision,
 ): TurnDecision {
-  // Only SQL/catalog candidates and already-canonical memory can authorize a
-  // product identity. Raw planner strings are deliberately excluded so an LLM
-  // cannot create a new product identity simply by repeating its own guess.
   const universe = unique([
     ...catalogCandidates,
     state.activeProduct,
@@ -145,6 +169,14 @@ export function validateTurnDecision(
     if (!(fallbackDecision?.explicitSwitch === true)) referenceType = 'NAMED_QUERY_TARGET';
   }
 
+  // On an ambiguous factual follow-up the deterministic active/recommended
+  // referent is authoritative. The planner cannot silently move the question to
+  // another canonical product just because it guessed one.
+  if(currentMentions.length===0&&knownFallbackTarget&&['ACTIVE_PRODUCT_FALLBACK','RECOMMENDED_FALLBACK','RECOMMENDED_REFERENT','COMPARISON_ALTERNATIVE','SELECTION_REFERENT'].includes(String(fallbackReference??''))){
+    targetProduct=knownFallbackTarget;
+    referenceType=fallbackReference;
+  }
+
   if (!targetProduct && catalogCandidates.length === 1) targetProduct = catalogCandidates[0];
 
   if (referenceType === 'SELECTION_REFERENT' && recentSelection) {
@@ -160,9 +192,6 @@ export function validateTurnDecision(
     referenceType = fallbackReference;
   }
 
-  // A genuinely unknown named model (e.g. Armor 30) remains a lookup target so
-  // the catalog recovery path can offer real alternatives. Generic need text
-  // such as “cámara resistente para fotos…” is never promoted to product id.
   if (!targetProduct) {
     const rawUnknown=String(fallbackDecision?.targetProduct ?? decision.targetProduct ?? '').trim();
     if(looksLikeProductModel(rawUnknown)) targetProduct=rawUnknown;
