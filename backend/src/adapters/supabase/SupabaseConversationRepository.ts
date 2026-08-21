@@ -152,8 +152,16 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const currentVersion=Number(state.contextVersion ?? 0);
     const origin=productOrigin(state);
     const status=productStatus(state);
-    const requiresClarification=state.lastRoute==='CLARIFICATION' || status==='AMBIGUO';
+    const requiresClarification=state.lastRoute==='CLARIFICATION' || status==='AMBIGUO' || Boolean(state.explicitSwitch && !state.lastResolvedProductId);
     const context=canonicalContext(state);
+    const metricsDetail=[{
+      model:meta.model ?? null,
+      input_tokens:meta.inputTokens ?? null,
+      output_tokens:meta.outputTokens ?? null,
+      total_tokens:meta.totalTokens ?? null,
+      cached_input_tokens:meta.cachedInputTokens ?? null,
+      total_prompts:meta.totalPrompts ?? 0,
+    }];
 
     const conversationPayload={
       session_id:sessionId,
@@ -208,7 +216,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
       tokens_salida:meta.outputTokens ?? null,
       tokens_totales:meta.totalTokens ?? null,
       tokens_cacheados:meta.cachedInputTokens ?? null,
-      total_prompts:meta.totalPrompts ?? null,
+      total_prompts:meta.totalPrompts ?? 0,
+      metricas_tokens_detalle:metricsDetail,
       fecha:new Date().toISOString(),
     };
     const contextPayload={
@@ -292,7 +301,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const body={respuesta_bot:content,intencion:state?.lastIntent??null,ruta:state?.lastRoute??null,producto_detectado:state?.queryTarget??state?.activeProduct??null,
       cambio_producto_explicito:state?.explicitSwitch??false,producto_id_resuelto:state?.lastResolvedProductId??null,producto_codigo_resuelto:state?.lastResolvedProductCode??null,
       estado_resolucion_producto:state?.lastResolvedProductId?'CONFIRMADO':'NO_CONFIRMADO',origen_resolucion_producto:state?productOrigin(state):'SIN_RESOLVER',
-      requiere_aclaracion:state?.lastRoute==='CLARIFICATION',siguiente_accion:state?.lastNba??null,...(meta.model?{modelo:meta.model}:{})};
+      requiere_aclaracion:state?.lastRoute==='CLARIFICATION'||Boolean(state?.explicitSwitch&&!state?.lastResolvedProductId),siguiente_accion:state?.lastNba??null,...(meta.model?{modelo:meta.model}:{})};
     const r=await this.#fetcher(`${this.#url}/rest/v1/${this.#conversationTable}?id=eq.${encodeURIComponent(turnId)}`,{method:'PATCH',headers:this.#headers(),body:JSON.stringify(body)});
     if(!r.ok) throw new Error(`Supabase conversation assistant write HTTP ${r.status}`); this.#pendingTurnId.delete(sessionId);
   }
