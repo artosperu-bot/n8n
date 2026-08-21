@@ -13,7 +13,7 @@ function deps(llm: LlmProvider, conversations = new MemoryConversationRepository
   return { conversations, telemetry:new NoopTelemetryRepository(), erp:new FakeErpRepository(), rag:new FakeRagRepository(), llm, automation:new NoopAutomationBus() };
 }
 
-test('hybrid engine lets semantic planner reason but hard guard preserves recent selection on purchase', async () => {
+test('hybrid engine preserves recent selection and starts personal reservation on purchase', async () => {
   const conversations = new MemoryConversationRepository();
   await conversations.saveState('s-hybrid', {
     activeProduct:'Armor 22', selectedProduct:'Armor 22', salientProduct:'Armor 22', recommendedProduct:'Armor 25T Pro',
@@ -35,9 +35,11 @@ test('hybrid engine lets semantic planner reason but hard guard preserves recent
   const r = await engine.processTurn({sessionId:'s-hybrid',message:'Entonces me quedo con ese'});
   assert.equal(r.state.selectedProduct,'Armor 22');
   assert.equal(r.state.activeProduct,'Armor 22');
-  assert.equal(r.state.lastNba,'ASSISTED_HANDOFF');
-  assert.equal(r.state.handoffActive,true);
+  assert.equal(r.state.lastNba,'COLLECT_RESERVATION_DATA');
+  assert.equal(r.state.handoffActive,false);
+  assert.equal(r.state.reservationStage,'NEED_DOCUMENT');
   assert.match(r.answer,/Armor 22/);
+  assert.match(r.answer,/DNI|Carn[eé] de Extranjer/i);
 });
 
 test('unknown requested product recovers with verified catalog alternatives instead of a dead end', async () => {
