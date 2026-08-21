@@ -68,6 +68,11 @@ function strategyFor(intent: string): string {
   if (['PRODUCT_INFO','CAPABILITY','RECOMMEND','RECOMMEND_WITHIN_BUDGET','EVALUATE_USE'].includes(intent)) return 'FAB_SPIN';
   return 'RESPUESTA_DIRECTA';
 }
+function inheritedFactualIntent(lastIntent: string | null | undefined, referenceReason: string): string | null {
+  if (!['COMPARISON_ALTERNATIVE','RECOMMENDED_REFERENT','SELECTION_REFERENT'].includes(referenceReason)) return null;
+  const prior=normalizeIntent(String(lastIntent ?? ''),null);
+  return ['PRICE','STOCK','CAPABILITY','IMAGE'].includes(prior) ? prior : null;
+}
 function fallbackDecision(message: string, state: ConversationState): TurnDecision {
   const plan = resolveIntentPlan(message);
   const ref = resolveReference(message, state);
@@ -75,7 +80,8 @@ function fallbackDecision(message: string, state: ConversationState): TurnDecisi
   const institutionalIntent = institutional
     ? (institutional.category === 'garantia' || (institutional.category === 'postventa' && institutional.subcategory === 'garantia_general') ? 'WARRANTY' : 'POLICY')
     : null;
-  const primary = plan.primary === 'OTHER' && institutionalIntent ? institutionalIntent : plan.primary;
+  const inheritedIntent = plan.primary === 'OTHER' ? inheritedFactualIntent(state.lastIntent,ref.reason) : null;
+  const primary = plan.primary === 'OTHER' ? (institutionalIntent ?? inheritedIntent ?? plan.primary) : plan.primary;
   const intent = normalizeIntent(primary, state.budget ?? null);
   return {
     primaryIntent:intent,
@@ -97,7 +103,7 @@ function fallbackDecision(message: string, state: ConversationState): TurnDecisi
     needsSql:['PRICE','STOCK','IMAGE','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','ORDER_STATUS'].includes(intent),
     needsProductRag:['PRODUCT_INFO','CAPABILITY','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','EVALUATE_USE','HANDLE_PRICE_OBJECTION'].includes(intent),
     needsInstitutionalRag:['POLICY','WARRANTY'].includes(intent),
-    confidence:institutionalIntent && primary === institutionalIntent ? 0.99 : plan.confidence,
+    confidence:(institutionalIntent && primary === institutionalIntent) || inheritedIntent ? 0.99 : plan.confidence,
   };
 }
 function plannerDebug(result: LlmDecisionResult | null) {
@@ -249,8 +255,9 @@ export class HybridConversationEngine {
       catch(error){plannerFailure=error instanceof Error?error.message:String(error);}
 
       const rawDecision=planner?.decision??deterministicDecision;
-      const guardedDecision=rawDecision.primaryIntent==='OTHER'&&['POLICY','WARRANTY'].includes(deterministicDecision.primaryIntent)
-        ?{...rawDecision,primaryIntent:deterministicDecision.primaryIntent}
+      const deterministicOverride=['POLICY','WARRANTY','PRICE','STOCK','CAPABILITY','IMAGE'].includes(deterministicDecision.primaryIntent);
+      const guardedDecision=rawDecision.primaryIntent==='OTHER'&&deterministicOverride
+        ?{...rawDecision,primaryIntent:deterministicDecision.primaryIntent,targetProduct:deterministicDecision.targetProduct,referenceType:deterministicDecision.referenceType}
         :rawDecision;
       const initialCandidates=await this.#searchCandidates(input.message,guardedDecision.targetProduct);
       const decision=validateTurnDecision(guardedDecision,baseState,unique(initialCandidates.map(productName)),deterministicDecision);
