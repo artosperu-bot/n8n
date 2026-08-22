@@ -100,3 +100,19 @@ test('artifact run recreates latest with summary, failures, trace and safe conve
   });
   await assert.rejects(()=>readFile(join(latest,'stale.txt'),'utf8'));
 });
+
+test('QA report separates NBA decision, delivery and commercial progression',async()=>{
+  const {report}=await runLiveQa({
+    baseUrl:'http://test',writeArtifacts:false,logger:{log(){},table(){},error(){}} as any,
+    fetcher:async(url)=>String(url).endsWith('/health')
+      ?Response.json({status:'ok',modes:{}})
+      :Response.json({answer:'Sí, está disponible.',state:{lastNba:'SOFT_CLOSE',interestSignal:true,purchaseSignal:false,activeProduct:'Armor X13',commercialStage:'CONSIDERACION'},debug:{intent:'STOCK'}}),
+    scenarios:[{id:'N1',family:'CLOSING',title:'visible N+1',turns:[{message:'si está disponible me interesa'}]}],
+  });
+  assert.deepEqual(report.dimensions?.nbaDecisionQuality,{pass:1,total:1});
+  assert.deepEqual(report.dimensions?.nbaDeliveryQuality,{pass:0,total:1});
+  assert.deepEqual(report.dimensions?.commercialProgression,{pass:0,total:1});
+  assert.deepEqual((report.scenarios[0].turns[0] as any).nbaEvaluation,{
+    n1Required:true,n1Delivered:false,n1Reason:'INTEREST_REQUIRES_PROGRESSION',decisionPass:true,deliveryPass:false,progressionPass:false,
+  });
+});

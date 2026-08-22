@@ -38,3 +38,18 @@ test('attribute followups inside a known comparison protect comparison semantics
     assert.equal(turn?.expected?.intent,'COMPARE',message);
   }
 });
+
+test('CORE includes the compact B2C N+1 funnel without a rigid budget intent enum',()=>{
+  const funnel=coreScenarios.find(s=>s.id==='N1-B2C-CONSTRUCTION');
+  assert.ok(funnel);
+  assert.deepEqual(funnel.turns.map(t=>t.message),[
+    'Trabajo en construcción, se me cae el celular.',
+    'y necesito batería todo el día',
+    'máximo 1500',
+    'si está disponible me interesa',
+    'ya ese quiero, como compro?',
+  ]);
+  assert.equal(funnel.turns[2].expected?.budget,1500);
+  assert.equal(funnel.turns[2].expected?.intent,undefined);
+  assert.ok(coreScenarios.some(s=>s.id==='N1-B2C-INTERESTED-PRICE'&&s.turns.some(t=>t.message==='cuánto cuesta?')));
+});

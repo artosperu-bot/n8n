@@ -103,6 +103,22 @@ test('conditional availability interest is remembered without confirming purchas
   assert.equal(result.state.purchaseSignal,false);
   assert.equal(result.state.reservationStage,null);
   assert.equal(result.debug.nextBestAction,'SOFT_CLOSE');
+  assert.match(result.answer,/avanz|compr|reserv|apart/i);
+});
+
+test('price after expressed interest delivers the computed soft close without confirming purchase',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-interested-price',{
+    activeProduct:'Armor X13',queryTarget:'Armor X13',salientProduct:'Armor X13',interestSignal:true,purchaseSignal:false,turnCount:2,
+  });
+  const result=await new HybridConversationEngine(deps(new FakeLlmProvider(),conversations)).processTurn({
+    sessionId:'s-interested-price',message:'cuánto cuesta?',
+  });
+  assert.equal(result.debug.intent,'PRICE');
+  assert.equal(result.debug.nextBestAction,'SOFT_CLOSE');
+  assert.equal(result.state.purchaseSignal,false);
+  assert.match(result.answer,/S\/\s*899/);
+  assert.match(result.answer,/avanz|compr|stock|reserv|apart/i);
 });
 
 test('direct image request remains a deterministic URL-only fast path', async () => {

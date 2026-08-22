@@ -46,6 +46,17 @@ export const coreScenarios: QaScenario[] = [
     { message: 'Estoy viendo el Armor X13', expected: { activeProduct: 'Armor X13' } },
     { message: 'Si está disponible me interesa', expected: { intent: 'STOCK', activeProduct: 'Armor X13' } },
   ] },
+  { id: 'N1-B2C-CONSTRUCTION', family: 'COMMERCIAL', title: 'N+1 visible desde necesidad hasta compra personal', turns: [
+    { message: 'Trabajo en construcción, se me cae el celular.' },
+    { message: 'y necesito batería todo el día' },
+    { message: 'máximo 1500', expected: { budget:1500 } },
+    { message: 'si está disponible me interesa', expected: { intent:'STOCK' } },
+    { message: 'ya ese quiero, como compro?', expected: { intent:'PURCHASE' } },
+  ] },
+  { id: 'N1-B2C-INTERESTED-PRICE', family: 'COMMERCIAL', title: 'Precio con continuación contextual tras interés', turns: [
+    { message: 'me interesa el Armor X13', expected: { activeProduct:'Armor X13' } },
+    { message: 'cuánto cuesta?', expected: { intent:'PRICE', queryTarget:'Armor X13' } },
+  ] },
   { id: 'YA-ENTENDI-CONTINUITY', family: 'INTENT', title: 'Ya entendí no crea contexto nuevo', turns: [
     { message: 'Estoy viendo el Armor X13', expected: { activeProduct: 'Armor X13' } },
     { message: 'Ya entendí', expected: { activeProduct: 'Armor X13' } },

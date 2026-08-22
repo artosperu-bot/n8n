@@ -6,7 +6,7 @@ import { imageScenarios } from '../qa/scenarios/images.ts';
 import { journeyScenarios } from '../qa/scenarios/journeys.ts';
 import { golden100Scenarios } from '../qa/scenarios/golden100.ts';
 import { createMessageId, createRunId, createSessionId } from '../qa/id.ts';
-import { evaluateCommercial } from '../qa/evaluators/commercial.ts';
+import { assessNba, evaluateCommercial } from '../qa/evaluators/commercial.ts';
 import { evaluateHard } from '../qa/evaluators/hard.ts';
 import { evaluateOracle, evaluatePersistence } from '../qa/evaluators/oracle.ts';
 import { OracleResolver } from '../qa/oracle/OracleResolver.ts';
@@ -60,7 +60,7 @@ function inferRootCause(f:QaFinding):QaRootCause|null{
 }
 function dimension(pass:boolean,metric:{pass:number;total:number}){metric.total+=1;if(pass)metric.pass+=1;}
 function buildDimensions(results:QaScenarioResult[]):{dimensions:QaDimensionMetrics;rootCauses:Partial<Record<QaRootCause,number>>}{
-  const dimensions:QaDimensionMetrics={productIdentity:{pass:0,total:0},referenceAccuracy:{pass:0,total:0},factualAccuracy:{pass:0,total:0},noFabrication:{pass:0,total:0},memoryConsistency:{pass:0,total:0},questionResolved:{pass:0,total:0},nbaQuality:{pass:0,total:0},purchaseProgression:{pass:0,total:0},persistence:{pass:0,total:0}};
+  const dimensions:QaDimensionMetrics={productIdentity:{pass:0,total:0},referenceAccuracy:{pass:0,total:0},factualAccuracy:{pass:0,total:0},noFabrication:{pass:0,total:0},memoryConsistency:{pass:0,total:0},questionResolved:{pass:0,total:0},nbaQuality:{pass:0,total:0},nbaDecisionQuality:{pass:0,total:0},nbaDeliveryQuality:{pass:0,total:0},commercialProgression:{pass:0,total:0},purchaseProgression:{pass:0,total:0},persistence:{pass:0,total:0}};
   const rootCauses:Partial<Record<QaRootCause,number>>={};
   for(const turn of results.flatMap(s=>s.turns)){
     const red=turn.findings.filter(f=>f.level==='RED');
@@ -73,7 +73,11 @@ function buildDimensions(results:QaScenarioResult[]):{dimensions:QaDimensionMetr
     dimension(!turn.findings.some(f=>/UNSUPPORTED|UNSOLICITED_PRICE|STOCK_COUNT_LEAK|UNVERIFIED|IMAGE_URL_MISMATCH/.test(f.code)),dimensions.noFabrication);
     dimension(!roots.has('STATE')&&!roots.has('PERSISTENCE'),dimensions.memoryConsistency);
     dimension(Boolean(String(turn.observation.response?.answer??'').trim())&&!turn.findings.some(f=>f.code==='HTTP_ERROR'),dimensions.questionResolved);
-    dimension(Boolean(turn.observation.response?.state?.lastNba)&&!roots.has('NBA'),dimensions.nbaQuality);
+    const nba=turn.nbaEvaluation??assessNba(turn.observation);
+    dimension(nba.decisionPass&&nba.deliveryPass,dimensions.nbaQuality);
+    dimension(nba.decisionPass,dimensions.nbaDecisionQuality);
+    dimension(nba.deliveryPass,dimensions.nbaDeliveryQuality);
+    dimension(nba.progressionPass,dimensions.commercialProgression);
     if(card?.requiresHandoff)dimension(turn.observation.response?.state?.handoffActive===true&&!roots.has('HANDOFF'),dimensions.purchaseProgression);
     if(card)dimension(!roots.has('PERSISTENCE'),dimensions.persistence);
   }
@@ -118,7 +122,7 @@ export async function runLiveQa(options: RunOptions = {}): Promise<{ report: QaR
       }catch(error){observation={httpStatus:0,ok:false,request,response:{error:error instanceof Error?error.message:String(error)},persisted:null,roundTripMs:Math.max(0,Math.round(performance.now()-started))};}
 
       const findings=[...preFindings,...evaluateHard(turn,observation),...(oracle?evaluateOracle(oracle,observation):[]),...(turn.oracleSpec?evaluatePersistence(observation,previousPersistedVersion):[]),...evaluateCommercial(observation)];
-      const status=statusFromFindings(findings);turnResults.push({turn:index+1,message:turn.message,status,observation,findings,oracle});
+      const status=statusFromFindings(findings);turnResults.push({turn:index+1,message:turn.message,status,observation,findings,oracle,nbaEvaluation:assessNba(observation)});
       if(observation.persisted?.state?.contextVersion!=null){const v=Number(observation.persisted.state.contextVersion);if(Number.isFinite(v))previousPersistedVersion=v;}
       if(oracle)oracleState={...oracleState,...oracle.expectedStateDelta,turnCount:(oracleState.turnCount??0)+1};
       // A failed turn is evidence, not a reason to hide the rest of the journey.

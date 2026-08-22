@@ -5,19 +5,21 @@ function shortProduct(value: string | null | undefined): string {
   return raw || 'el producto';
 }
 
-export function priceResponse(quote: ProductQuote | null): string {
+export function priceResponse(quote: ProductQuote | null, softClose = false): string {
   if (!quote || quote.price == null) return 'No tengo un precio confirmado en este momento.';
-  return `${shortProduct(quote.shortName ?? quote.product)} está a S/ ${quote.price}.`;
+  const fact=`${shortProduct(quote.shortName ?? quote.product)} está a S/ ${quote.price}.`;
+  return softClose?`${fact} Si te cuadra, puedo revisar stock para avanzar.`:fact;
 }
 
-export function stockResponse(quote: ProductQuote | null, requestedQuantity?: number | null): string {
+export function stockResponse(quote: ProductQuote | null, requestedQuantity?: number | null, softClose = false): string {
   if (!quote || quote.stock == null) return 'No puedo confirmar la disponibilidad en este momento.';
   if (requestedQuantity != null && requestedQuantity > 1) {
     return quote.stock >= requestedQuantity
       ? 'Sí, está disponible para esa cantidad.'
       : 'Para esa cantidad necesito validar disponibilidad.';
   }
-  return quote.stock > 0 ? 'Sí, está disponible.' : 'Ahora no está disponible.';
+  if(quote.stock<=0)return 'Ahora no está disponible. Puedo ayudarte a revisar una alternativa disponible.';
+  return softClose?'Sí, está disponible. ¿Quieres avanzar con ese modelo?':'Sí, está disponible.';
 }
 
 export function imageResponse(images: ProductImage[]): string {

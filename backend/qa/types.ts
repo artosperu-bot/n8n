@@ -18,6 +18,14 @@ export type QaExpected = {
 export type QaTurn = { message: string; expected?: QaExpected; oracleSpec?: OracleSpec };
 export type QaScenario = { id: string; family: QaFamily; title: string; turns: QaTurn[] };
 export type QaFinding = { level: 'YELLOW' | 'RED'; code: string; message: string; rootCause?:QaRootCause };
+export type QaNbaEvaluation = {
+  n1Required:boolean;
+  n1Delivered:boolean;
+  n1Reason:string;
+  decisionPass:boolean;
+  deliveryPass:boolean;
+  progressionPass:boolean;
+};
 
 export type QaTurnObservation = {
   httpStatus: number;
@@ -35,6 +43,7 @@ export type QaTurnResult = {
   observation: QaTurnObservation;
   findings: QaFinding[];
   oracle?: OracleCard | null;
+  nbaEvaluation?:QaNbaEvaluation;
 };
 
 export type QaScenarioResult = {
@@ -54,6 +63,9 @@ export type QaDimensionMetrics = {
   memoryConsistency:{pass:number;total:number};
   questionResolved:{pass:number;total:number};
   nbaQuality:{pass:number;total:number};
+  nbaDecisionQuality:{pass:number;total:number};
+  nbaDeliveryQuality:{pass:number;total:number};
+  commercialProgression:{pass:number;total:number};
   purchaseProgression:{pass:number;total:number};
   persistence:{pass:number;total:number};
 };

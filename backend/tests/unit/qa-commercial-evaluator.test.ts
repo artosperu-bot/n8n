@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluateCommercial } from '../../qa/evaluators/commercial.ts';
 
-const observation = (answer: string, debug: any = {}) => ({
+const observation = (answer: string, debug: any = {}, state: any = { lastNba: 'HANDLE_OBJECTION' }, message = 'Está muy caro') => ({
   httpStatus: 200,
   ok: true,
-  request: { sessionId: 'qa-x', messageId: 'qa:x:t01', message: 'Está muy caro' },
-  response: { answer, state: { lastNba: 'HANDLE_OBJECTION' }, debug },
+  request: { sessionId: 'qa-x', messageId: 'qa:x:t01', message },
+  response: { answer, state, debug },
   roundTripMs: 10,
 });
 
@@ -38,4 +38,41 @@ test('comparison length uses the wider chat guidance without relaxing normal rep
   const normal = evaluateCommercial(observation('x'.repeat(700), { intent: 'PRODUCT_INFO' }));
   assert.equal(comparison.some(x => x.code === 'CHAT_TOO_LONG'), false);
   assert.equal(normal.some(x => x.code === 'CHAT_TOO_LONG'), true);
+});
+
+test('ASK_MISSING_FACT fails delivery when the answer never asks for the missing fact', () => {
+  const findings=evaluateCommercial(observation(
+    'Te recomiendo revisar resistencia y batería.',
+    {intent:'EVALUATE_USE'},
+    {lastNba:'ASK_MISSING_FACT',commercialStage:'DESCUBRIMIENTO',useCase:'construccion',problem:'caidas'},
+    'Trabajo en construcción y se me cae el celular.',
+  ));
+  assert.ok(findings.some(x=>x.code==='NBA_NOT_DELIVERED'));
+});
+
+test('SOFT_CLOSE fails delivery when conditional stock interest gets only a factual answer', () => {
+  const findings=evaluateCommercial(observation(
+    'Sí, está disponible.',
+    {intent:'STOCK'},
+    {lastNba:'SOFT_CLOSE',interestSignal:true,purchaseSignal:false,activeProduct:'Armor X13',commercialStage:'CONSIDERACION'},
+    'si está disponible me interesa',
+  ));
+  assert.ok(findings.some(x=>x.code==='NBA_NOT_DELIVERED'));
+});
+
+test('ANSWER_ONLY is valid for a policy answer but not when purchase interest clearly calls for progression', () => {
+  const policy=evaluateCommercial(observation('La garantía cubre defectos de fábrica.',{intent:'WARRANTY'},{lastNba:'ANSWER_ONLY',commercialStage:'DESCUBRIMIENTO'},'¿Qué garantía tiene?'));
+  const interested=evaluateCommercial(observation('Armor 22 está a S/ 1399.',{intent:'PRICE'},{lastNba:'ANSWER_ONLY',interestSignal:true,activeProduct:'Armor 22',commercialStage:'CONSIDERACION'},'¿Cuánto cuesta?'));
+  assert.equal(policy.some(x=>x.code==='NBA_PROGRESSION_MISSING'),false);
+  assert.ok(interested.some(x=>x.code==='NBA_PROGRESSION_MISSING'));
+});
+
+test('ASK_MISSING_FACT must not ask again for context already known', () => {
+  const findings=evaluateCommercial(observation(
+    '¿Para qué uso necesitas el equipo?',
+    {intent:'EVALUATE_USE'},
+    {lastNba:'ASK_MISSING_FACT',useCase:'construccion',problem:'caidas',commercialStage:'DESCUBRIMIENTO'},
+    'También necesito buena batería.',
+  ));
+  assert.ok(findings.some(x=>x.code==='NBA_REPEATS_KNOWN'));
 });
