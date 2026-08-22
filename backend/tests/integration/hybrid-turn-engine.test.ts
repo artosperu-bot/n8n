@@ -139,3 +139,76 @@ test('explicit budget with known use cannot be degraded to OTHER by semantic pla
   assert.notEqual(r.debug.route,'GENERAL_COMMERCIAL');
   assert.ok(r.state.recommendedProduct);
 });
+
+test('explicit human request outranks stale STOCK planner intent and closes as assisted handoff', async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-human-authority',{
+    activeProduct:'Armor 22',recommendedProduct:'Armor 22',quantity:12,customerType:'BUSINESS',purchaseSignal:true,turnCount:4,
+  });
+  const base=new FakeLlmProvider();
+  const llm:LlmProvider={
+    async decide(){return {decision:{
+      primaryIntent:'STOCK',secondaryIntents:[],targetProduct:'Armor 22',mentionedProducts:[],referenceType:'RECENT',
+      explicitSwitch:false,selectedProduct:null,comparisonProducts:[],attributes:[],customerNeed:'tecnicos',customerProblem:null,
+      priorities:['resistencia'],objection:null,commercialStage:'CONSIDERACION',spinContribution:null,nextBestAction:'ANSWER_ONLY',
+      needsSql:true,needsProductRag:false,needsInstitutionalRag:false,confidence:0.92,
+    },model:'gpt-test',usage:{inputTokens:1,outputTokens:1,totalTokens:2,cachedInputTokens:0},durationMs:1};},
+    write(input:LlmWriteInput){return base.write(input);},
+  };
+  const engine=new HybridConversationEngine(deps(llm,conversations));
+  const r=await engine.processTurn({sessionId:'s-human-authority',message:'quiero q un asesor siga con la compra'});
+  assert.equal(r.debug.intent,'HUMAN');
+  assert.equal(r.debug.route,'ASSISTED_HANDOFF');
+  assert.equal(r.state.lastNba,'ASSISTED_HANDOFF');
+  assert.equal(r.state.handoffActive,true);
+  assert.equal(r.state.commercialStage,'CIERRE_ASISTIDO');
+});
+
+test('purchase intent owns CIERRE stage even when planner proposes an older stage',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-purchase-stage',{activeProduct:'Armor X13',turnCount:3});
+  const base=new FakeLlmProvider();
+  const llm:LlmProvider={
+    async decide(){return {decision:{
+      primaryIntent:'PURCHASE',secondaryIntents:[],targetProduct:'Armor X13',mentionedProducts:[],referenceType:'RECENT',
+      explicitSwitch:false,selectedProduct:null,comparisonProducts:[],attributes:[],customerNeed:null,customerProblem:null,priorities:[],
+      objection:null,commercialStage:'DESCUBRIMIENTO',spinContribution:null,nextBestAction:'COLLECT_RESERVATION_DATA',needsSql:true,
+      needsProductRag:false,needsInstitutionalRag:false,confidence:0.95,
+    },model:'gpt-test',usage:{inputTokens:1,outputTokens:1,totalTokens:2,cachedInputTokens:0},durationMs:1};},
+    write(input:LlmWriteInput){return base.write(input);},
+  };
+  const r=await new HybridConversationEngine(deps(llm,conversations)).processTurn({sessionId:'s-purchase-stage',message:'ya lo quiero comprar'});
+  assert.equal(r.debug.intent,'PURCHASE');
+  assert.equal(r.state.reservationStage,'NEED_DOCUMENT');
+  assert.equal(r.state.commercialStage,'CIERRE');
+});
+
+test('comparison resolves both planner products even when whole-message SQL lookup misses the pair',async()=>{
+  const baseErp=new FakeErpRepository();
+  const erp:any={
+    ...baseErp,
+    async searchProducts(text:string,max=20){
+      if(text.toLowerCase().includes('estoy entre'))return [];
+      return baseErp.searchProducts(text,max);
+    },
+    getProductQuote:baseErp.getProductQuote.bind(baseErp),
+    listProductsWithinBudget:baseErp.listProductsWithinBudget.bind(baseErp),
+  };
+  const base=new FakeLlmProvider();
+  const llm:LlmProvider={
+    async decide(){return {decision:{
+      primaryIntent:'COMPARE',secondaryIntents:[],targetProduct:'Armor X13',mentionedProducts:['Armor X13','Armor 22'],referenceType:'MULTI_PRODUCT_MENTION',
+      explicitSwitch:false,selectedProduct:null,comparisonProducts:['Armor X13','Armor 22'],attributes:['BATERIA'],customerNeed:null,customerProblem:null,
+      priorities:['bateria'],objection:null,commercialStage:'EVALUACION',spinContribution:null,nextBestAction:'COMPARE',needsSql:true,needsProductRag:true,
+      needsInstitutionalRag:false,confidence:0.98,
+    },model:'gpt-test',usage:{inputTokens:1,outputTokens:1,totalTokens:2,cachedInputTokens:0},durationMs:1};},
+    write(input:LlmWriteInput){return base.write(input);},
+  };
+  const conversations=new MemoryConversationRepository();
+  const engine=new HybridConversationEngine({conversations,telemetry:new NoopTelemetryRepository(),erp,rag:new FakeRagRepository(),llm,automation:new NoopAutomationBus()});
+  const r=await engine.processTurn({sessionId:'s-compare-seed',message:'estoy entre Armor X13 y Armor 22, comparalos'});
+  assert.equal(r.debug.intent,'COMPARE');
+  assert.equal(r.debug.route,'RAG_COMPARISON');
+  assert.deepEqual(r.state.comparisonProducts,['Armor X13','Armor 22']);
+  assert.doesNotMatch(r.answer,/Qué dos modelos quieres comparar/i);
+});
