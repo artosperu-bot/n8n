@@ -149,6 +149,33 @@ test('explicit budget with known use cannot be degraded to OTHER by semantic pla
   assert.ok(r.state.recommendedProduct);
 });
 
+test('explicit budget authority cannot be degraded to CAPABILITY by semantic planner',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-budget-capability',{
+    activeProduct:'Armor X12 Pro',queryTarget:'Armor X12 Pro',salientProduct:'Armor X12 Pro',
+    useCase:'delivery',priorities:['bateria','resistencia'],turnCount:2,
+  });
+  const base=new FakeLlmProvider();
+  const llm:LlmProvider={
+    async decide(){return {decision:{
+      primaryIntent:'CAPABILITY',secondaryIntents:[],targetProduct:null,mentionedProducts:[],referenceType:null,
+      explicitSwitch:false,selectedProduct:null,comparisonProducts:[],attributes:['BATERIA'],customerNeed:'delivery',customerProblem:null,
+      priorities:['bateria','resistencia'],objection:null,commercialStage:'EVALUACION',spinContribution:null,
+      nextBestAction:'ANSWER_ONLY',needsSql:false,needsProductRag:true,needsInstitutionalRag:false,confidence:0.91,
+    },model:'gpt-test',usage:{inputTokens:1,outputTokens:1,totalTokens:2,cachedInputTokens:0},durationMs:1};},
+    write(input:LlmWriteInput){return base.write(input);},
+  };
+  const result=await new HybridConversationEngine(deps(llm,conversations)).processTurn({
+    sessionId:'s-budget-capability',message:'máximo 1500 soles',
+  });
+  assert.equal(result.state.budget,1500);
+  assert.equal(result.debug.decisionTrace.deterministicIntent,'RECOMMEND_WITHIN_BUDGET');
+  assert.equal(result.debug.decisionTrace.plannerIntent,'CAPABILITY');
+  assert.equal(result.debug.intent,'RECOMMEND_WITHIN_BUDGET');
+  assert.equal(result.debug.route,'RAG_RECOMMENDATION');
+  assert.ok(result.debug.recommendationCriteria.includes('BATERIA'));
+});
+
 test('explicit human request outranks stale STOCK planner intent and closes as assisted handoff', async()=>{
   const conversations=new MemoryConversationRepository();
   await conversations.saveState('s-human-authority',{

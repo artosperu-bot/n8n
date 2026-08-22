@@ -43,16 +43,16 @@ Leave the STECH conversational sales backend correct, useful, observable, regres
 - Personal one-unit purchase enters data collection; two or more units use assisted handoff.
 - Trace privacy/uniqueness root closed in code by `207c014`; targeted tests 6/6 PASS.
 - Reservation turn ownership closed in code: only compatible field data or explicit reservation operations own the turn; interruptions preserve pending state and abandonment clears local capture without claiming external cancellation.
+- Deterministic budget authority closed in code: explicit parsed budget remains primary over incompatible semantic planner intents while compatible capability criteria remain available.
 
 Do not reopen a closed dimension without fresh contradictory evidence.
 
 ## Open issues, ordered
 
-1. P1 deterministic budget authority: planner `CAPABILITY` can defeat explicit budget recommendation intent.
-2. P1 recommendation sufficiency: zero-evidence/tied candidates can become an arbitrary first-row winner.
-3. P1 conditional stock interest: current behavior must be reproduced before any implementation.
-4. External gate: exact signature and result contract for `dbo.sp_IA_RegistrarReserva24h_Idempotente` are not confirmed; execution remains blocked.
-5. Live conversational certification remains pending after code fixes.
+1. P1 recommendation sufficiency: zero-evidence/tied candidates can become an arbitrary first-row winner.
+2. P1 conditional stock interest: current behavior must be reproduced before any implementation.
+3. External gate: exact signature and result contract for `dbo.sp_IA_RegistrarReserva24h_Idempotente` are not confirmed; execution remains blocked.
+4. Live conversational certification remains pending after code fixes.
 
 ## Latest verified evidence
 
@@ -64,6 +64,7 @@ Do not reopen a closed dimension without fresh contradictory evidence.
 - Trace GREEN: `trace-writer` plus adjacent metadata tests 6/6 PASS.
 - Reservation RED reproduced warranty/human/switch/abandonment capture before intent.
 - Reservation GREEN: ownership, switch, abandonment, document, name and address plus adjacent suites 22/22 PASS.
+- Budget RED reproduced active-product `CAPABILITY` override; GREEN plus adjacent authority suites 33/33 PASS.
 - Production/Supabase mutations: none.
 - Preexisting untracked `backend/package-lock.json`: preserved and excluded.
 
@@ -91,4 +92,4 @@ Do not reopen a closed dimension without fresh contradictory evidence.
 
 ## NEXT ACTION
 
-Write and run the planner=`CAPABILITY` RED regression for deterministic budget authority.
+Write and run no-winner RED regressions for zero-evidence/tied recommendation candidates.
