@@ -41,7 +41,7 @@ test('OpenAI adapter sends deterministic evidence through Responses API', async 
       output: [{ type: 'message', content: [{ type: 'output_text', text: 'Respuesta final' }] }],
     });
   };
-  const llm = new OpenAIProvider({ apiKey: 'key', model: 'gpt-test', fetcher });
+  const llm = new OpenAIProvider({ apiKey: 'key', model: 'gpt-5-mini', fetcher });
   const result = await llm.write({
     message: 'precio?',
     intent: 'PRICE',
@@ -59,6 +59,9 @@ test('OpenAI adapter sends deterministic evidence through Responses API', async 
   assert.match(body.instructions, /no inventes/i);
   assert.match(body.instructions, /persona experta, cercana y concreta/i);
   assert.match(body.instructions, /1 a 3 frases/i);
+  assert.match(body.instructions, /150 a 450 caracteres/i);
+  assert.match(body.instructions, /350 a 750 caracteres/i);
+  assert.deepEqual(body.text, { verbosity: 'low' });
   assert.match(body.instructions, /ANSWER_ONLY/i);
   assert.match(body.instructions, /responder y terminar/i);
   assert.match(body.instructions, /ASSISTED_HANDOFF/i);

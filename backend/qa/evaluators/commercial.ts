@@ -4,7 +4,8 @@ export function evaluateCommercial(observation:QaTurnObservation):QaFinding[]{
   const findings:QaFinding[]=[];if(!observation.ok)return findings;
   const response=observation.response??{};const answer=String(response.answer??'');const debug=response.debug??{};const state=response.state??{};
   if((answer.match(/\?/g)??[]).length>1)findings.push({level:'YELLOW',code:'TOO_MANY_QUESTIONS',message:'La respuesta hace más de una pregunta.'});
-  if(answer.length>500)findings.push({level:'YELLOW',code:'CHAT_TOO_LONG',message:`Respuesta de ${answer.length} caracteres; excesiva para chat comercial.`});
+  const lengthGuidance=debug.intent==='COMPARE'?750:500;
+  if(answer.length>lengthGuidance)findings.push({level:'YELLOW',code:'CHAT_TOO_LONG',message:`Respuesta de ${answer.length} caracteres; excesiva para chat comercial.`});
   if((answer.match(/^\s*[-*•]\s+/gm)??[]).length>4)findings.push({level:'YELLOW',code:'TOO_MANY_BULLETS',message:'Usa demasiados puntos/listas para una conversación.'});
   if(/como modelo de ia|según mi sistema interno|\bINTENT\b|queryTarget|\bRAG\b|\bUNKNOWN\b/i.test(answer))findings.push({level:'YELLOW',code:'ROBOTIC_META_LANGUAGE',message:'Expone lenguaje técnico/meta o suena como sistema.'});
   const isPriceObjection=debug.priceObjection===true||debug.intent==='HANDLE_PRICE_OBJECTION';

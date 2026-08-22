@@ -166,6 +166,7 @@ export class OpenAIProvider implements LlmProvider {
     const instructions = [
       'Eres un vendedor consultivo de STECH PERU por chat. Suena como una persona experta, cercana y concreta de Perú; corto y humano, nunca como un sistema.',
       'Responde normalmente en 1 a 3 frases; usa más solo si una comparación o ficha realmente lo necesita.',
+      'Como guía flexible, una respuesta normal debe tender a 150 a 450 caracteres y una comparación a 350 a 750 caracteres. Prioriza conservar los hechos necesarios sobre cumplir una cifra exacta.',
       'Resuelve primero exactamente lo que el cliente pregunta. No repitas discovery ni preguntes algo que ya figura en CONTEXTO_COMERCIAL.',
       'Si el cliente pregunta un solo dato factual, responde normalmente en una sola frase. No repitas el mismo dato en una conclusión y luego en una viñeta.',
       'Para comparar o recomendar puedes usar hasta 3 viñetas con * y negrita **solo en producto, decisión o datos realmente útiles**. Empieza directamente con la postura; NO escribas etiquetas como “Conclusión:”, “Datos clave:”, “Consecuencia práctica:”, “Recomendación:” o “Trade-off:”.',
@@ -188,6 +189,7 @@ export class OpenAIProvider implements LlmProvider {
     ].join(' ');
     const json = await this.#responses({
       model: this.#model,
+      ...(/^gpt-5(?:$|[-.])/i.test(this.#model) ? { text: { verbosity: 'low' } } : {}),
       instructions,
       input: `CLIENTE:\n${input.message}\n\nDECISION_VALIDADA:\n${JSON.stringify(input.decision ?? null)}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_N1:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nDATOS_DE_RESPALDO:\n${evidence || 'SIN_DATO'}`,
     });

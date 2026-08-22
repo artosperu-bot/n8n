@@ -32,3 +32,10 @@ test('telemetry and n8n delivery failures are advisory yellow findings', () => {
   assert.ok(findings.some(x => x.code === 'AUTOMATION_DELIVERY_FAILED'));
   assert.equal(findings.some(x => x.level === 'RED'), false);
 });
+
+test('comparison length uses the wider chat guidance without relaxing normal replies', () => {
+  const comparison = evaluateCommercial(observation('x'.repeat(700), { intent: 'COMPARE' }));
+  const normal = evaluateCommercial(observation('x'.repeat(700), { intent: 'PRODUCT_INFO' }));
+  assert.equal(comparison.some(x => x.code === 'CHAT_TOO_LONG'), false);
+  assert.equal(normal.some(x => x.code === 'CHAT_TOO_LONG'), true);
+});
