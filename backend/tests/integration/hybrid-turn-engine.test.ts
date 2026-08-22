@@ -13,6 +13,15 @@ function deps(llm: LlmProvider, conversations = new MemoryConversationRepository
   return { conversations, telemetry:new NoopTelemetryRepository(), erp:new FakeErpRepository(), rag:new FakeRagRepository(), llm, automation:new NoopAutomationBus() };
 }
 
+async function engineWithPendingReservation(sessionId:string){
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState(sessionId,{
+    activeProduct:'Armor 22',selectedProduct:'Armor 22',queryTarget:'Armor 22',salientProduct:'Armor 22',
+    reservationStage:'NEED_DOCUMENT',purchaseSignal:true,commercialStage:'CIERRE',turnCount:2,
+  });
+  return new HybridConversationEngine(deps(new FakeLlmProvider(),conversations));
+}
+
 test('hybrid engine preserves recent selection and starts personal reservation on purchase', async () => {
   const conversations = new MemoryConversationRepository();
   await conversations.saveState('s-hybrid', {
@@ -211,4 +220,69 @@ test('comparison resolves both planner products even when whole-message SQL look
   assert.equal(r.debug.route,'RAG_COMPARISON');
   assert.deepEqual(r.state.comparisonProducts,['Armor X13','Armor 22']);
   assert.doesNotMatch(r.answer,/Qué dos modelos quieres comparar/i);
+});
+
+test('valid competing intents interrupt reservation data capture and preserve the pending stage',async()=>{
+  const warranty=await (await engineWithPendingReservation('s-reservation-warranty')).processTurn({
+    sessionId:'s-reservation-warranty',message:'¿Cuál es la garantía del Armor 22?',
+  });
+  assert.equal(warranty.debug.intent,'WARRANTY');
+  assert.equal(warranty.debug.route,'RAG_INSTITUTIONAL');
+  assert.equal(warranty.state.reservationStage,'NEED_DOCUMENT');
+  assert.doesNotMatch(warranty.answer,/Necesito un DNI/i);
+
+  const human=await (await engineWithPendingReservation('s-reservation-human')).processTurn({
+    sessionId:'s-reservation-human',message:'prefiero hablar con un asesor',
+  });
+  assert.equal(human.debug.intent,'HUMAN');
+  assert.equal(human.debug.route,'ASSISTED_HANDOFF');
+  assert.equal(human.state.reservationStage,'NEED_DOCUMENT');
+  assert.doesNotMatch(human.answer,/Necesito un DNI/i);
+});
+
+test('explicit product decision during reservation returns to the normal switch pipeline',async()=>{
+  const result=await (await engineWithPendingReservation('s-reservation-switch')).processTurn({
+    sessionId:'s-reservation-switch',message:'me quedo con el Armor X13',
+  });
+  assert.equal(result.debug.intent,'PURCHASE');
+  assert.equal(result.state.selectedProduct,'Armor X13');
+  assert.equal(result.state.activeProduct,'Armor X13');
+  assert.equal(result.state.reservationStage,'NEED_DOCUMENT');
+  assert.equal(result.debug.queryTarget,'Armor X13');
+});
+
+test('explicit abandonment clears local reservation data while valid document advances one stage',async()=>{
+  const abandoned=await (await engineWithPendingReservation('s-reservation-abandon')).processTurn({
+    sessionId:'s-reservation-abandon',message:'ya no quiero continuar con la reserva',
+  });
+  assert.equal(abandoned.debug.route,'RESERVATION_CANCELLED');
+  assert.equal(abandoned.state.reservationStage,null);
+  assert.equal(abandoned.state.purchaseSignal,false);
+  assert.equal(abandoned.state.reservationDocument,null);
+  assert.doesNotMatch(abandoned.answer,/reserva (?:qued[oó]|fue) cancelada/i,'must not claim an external cancellation');
+
+  const advanced=await (await engineWithPendingReservation('s-reservation-document')).processTurn({
+    sessionId:'s-reservation-document',message:'12345678',
+  });
+  assert.equal(advanced.debug.route,'RESERVATION_DATA');
+  assert.equal(advanced.state.reservationStage,'NEED_NAME');
+  assert.equal(advanced.state.reservationDocument,'12345678');
+});
+
+test('structurally valid name and address continue reservation despite incidental policy words',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-reservation-fields',{
+    activeProduct:'Armor 22',selectedProduct:'Armor 22',reservationStage:'NEED_NAME',reservationDocument:'12345678',
+    purchaseSignal:true,commercialStage:'CIERRE',turnCount:3,
+  });
+  const engine=new HybridConversationEngine(deps(new FakeLlmProvider(),conversations));
+  const named=await engine.processTurn({sessionId:'s-reservation-fields',message:'Juan Pérez Torres'});
+  assert.equal(named.state.reservationStage,'NEED_ADDRESS');
+  assert.equal(named.state.reservationCustomerName,'Juan Pérez Torres');
+
+  const addressed=await engine.processTurn({sessionId:'s-reservation-fields',message:'Calle Lima 123'});
+  assert.equal(addressed.debug.route,'RESERVATION_READY');
+  assert.equal(addressed.state.reservationStage,'READY');
+  assert.equal(addressed.state.reservationAddress,'Calle Lima 123');
+  assert.match(addressed.answer,/todav[ií]a no est[aá] confirmada/i);
 });

@@ -29,7 +29,7 @@ type Dependencies = {
 };
 type CandidateRank = { quote: ProductQuote; evidence: RagEvidence[]; score: number; reasons:string[]; criteria:string[]; criterionScores:Record<string,number>; tradeoffs:string[]; confidence:number };
 type RankCandidatesResult={ranks:CandidateRank[];trace:RecommendationDecisionTrace};
-type ReservationAdvance={stage:ConversationState['reservationStage'];document?:string;name?:string;address?:string;answer:string;nba:string;route:string};
+type ReservationAdvance={stage:ConversationState['reservationStage'];document?:string|null;name?:string|null;address?:string|null;answer:string;nba:string;route:string;cancelled?:boolean};
 
 function unique(values: Array<unknown>): string[] {
   return [...new Set(values.filter((v):v is string=>typeof v==='string').map(v=>v.trim()).filter(Boolean))];
@@ -181,10 +181,38 @@ function safeError(error:unknown):string{
   const raw=error instanceof Error?error.message:String(error);
   return raw.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[REDACTED_EMAIL]').replace(/\b\d{8,12}\b/g,'[REDACTED_ID]').slice(0,240);
 }
+function isReservationAbandonment(message:string):boolean{
+  const text=fold(message);
+  return /\b(?:ya\s+no|no\s+quiero|cancel|anul|abandona|dejemos|deten|para(?:r)?)\b[^.!?]{0,55}\b(?:reserva|separacion|compra)\b/.test(text)
+    || /\b(?:reserva|separacion|compra)\b[^.!?]{0,55}\b(?:cancel|anul|abandona|dejemos|deten|para(?:r)?)\b/.test(text);
+}
+function isExplicitReservationOperation(message:string):boolean{
+  const text=fold(message);
+  return /\b(?:continu|seguir|retom|avanz)\w*\b[^.!?]{0,45}\b(?:reserva|separacion)\b/.test(text)
+    || /\b(?:reserva|separacion)\b[^.!?]{0,45}\b(?:continu|seguir|retom|avanz)\w*\b/.test(text);
+}
+function reservationFieldCompatible(stage:ConversationState['reservationStage'],message:string):boolean{
+  const raw=message.trim();
+  if(stage==='NEED_DOCUMENT'){
+    const value=raw.replace(/[\s.-]/g,'').toUpperCase();
+    return /^[A-Z0-9]{8,12}$/.test(value)&&/[0-9]{6}/.test(value);
+  }
+  if(stage==='NEED_NAME')return !/[?¿]/.test(raw)&&raw.length>=5&&raw.split(/\s+/).filter(Boolean).length>=2&&/^[\p{L}\s.'-]+$/u.test(raw);
+  if(stage==='NEED_ADDRESS')return raw.length>=6&&/\p{L}/u.test(raw)&&(/\d/u.test(raw)||/\b(?:av|avenida|jr|jiron|calle|mz|manzana|lote|urbanizacion|distrito)\b/i.test(fold(raw)));
+  return false;
+}
+function reservationOwnsTurn(state:ConversationState,message:string):boolean{
+  if(!state.reservationStage)return false;
+  if(isReservationAbandonment(message)||isExplicitReservationOperation(message))return true;
+  if(!reservationFieldCompatible(state.reservationStage,message))return false;
+  if(state.reservationStage==='NEED_ADDRESS'&&!/[?¿]/.test(message)&&/\b(?:av|avenida|jr|jiron|calle|mz|manzana|lote|urbanizacion|distrito)\b/i.test(fold(message)))return true;
+  return fallbackDecision(message,state).primaryIntent==='OTHER';
+}
 function reservationAdvance(state:ConversationState,message:string):ReservationAdvance|null{
   const stage=state.reservationStage;
   if(!stage)return null;
   const raw=message.trim();
+  if(isReservationAbandonment(message))return{stage:null,document:null,name:null,address:null,cancelled:true,answer:'Entendido, detuve la captura de datos para la reserva. La reserva no llegó a confirmarse.',nba:'ANSWER_ONLY',route:'RESERVATION_CANCELLED'};
   if(stage==='NEED_DOCUMENT'){
     const value=raw.replace(/[\s.-]/g,'').toUpperCase();
     if(!/^[A-Z0-9]{8,12}$/.test(value)||!/[0-9]{6}/.test(value))return{stage,answer:'Necesito un DNI o Carné de Extranjería válido para continuar la reserva.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
@@ -309,20 +337,21 @@ export class HybridConversationEngine {
       const previous=await this.#deps.conversations.getState(input.sessionId);
       const turn=(previous.turnCount??0)+1;
 
-      const reservation=reservationAdvance(previous,input.message);
+      const reservation=reservationOwnsTurn(previous,input.message)?reservationAdvance(previous,input.message):null;
       if(reservation){
-        const decisionTrace:TurnDecisionTrace={deterministicIntent:'PURCHASE',plannerIntent:null,finalIntent:'PURCHASE',route:reservation.route,nextBestAction:reservation.nba,targetProduct:previous.selectedProduct??previous.queryTarget??previous.recommendedProduct??previous.activeProduct??null,recommendation:null};
+        const reservationIntent=reservation.cancelled?'POLICY':'PURCHASE';
+        const decisionTrace:TurnDecisionTrace={deterministicIntent:reservationIntent,plannerIntent:null,finalIntent:reservationIntent,route:reservation.route,nextBestAction:reservation.nba,targetProduct:previous.selectedProduct??previous.queryTarget??previous.recommendedProduct??previous.activeProduct??null,recommendation:null};
         const nextState=reduceState(previous,{
-          contextVersion:previous.contextVersion??0,reservationStage:reservation.stage,reservationDocument:reservation.document??previous.reservationDocument??null,reservationCustomerName:reservation.name??previous.reservationCustomerName??null,reservationAddress:reservation.address??previous.reservationAddress??null,
-          purchaseSignal:true,lastIntent:'PURCHASE',lastRoute:reservation.route,lastNba:reservation.nba,pendingCommercialAction:reservation.nba,commercialStage:'CIERRE',commercialStrategy:'CIERRE_PROGRESIVO',handoffActive:false,blockAutomaticReply:false,handoffReason:null,lastDecisionTrace:decisionTrace,lastUserMessage:input.message,lastAssistantMessage:reservation.answer,
+          contextVersion:previous.contextVersion??0,reservationStage:reservation.stage,reservationDocument:reservation.document!==undefined?reservation.document:previous.reservationDocument??null,reservationCustomerName:reservation.name!==undefined?reservation.name:previous.reservationCustomerName??null,reservationAddress:reservation.address!==undefined?reservation.address:previous.reservationAddress??null,
+          purchaseSignal:!reservation.cancelled,lastIntent:reservationIntent,lastRoute:reservation.route,lastNba:reservation.nba,pendingCommercialAction:reservation.cancelled?null:reservation.nba,commercialStage:reservation.cancelled?'CONSIDERACION':'CIERRE',commercialStrategy:reservation.cancelled?'RESPUESTA_DIRECTA':'CIERRE_PROGRESIVO',handoffActive:false,blockAutomaticReply:false,handoffReason:null,lastDecisionTrace:decisionTrace,lastUserMessage:input.message,lastAssistantMessage:reservation.answer,
         });
         const completionMeta={messageId,requestId,conversationType:input.sessionId.startsWith('qa-')?'QA_LIVE':null,model:'stech-reservation-deterministic',inputTokens:null,outputTokens:null,totalTokens:null,cachedInputTokens:null,totalPrompts:0};
         if(atomic){await this.#deps.conversations.completeTurn!(input.sessionId,input.message,reservation.answer,nextState,completionMeta);leaseAcquired=false;}
         else{await this.#deps.conversations.appendMessage(input.sessionId,'user',input.message,completionMeta);await this.#deps.conversations.saveState(input.sessionId,nextState);await this.#deps.conversations.appendMessage(input.sessionId,'assistant',reservation.answer,completionMeta);}
-        console.log(JSON.stringify({event:'STECH_TURN_TRACE',sessionId:input.sessionId,messageId,finalIntent:'PURCHASE',route:reservation.route,nextBestAction:reservation.nba,target:decisionTrace.targetProduct}));
+        console.log(JSON.stringify({event:'STECH_TURN_TRACE',sessionId:input.sessionId,messageId,finalIntent:reservationIntent,route:reservation.route,nextBestAction:reservation.nba,target:decisionTrace.targetProduct}));
         let automation:{delivered:boolean;error?:string}={delivered:true};
-        try{automation=await this.#deps.automation.publish({type:'conversation.turn.completed',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{intent:'PURCHASE',route:reservation.route,product:decisionTrace.targetProduct,nextBestAction:reservation.nba}});}catch(error){automation={delivered:false,error:error instanceof Error?error.message:String(error)};}
-        return{sessionId:input.sessionId,answer:reservation.answer,state:{...nextState,contextVersion:(previous.contextVersion??0)+1},debug:{intent:'PURCHASE',route:reservation.route,sqlTools:[],queryTarget:decisionTrace.targetProduct??null,explicitSwitch:false,budget:previous.budget??null,priceObjection:false,ragSources:[],nextBestAction:reservation.nba,handoff:false,handoffReason:null,decisionTrace,telemetry:{delivered:true},automation,durationMs:Math.max(0,Math.round(performance.now()-started))}};
+        try{automation=await this.#deps.automation.publish({type:'conversation.turn.completed',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{intent:reservationIntent,route:reservation.route,product:decisionTrace.targetProduct,nextBestAction:reservation.nba}});}catch(error){automation={delivered:false,error:error instanceof Error?error.message:String(error)};}
+        return{sessionId:input.sessionId,answer:reservation.answer,state:{...nextState,contextVersion:(previous.contextVersion??0)+1},debug:{intent:reservationIntent,route:reservation.route,sqlTools:[],queryTarget:decisionTrace.targetProduct??null,explicitSwitch:false,budget:previous.budget??null,priceObjection:false,ragSources:[],nextBestAction:reservation.nba,handoff:false,handoffReason:null,decisionTrace,telemetry:{delivered:true},automation,durationMs:Math.max(0,Math.round(performance.now()-started))}};
       }
 
       const facts=extractCommercialFacts(input.message,previous);
