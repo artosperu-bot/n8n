@@ -8,7 +8,19 @@ function isSensitiveKey(key: string): boolean {
     || normalized.endsWith('token')
     || normalized.endsWith('password')
     || normalized.endsWith('servicerolekey')
-    || normalized.endsWith('secret');
+    || normalized.endsWith('secret')
+    || normalized.endsWith('email')
+    || normalized.endsWith('phone')
+    || normalized.endsWith('document')
+    || normalized.endsWith('address')
+    || normalized.endsWith('customername');
+}
+
+function sanitizeText(value:string):string {
+  return value
+    .replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,'[REDACTED_EMAIL]')
+    .replace(/(?<![-\d])\d{8}(?![-\d])/g,'[REDACTED_ID]')
+    .replace(/(?<![-\d])9\d{8}(?![-\d])/g,'[REDACTED_PHONE]');
 }
 
 export function sanitizeSecrets<T>(value: T): T {
@@ -20,7 +32,7 @@ export function sanitizeSecrets<T>(value: T): T {
     }
     return out as T;
   }
-  return value;
+  return typeof value==='string'?sanitizeText(value) as T:value;
 }
 
 export function renderMarkdown(report: QaReport): string {

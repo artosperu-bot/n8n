@@ -3,98 +3,76 @@
 Updated: 2026-08-21
 Branch: `feat/stech-backend`
 
-## Objective
+## Operational objective
 
-Leave the STECH conversational sales backend correct, useful, observable, regression-protected, and ready for local conversational certification without touching production.
+The backend is prepared for isolated local CORE conversational QA. Production, production workflows, secrets, and real reservation execution remain untouched.
 
-## Current architecture
+## Runtime flow
 
-`HTTP → HybridConversationEngine → deterministic intent/reference/state authorities → SQL/RAG evidence → NBA → guarded writer → atomic conversation/state persistence → optional n8n events`
+`HTTP → HybridConversationEngine → deterministic intent/reference/state authorities → SQL/RAG evidence → NBA → guarded writer → atomic persistence → optional n8n event`
 
-- Node.js backend owns current conversational decisions and compact state.
-- SQL Server/ERP supplies catalog identity, price, stock, images, and authorized operational reads.
-- Supabase persists sessions, turns, compact context, RAG, telemetry, and concurrency state.
-- LLM interprets and writes; it is never factual authority.
+- SQL/ERP owns product identity, price, stock, images, and authorized operational reads.
+- Product RAG owns documented specifications and product capabilities.
+- Institutional RAG owns warranty, delivery, payment, store, returns, post-sale, and policies.
+- Conversation state owns product focus, references, comparison, budget, interest, purchase, and reservation progression.
+- The LLM assists semantic interpretation and wording; it is not factual authority.
 
-## Data authorities
+## Current persistence contract
 
-- SQL/ERP: commercial product identity, price, stock.
-- Product RAG: specifications and documented product capabilities.
-- Institutional RAG: warranty, delivery, payment, store, returns, post-sale, policies.
-- Conversation state: active/selected/recommended product, intent context, references, comparison and purchase progression.
-- LLM: classification assistance and natural commercial language only.
+- `ia_conversaciones` is turn history and audit.
+- `ia_contexto` is current operational state.
+- `ia_sesiones` is session lifecycle and isolation.
+- Canonical internal fields are the English `ConversationState` fields such as `activeProduct`, `queryTarget`, `lastIntent`, and `contextVersion`.
+- Spanish nested objects such as `producto_activo`, `producto_objetivo_turno`, `cliente`, `venta`, and `conversacion` are compatibility mirrors.
+- Read precedence is canonical field first, legacy mirror only when the canonical value is absent.
+- Legacy mirrors are removed from the internal state after hydration and regenerated on write.
+- The `ia_contexto.context_version` column is authoritative over a JSON copy.
+- `spin_aporte` persists only canonical values: `SITUACION`, `PROBLEMA`, `IMPLICACION`, or `NECESIDAD_SOLUCION`.
+- Atomic turn persistence remains the normal Supabase path.
 
-## Invariants
+## Closed behavioral contracts
 
-- Deterministic authority beats contradictory LLM output.
-- Price/stock cannot originate from memory, RAG, LLM, history, or hardcoded values.
-- Product and institutional RAG never cross domains.
-- Product focus changes only through an authorized recommendation focus or explicit customer selection/switch.
-- A reservation is never confirmed before the authorized idempotent operation succeeds.
-- `STECH_TRACE_FILE` is UTF-8 JSONL, append-only, fail-soft, one row maximum per event, and contains no messages, PII, credentials, or secrets.
-- Production, production workflows, secrets, and real data are immutable during this work.
+- Trace: raw STECH event is sanitized once before console and JSONL; one event writes at most one JSONL row; non-STECH console calls are unchanged.
+- Reservation ownership: a pending stage owns only compatible field input or an explicit reservation operation. Other valid intents return to the normal pipeline and preserve the pending stage unless the user explicitly abandons it.
+- Budget: an explicit parsed budget remains deterministic authority over incompatible planner classifications.
+- Recommendation: no differentiating evidence means no winner. Neutral alternatives and one useful criterion are allowed; catalog order is not authority and price is not a tie-breaker unless the customer expressed price/budget preference.
+- Conditional interest: “si está disponible me interesa” records interest but does not confirm purchase or start reservation.
+- Reference stress: a current second-product mention becomes the turn target and comparison candidate without silently switching the active product; later “los dos” resolves the stored pair.
+- Unknown product: an unresolved model remains a query attempt, never a valid selection; later explicit known-product requests recover normally.
+- Personal purchase: one unit begins local reservation data collection; two or more units use assisted handoff.
 
-## Closed/frozen dimensions
+## Integration behavior
 
-- P0 concurrency and atomic persistence fencing.
-- SQL authority and price/stock normalization.
-- Product/institutional RAG separation and exact institutional subcategory fallback.
-- Reference resolution, comparison pair, explicit switch/no-switch, and recommendation focus alignment covered by current regressions.
-- Personal one-unit purchase enters data collection; two or more units use assisted handoff.
-- Trace privacy/uniqueness root closed in code by `207c014`; targeted tests 6/6 PASS.
-- Reservation turn ownership closed in code: only compatible field data or explicit reservation operations own the turn; interruptions preserve pending state and abandonment clears local capture without claiming external cancellation.
-- Deterministic budget authority closed in code: explicit parsed budget remains primary over incompatible semantic planner intents while compatible capability criteria remain available.
-- Recommendation evidence sufficiency closed in code: zero comparable evidence and unresolved top ties expose an explicit no-winner reason, preserve product focus, and offer neutral alternatives or request a useful criterion; price differentiates only when expressed by the customer.
-- Conditional interest closed in code: availability interest is persisted separately from purchase intent, never starts reservation, and permits a bounded commercial soft-close.
+- Token telemetry writes are idempotent against `(message_id, nodo)` duplicates.
+- Telemetry failure is fail-soft and observable.
+- n8n delivery is secondary and fail-soft by default. HTTP 500 is an integration `YELLOW`, not a conversational `RED`.
+- No n8n workflow was modified or published.
+- Normal replies target roughly 150–450 characters; comparisons may use roughly 350–750 when evidence needs it.
+- GPT-5 writer requests low verbosity without hard truncation.
+- Planner context contains structured current state, the current message, and at most two recent complete turns. Legacy last-message mirrors are not duplicated into LLM context.
 
-Do not reopen a closed dimension without fresh contradictory evidence.
+## Local QA artifacts
 
-## Open issues, ordered
+Each artifact-enabled run clears and recreates `backend/qa-results/latest/`:
 
-1. External gate: exact signature and result contract for `dbo.sp_IA_RegistrarReserva24h_Idempotente` are not confirmed; execution remains blocked.
-2. Live conversational certification remains pending after code fixes.
+- `summary.json`
+- `failures.json`
+- `trace.jsonl`
+- `conversation-report.txt`
 
-## Latest verified evidence
+Historical run JSON and Markdown remain under `backend/qa-results/`. Artifacts are Git-ignored and redact secrets plus common personal identifiers. For server traces, set `STECH_TRACE_FILE` to the absolute `backend/qa-results/latest/trace.jsonl` path before starting the backend.
 
-- Baseline HEAD before remediation: `0018bc6`.
-- Baseline technical suite: 236/236 PASS.
-- Baseline build: PASS.
-- Supabase project `iipamvqbipbolchlozoj` inspected read-only; no schema change is required for current roots.
-- Trace RED reproduced unsafe console output, credential leakage, and duplicate append.
-- Trace GREEN: `trace-writer` plus adjacent metadata tests 6/6 PASS.
-- Reservation RED reproduced warranty/human/switch/abandonment capture before intent.
-- Reservation GREEN: ownership, switch, abandonment, document, name and address plus adjacent suites 22/22 PASS.
-- Budget RED reproduced active-product `CAPABILITY` override; GREEN plus adjacent authority suites 33/33 PASS.
-- Recommendation RED reproduced catalog-order winner selection with zero evidence; GREEN plus adjacent recommendation/reference/state suites 42/42 PASS.
-- Conditional-interest RED reproduced the missing signal; GREEN plus adjacent extraction/NBA/engine suites 43/43 PASS.
-- Final technical suite after all roots: 246/246 PASS.
-- Final build check: PASS.
-- `npm start` smoke with fake/memory adapters: health PASS; HTTP conditional-interest turn PASS; trace JSONL 3/3 valid rows, zero duplicate rows, no raw message.
-- Production/Supabase mutations: none.
-- Preexisting untracked `backend/package-lock.json`: preserved and excluded.
+## Safety gates
 
-## QA rules
+- `dbo.sp_IA_RegistrarReserva24h_Idempotente` remains blocked.
+- Do not infer its signature, execute a real reservation, or simulate success.
+- SQL authority, price/stock normalization, RAG separation, reference contracts, switch/no-switch, concurrency, and production are unchanged.
+- Supabase inspection for this recovery was read-only; no schema change was required.
 
-- Each production change follows RED → expected failure → minimal general fix → GREEN → adjacent regression → diff review.
-- Tests protect authority, state, factuality, progression, safety, fallback, observability, or integration contracts.
-- Technical QA runs locally in the repository.
-- Conversational/Golden100 QA runs locally, never through GitHub Actions.
-- Live QA uses isolated session/message IDs and safe JSONL tracing.
-- PASS requires persisted final response/state, not internal flags alone.
+## Validation policy
 
-## Definition of Done
-
-- Full technical suite and build pass after all root fixes.
-- Authorities and closed reference/state contracts remain preserved.
-- Reservation interruptions and cancellation are safe.
-- Budget cannot be degraded by semantic planner output.
-- No arbitrary recommendation winner without differentiating evidence.
-- Conditional interest is useful without false purchase/reservation.
-- Trace privacy and uniqueness remain green.
-- Local conversational QA runner and command are ready.
-- Real reservation execution stays explicitly blocked until its authoritative SQL contract is available.
-- Production remains untouched and diff is reviewed.
-
-## NEXT ACTION
-
-Run local isolated Golden100 conversational certification; do not use production persistence or execute the blocked reservation procedure.
+- Production changes follow RED → expected failure → minimal general fix → GREEN → adjacent regression → diff review.
+- Technical tests and build run locally.
+- Conversational QA runs locally through the HTTP boundary with isolated session/message IDs.
+- CORE is the next suite. Golden100 is intentionally deferred.
+- A failed optional integration is reported separately from conversational correctness.

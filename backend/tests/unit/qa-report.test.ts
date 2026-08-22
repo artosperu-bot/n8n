@@ -5,6 +5,8 @@ import { sanitizeSecrets, renderMarkdown } from '../../qa/report/render.ts';
 test('sanitizer redacts sensitive keys recursively without hiding token metrics', () => {
   const value: any = sanitizeSecrets({
     safe: 'ok',
+    message: 'DNI 12345678, correo persona@example.com, celular 987654321',
+    reservationAddress: 'Av. privada 123',
     authorization: 'Bearer abc',
     nested: {
       password: 'p',
@@ -16,6 +18,8 @@ test('sanitizer redacts sensitive keys recursively without hiding token metrics'
     },
   });
   assert.equal(value.safe, 'ok');
+  assert.equal(value.message, 'DNI [REDACTED_ID], correo [REDACTED_EMAIL], celular [REDACTED_PHONE]');
+  assert.equal(value.reservationAddress, '[REDACTED]');
   assert.equal(value.authorization, '[REDACTED]');
   assert.equal(value.nested.password, '[REDACTED]');
   assert.equal(value.nested.token, '[REDACTED]');

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { coreScenarios } from '../qa/scenarios/core.ts';
@@ -33,6 +33,18 @@ export function parseQaSuite(argv = process.argv.slice(2)): QaSuite {
 function statusFromFindings(findings: QaFinding[]): QaLevel { if(findings.some(f=>f.level==='RED'))return'RED';if(findings.some(f=>f.level==='YELLOW'))return'YELLOW';return'GREEN'; }
 function maxStatus(statuses: QaLevel[]): QaLevel { if(statuses.includes('RED'))return'RED';if(statuses.includes('YELLOW'))return'YELLOW';return'GREEN'; }
 function average(values:number[]):number{return values.length?Math.round(values.reduce((a,b)=>a+b,0)/values.length):0;}
+function conversationReport(report:QaReport):string {
+  const lines=[`STECH LIVE QA ${report.runId}`,`GREEN=${report.summary.green} YELLOW=${report.summary.yellow} RED=${report.summary.red}`];
+  for(const scenario of report.scenarios){
+    lines.push('',`${scenario.status} ${scenario.id} — ${scenario.title}`);
+    for(const turn of scenario.turns){
+      lines.push(`T${String(turn.turn).padStart(2,'0')} CLIENTE: ${turn.message}`);
+      lines.push(`T${String(turn.turn).padStart(2,'0')} STECH: ${String(turn.observation.response?.answer??turn.observation.response?.error??'SIN_RESPUESTA')}`);
+      for(const finding of turn.findings)lines.push(`  ${finding.level} ${finding.code}: ${finding.message}`);
+    }
+  }
+  return `${lines.join('\n')}\n`;
+}
 async function responseJson(response:Response):Promise<any>{const text=await response.text();if(!text)return{};try{return JSON.parse(text);}catch{return{error:text};}}
 function llmSteps(turn:QaScenarioResult['turns'][number]):any[]{const debug=turn.observation.response?.debug??{};return[debug.planner,debug.llm].filter(Boolean);}
 function inferRootCause(f:QaFinding):QaRootCause|null{
@@ -74,6 +86,8 @@ export async function runLiveQa(options: RunOptions = {}): Promise<{ report: QaR
   const scenarios=options.scenarios??selectScenarios(suite);
   const fetcher=options.fetcher??fetch;const now=options.now??new Date();const runId=createRunId(now,options.entropy);const logger=options.logger??console;
   const strict=options.strict??['1','true','yes','on'].includes(String(process.env.QA_STRICT??'').toLowerCase());
+  const writeArtifacts=options.writeArtifacts!==false;const outputDir=resolve(options.outputDir??'qa-results');const latestDir=resolve(outputDir,'latest');
+  if(writeArtifacts){await rm(latestDir,{recursive:true,force:true});await mkdir(latestDir,{recursive:true});await writeFile(resolve(latestDir,'trace.jsonl'),'','utf8');}
   let healthResponse:Response;try{healthResponse=await fetcher(`${baseUrl}/health`);}catch(error){throw new Error(`QA health check failed: ${error instanceof Error?error.message:String(error)}`);}
   const health=await responseJson(healthResponse);if(!healthResponse.ok||health.status!=='ok')throw new Error(`QA health check failed HTTP ${healthResponse.status}: ${health.error??'backend no saludable'}`);
 
@@ -116,7 +130,16 @@ export async function runLiveQa(options: RunOptions = {}): Promise<{ report: QaR
   const usage=allLlmSteps.reduce((acc,llm)=>{acc.inputTokens+=Number(llm.inputTokens??0);acc.outputTokens+=Number(llm.outputTokens??0);acc.totalTokens+=Number(llm.totalTokens??0);acc.cachedInputTokens+=Number(llm.cachedInputTokens??0);return acc;},{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0});
   const scored=buildDimensions(scenarioResults);
   const report:QaReport={runId,startedAt:now.toISOString(),finishedAt:new Date().toISOString(),modes:health.modes??{},summary:{scenarios:scenarioResults.length,turns:allTurns.length,green:scenarioStatuses.filter(s=>s==='GREEN').length,yellow:scenarioStatuses.filter(s=>s==='YELLOW').length,red:scenarioStatuses.filter(s=>s==='RED').length},usage,latency:{averageRoundTripMs:average(allTurns.map(t=>t.observation.roundTripMs)),averageLlmMs:average(allLlmSteps.map(x=>Number(x.durationMs)).filter(Number.isFinite))},dimensions:scored.dimensions,rootCauses:scored.rootCauses,scenarios:scenarioResults};
-  const safeReport=sanitizeSecrets(report);if(options.writeArtifacts!==false){const outputDir=resolve(options.outputDir??'qa-results');await mkdir(outputDir,{recursive:true});await writeFile(resolve(outputDir,`${runId}.json`),`${JSON.stringify(safeReport,null,2)}\n`,'utf8');await writeFile(resolve(outputDir,`${runId}.md`),renderMarkdown(safeReport),'utf8');}
+  const safeReport=sanitizeSecrets(report);if(writeArtifacts){
+    await mkdir(outputDir,{recursive:true});
+    const failures=safeReport.scenarios.flatMap(scenario=>scenario.turns.filter(turn=>turn.findings.length).map(turn=>({scenarioId:scenario.id,sessionId:scenario.sessionId,turn:turn.turn,status:turn.status,findings:turn.findings})));
+    const summary={runId:safeReport.runId,startedAt:safeReport.startedAt,finishedAt:safeReport.finishedAt,modes:safeReport.modes,summary:safeReport.summary,usage:safeReport.usage,latency:safeReport.latency,dimensions:safeReport.dimensions,rootCauses:safeReport.rootCauses};
+    await writeFile(resolve(outputDir,`${runId}.json`),`${JSON.stringify(safeReport,null,2)}\n`,'utf8');
+    await writeFile(resolve(outputDir,`${runId}.md`),renderMarkdown(safeReport),'utf8');
+    await writeFile(resolve(latestDir,'summary.json'),`${JSON.stringify(summary,null,2)}\n`,'utf8');
+    await writeFile(resolve(latestDir,'failures.json'),`${JSON.stringify(failures,null,2)}\n`,'utf8');
+    await writeFile(resolve(latestDir,'conversation-report.txt'),conversationReport(safeReport),'utf8');
+  }
   logger.log(`STECH Live QA ${runId}`);logger.table(scenarioResults.map(s=>({status:s.status,family:s.family,case:s.id,session:s.sessionId})));logger.log(`GREEN=${report.summary.green} YELLOW=${report.summary.yellow} RED=${report.summary.red} | turns=${report.summary.turns} tokens=${report.usage.totalTokens}`);
   if(report.dimensions){for(const [key,value] of Object.entries(report.dimensions))logger.log(`${key}=${value.pass}/${value.total}`);}
   return{report:safeReport,exitCode:strict&&report.summary.red>0?1:0};

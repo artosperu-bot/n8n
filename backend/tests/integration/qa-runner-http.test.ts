@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { runLiveQa } from '../../scripts/qa-live.ts';
 
 test('live runner uses HTTP boundary, deterministic ids and aggregates planner plus writer usage', async () => {
@@ -74,4 +77,26 @@ test('Golden runner records a failed turn but still executes the rest of the jou
   assert.equal(chats.length,3,'un RED no debe ocultar los turnos posteriores del journey');
   assert.equal(report.scenarios[0]?.turns.length,3);
   assert.equal(report.summary.red,1);
+});
+
+test('artifact run recreates latest with summary, failures, trace and safe conversation report',async()=>{
+  const outputDir=await mkdtemp(join(tmpdir(),'stech-qa-'));
+  const latest=join(outputDir,'latest');
+  await runLiveQa({
+    baseUrl:'http://test',outputDir,logger:{log(){},table(){},error(){}} as any,
+    fetcher:async(url,init:any={})=>String(url).endsWith('/health')
+      ?Response.json({status:'ok',modes:{}})
+      :Response.json({answer:'No pude responder.',state:{lastNba:'ANSWER_ONLY'},debug:{intent:'OTHER'}}),
+    scenarios:[{id:'ARTIFACT',family:'RELIABILITY',title:'artifacts',turns:[{message:'consulta segura'}]}],
+  });
+  for(const file of ['summary.json','failures.json','trace.jsonl','conversation-report.txt']){
+    assert.equal(typeof await readFile(join(latest,file),'utf8'),'string',file);
+  }
+  await writeFile(join(latest,'stale.txt'),'stale','utf8');
+  await runLiveQa({
+    baseUrl:'http://test',outputDir,logger:{log(){},table(){},error(){}} as any,
+    fetcher:async(url)=>String(url).endsWith('/health')?Response.json({status:'ok',modes:{}}):Response.json({answer:'Listo.',state:{lastNba:'ANSWER_ONLY'},debug:{intent:'OTHER'}}),
+    scenarios:[{id:'ARTIFACT-2',family:'RELIABILITY',title:'clean latest',turns:[{message:'otra consulta'}]}],
+  });
+  await assert.rejects(()=>readFile(join(latest,'stale.txt'),'utf8'));
 });
