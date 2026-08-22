@@ -1,0 +1,22 @@
+import type { ErpRepository } from '../../ports/ErpRepository.ts';
+import type { ProductImage, ProductQuote } from '../../domain/types.ts';
+
+const TEST_QUOTES: ProductQuote[] = [
+  { product: 'Armor X12 Pro', shortName:'Armor X12 Pro', productCode: 'P000047', productRagId:'P-ARMOR-X12Pro', price: 699, stock: 5, currency: 'PEN', source: 'FAKE_TEST_DATA' },
+  { product: 'Armor X13', shortName:'Armor X13', productCode: 'P000048', productRagId:'P-ARMOR-X13', price: 899, stock: 4, currency: 'PEN', source: 'FAKE_TEST_DATA' },
+  { product: 'Armor 22', shortName:'Armor 22', productCode: 'P000049', productRagId:'P-ARMOR-22-256G', price: 1199, stock: 3, currency: 'PEN', source: 'FAKE_TEST_DATA' },
+  { product: 'Armor 25T Pro', shortName:'Armor 25T Pro', productCode: 'P000050', productRagId:'P-ARMOR-25TPro-256GB', price: 1999, stock: 2, currency: 'PEN', source: 'FAKE_TEST_DATA' }
+];
+export class FakeErpRepository implements ErpRepository {
+  async searchProducts(text:string,maxResults=20):Promise<ProductQuote[]>{
+    const t=text.toLowerCase();
+    return structuredClone(TEST_QUOTES.filter(q=>t.includes(q.product.toLowerCase())||t.includes(String(q.productCode??'').toLowerCase())).slice(0,maxResults));
+  }
+  async getProductQuote(product: string): Promise<ProductQuote | null> { return structuredClone(TEST_QUOTES.find(q => q.product.toLowerCase() === product.toLowerCase() || q.shortName?.toLowerCase() === product.toLowerCase()) ?? null); }
+  async listProductsWithinBudget(maxBudget: number): Promise<ProductQuote[]> { return structuredClone(TEST_QUOTES.filter(q => q.price != null && q.price <= maxBudget).sort((a,b) => (a.price ?? 0) - (b.price ?? 0))); }
+  async getProductImages(product: string, maxImages = 10): Promise<ProductImage[]> {
+    const known = TEST_QUOTES.find(q => q.product.toLowerCase() === product.toLowerCase());
+    if (!known) return [];
+    return [{ url:`https://example.test/${encodeURIComponent(known.productCode ?? known.product)}-1.jpg`, type:'principal', source:'FAKE_TEST_DATA' }].slice(0, maxImages);
+  }
+}

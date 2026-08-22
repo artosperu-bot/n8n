@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import { resolveIntent } from '../../src/conversation/intent/IntentResolver.ts';
+test('explicit price intent outranks stale comparison',()=>{assert.equal(resolveIntent('¿Cuál es el precio?',{staleIntent:'COMPARE'}),'PRICE');});test('stock is detected explicitly',()=>{assert.equal(resolveIntent('¿Tiene stock ese?',{}),'STOCK');});test('purchase signal is detected',()=>{assert.equal(resolveIntent('Me quedo con ese, quiero comprarlo.',{}),'PURCHASE');});

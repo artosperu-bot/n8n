@@ -1,0 +1,1 @@
+import type { RagRepository } from '../../ports/RagRepository.ts';import type { RagEvidence } from '../../domain/types.ts';export class DisabledRagRepository implements RagRepository{async search():Promise<RagEvidence[]>{return[];}}
