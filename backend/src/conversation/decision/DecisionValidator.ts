@@ -12,6 +12,7 @@ function editDistance(a:string,b:string):number{const rows=a.length+1,cols=b.len
 function fuzzyCanonical(raw:string,universe:string[]):string|null{const parts=fold(raw).match(/[a-z0-9]+/g)??[],model=parts.find(x=>/\d/.test(x));if(!model)return null;const scored=universe.map(product=>{const p=fold(product).match(/[a-z0-9]+/g)??[],modelMatch=p.includes(model)?3:0,family=p.filter(x=>!/[0-9]/.test(x)&&x.length>=4),familyMatch=family.some(word=>parts.some(q=>q===word||(q.length>=4&&editDistance(q,word)<=1)))?1:0;return{product,score:modelMatch+familyMatch};}).filter(x=>x.score>=3).sort((a,b)=>b.score-a.score);if(!scored.length||scored[1]&&scored[1].score===scored[0].score)return null;return scored[0].product;}
 function knownCanonical(value:string|null|undefined,universe:string[]):string|null{const raw=String(value??'').trim();if(!raw)return null;const f=fold(raw);return universe.find(p=>fold(p)===f||fold(p).includes(f)||f.includes(fold(p)))??fuzzyCanonical(raw,universe);}
 function looksLikeProductModel(value:string|null|undefined):boolean{const raw=String(value??'').trim();if(!raw||raw.length>48)return false;const t=fold(raw);return/[a-z]/.test(t)&&/\d/.test(t)&&t.split(/\s+/).length<=5;}
+function canonicalOrModel(value:string|null|undefined,universe:string[]):string|null{const canonical=knownCanonical(value,universe);if(canonical)return canonical;const raw=String(value??'').trim();return looksLikeProductModel(raw)?raw:null;}
 function canonicalIntent(value:string|null|undefined):string|null{const v=String(value??'').trim().toUpperCase();return INTENTS.has(v)?v:null;}
 function canonicalNba(value:string|null|undefined):string|null{const v=String(value??'').trim().toUpperCase(),normalized=NBA_ALIASES[v]??v;return NBAS.has(normalized)?normalized:null;}
 function canonicalStage(value:string|null|undefined):string|null{const v=String(value??'').trim().toUpperCase();return STAGES.has(v)?v:null;}
@@ -21,64 +22,88 @@ function forcedProductRag(intent:string):boolean{return['PRODUCT_INFO','CAPABILI
 function forcedInstitutionalRag(intent:string):boolean{return['POLICY','WARRANTY'].includes(intent);}
 function sameStringListContains(values:string[],target:string):boolean{return values.some(value=>fold(value)===fold(target));}
 function sameProduct(a:string|null|undefined,b:string|null|undefined):boolean{return Boolean(a&&b&&fold(a)===fold(b));}
+function strongStage(intent:string):string|null{if(intent==='PURCHASE')return'CIERRE';if(['HUMAN','QUOTE'].includes(intent))return'CIERRE_ASISTIDO';return null;}
 
 export function validateTurnDecision(decision:TurnDecision,state:ConversationState,catalogCandidates:string[]=[],fallbackDecision?:TurnDecision):TurnDecision{
-  // 1/7 — SQL/catalog candidates are the canonical identity universe for this turn.
+  // 1/7 — SQL/catalog identities plus canonical memory form the bounded identity universe.
   const universe=unique([...catalogCandidates,state.activeProduct,state.queryTarget,state.salientProduct,state.selectedProduct,state.recommendedProduct,...(state.comparisonProducts??[])]);
-  const fallbackIntent=canonicalIntent(fallbackDecision?.primaryIntent),fallbackReference=canonicalReference(fallbackDecision?.referenceType,null),decisionAttributes=unique((decision.attributes??[]).map(x=>String(x).toUpperCase())),fallbackAttributes=unique((fallbackDecision?.attributes??[]).map(x=>String(x).toUpperCase()));
-  const currentMentions=unique([...(decision.mentionedProducts??[]).map(p=>knownCanonical(p,universe)),...(fallbackDecision?.mentionedProducts??[]).map(p=>knownCanonical(p,universe))]).filter(p=>catalogCandidates.some(c=>fold(c)===fold(p))||universe.some(c=>fold(c)===fold(p)));
+  const fallbackIntent=canonicalIntent(fallbackDecision?.primaryIntent),fallbackReference=canonicalReference(fallbackDecision?.referenceType,null),plannerReference=canonicalReference(decision.referenceType,fallbackDecision?.referenceType),decisionAttributes=unique((decision.attributes??[]).map(x=>String(x).toUpperCase())),fallbackAttributes=unique((fallbackDecision?.attributes??[]).map(x=>String(x).toUpperCase()));
+  const currentMentions=unique([...(decision.mentionedProducts??[]).map(p=>knownCanonical(p,universe)),...(fallbackDecision?.mentionedProducts??[]).map(p=>knownCanonical(p,universe))]).filter(Boolean);
+  const rawComparisonProducts=unique([...(decision.comparisonProducts??[]),...(fallbackDecision?.comparisonProducts??[]),...(state.comparisonProducts??[])]).map(p=>canonicalOrModel(p,universe)).filter((p):p is string=>Boolean(p));
   const plannerIntent=canonicalIntent(decision.primaryIntent);
   let primaryIntent=plannerIntent??fallbackIntent??'OTHER';
-  if(primaryIntent==='COMPARE'&&fallbackIntent!=='COMPARE'&&currentMentions.length<2&&(state.comparisonProducts?.length??0)<2)primaryIntent=fallbackIntent??'OTHER';
-  const specificAttributeAuthority=fallbackIntent==='CAPABILITY'&&fallbackAttributes.length>0;if(specificAttributeAuthority&&['PRODUCT_INFO','OTHER','EVALUATE_USE'].includes(primaryIntent))primaryIntent='CAPABILITY';
 
-  let referenceType=canonicalReference(decision.referenceType,fallbackDecision?.referenceType);
+  // Strong customer actions are code authority. A semantic planner may enrich them,
+  // but it cannot demote an explicit purchase, human handoff or quote request.
+  if(fallbackIntent&&['PURCHASE','HUMAN','QUOTE'].includes(fallbackIntent))primaryIntent=fallbackIntent;
+
+  // COMPARE requires a deterministic compare cue or an already-established pair.
+  // A bare mention of another product must never become a comparison by LLM guess.
+  const comparisonAuthority=fallbackIntent==='COMPARE'||(state.comparisonProducts?.length??0)>=2;
+  if(primaryIntent==='COMPARE'&&!comparisonAuthority)primaryIntent=fallbackIntent??'OTHER';
+  if(comparisonAuthority&&rawComparisonProducts.length>=2&&fallbackIntent==='COMPARE')primaryIntent='COMPARE';
+
+  const specificAttributeAuthority=fallbackIntent==='CAPABILITY'&&fallbackAttributes.length>0;
+  if(specificAttributeAuthority&&['PRODUCT_INFO','OTHER','EVALUATE_USE'].includes(primaryIntent))primaryIntent='CAPABILITY';
+
+  let referenceType=plannerReference;
   const recentSelection=knownCanonical(state.selectedProduct??state.salientProduct,universe),knownDecisionTarget=knownCanonical(decision.targetProduct,universe),knownFallbackTarget=knownCanonical(fallbackDecision?.targetProduct,universe),activeFold=fold(state.activeProduct??''),newCatalogCandidates=catalogCandidates.filter(p=>!activeFold||fold(p)!==activeFold),uniqueNewCatalogTarget=newCatalogCandidates.length===1?newCatalogCandidates[0]:null;
   let targetProduct=knownDecisionTarget??knownFallbackTarget,authorityReason=knownDecisionTarget?'CANONICAL_PLANNER_TARGET':'CONTEXT_FALLBACK';
 
-  // 2/7 — An explicit/current mention beats every older contextual product.
-  if(currentMentions.length===1){targetProduct=currentMentions[0];authorityReason='CURRENT_MENTION';if(!(fallbackDecision?.explicitSwitch===true))referenceType='NAMED_QUERY_TARGET';}
+  // 2/7 — An explicit/current canonical mention beats older contextual product state.
+  if(currentMentions.length===1){targetProduct=currentMentions[0];authorityReason='CURRENT_MENTION';if(!(fallbackDecision?.explicitSwitch===true)&&fallbackReference!=='COMPARISON_ALTERNATIVE')referenceType='NAMED_QUERY_TARGET';}
 
-  // 3/7 — If SQL found exactly one NEW product from the current message while the
-  // planner only repeated the active product, the current-message candidate wins.
-  const plannerOnlyRepeatedActive=Boolean(knownDecisionTarget&&state.activeProduct&&fold(knownDecisionTarget)===activeFold);
-  if(currentMentions.length===0&&uniqueNewCatalogTarget&&fallbackReference==='ACTIVE_PRODUCT_FALLBACK'&&(!knownDecisionTarget||plannerOnlyRepeatedActive)){targetProduct=uniqueNewCatalogTarget;referenceType='NAMED_QUERY_TARGET';authorityReason='UNIQUE_CURRENT_SQL_CANDIDATE';}
+  // 3/7 — Ambiguous factual follow-ups stay on the deterministic active product.
+  // A secondary lookup performed for a planner target is not proof the user named it.
+  const factualFallback=['PRICE','STOCK','CAPABILITY','IMAGE','PRODUCT_INFO'].includes(String(fallbackIntent??''));
+  if(currentMentions.length===0&&fallbackReference==='ACTIVE_PRODUCT_FALLBACK'&&knownFallbackTarget&&factualFallback){targetProduct=knownFallbackTarget;referenceType='ACTIVE_PRODUCT_FALLBACK';authorityReason='ACTIVE_FACTUAL_FALLBACK';}
 
-  // 4/7 — The old active/recommended fallback is allowed only when this turn did
-  // not produce a canonical target. It must never overwrite a valid current target.
-  if(currentMentions.length===0&&!knownDecisionTarget&&!uniqueNewCatalogTarget&&knownFallbackTarget&&['ACTIVE_PRODUCT_FALLBACK','RECOMMENDED_FALLBACK','RECOMMENDED_REFERENT','COMPARISON_ALTERNATIVE','SELECTION_REFERENT'].includes(String(fallbackReference??''))){targetProduct=knownFallbackTarget;referenceType=fallbackReference;authorityReason='CONTEXT_FALLBACK';}
+  // 4/7 — Contextual fallbacks are used only when no current canonical mention won.
+  if(currentMentions.length===0&&!knownDecisionTarget&&knownFallbackTarget&&['ACTIVE_PRODUCT_FALLBACK','RECOMMENDED_FALLBACK','RECOMMENDED_REFERENT','COMPARISON_ALTERNATIVE','SELECTION_REFERENT'].includes(String(fallbackReference??''))){targetProduct=knownFallbackTarget;referenceType=fallbackReference;authorityReason='CONTEXT_FALLBACK';}
 
-  // 5/7 — Purchase can select the single new SQL candidate, but only when it is
-  // unambiguous; multiple new candidates fail closed instead of guessing.
-  const sqlPurchaseTarget=fallbackIntent==='PURCHASE'?(newCatalogCandidates.length===1?newCatalogCandidates[0]:(!state.activeProduct&&catalogCandidates.length===1?catalogCandidates[0]:null)):null;
-  if(sqlPurchaseTarget){targetProduct=sqlPurchaseTarget;referenceType='SELECTION_REFERENT';authorityReason='UNIQUE_SQL_PURCHASE_SELECTION';}
+  // 5/7 — Purchase selection is allowed only from an explicit named canonical target,
+  // an existing selection referent, or exactly one new SQL candidate. It never guesses.
+  const decisionTargetIsCatalog=Boolean(knownDecisionTarget&&catalogCandidates.some(p=>sameProduct(p,knownDecisionTarget)));
+  const namedPurchaseTarget=fallbackIntent==='PURCHASE'&&decisionTargetIsCatalog&&plannerReference==='NAMED_QUERY_TARGET'?knownDecisionTarget:null;
+  const sqlPurchaseTarget=fallbackIntent==='PURCHASE'&&!namedPurchaseTarget
+    ?(newCatalogCandidates.length===1?newCatalogCandidates[0]:(!state.activeProduct&&catalogCandidates.length===1?catalogCandidates[0]:null))
+    :null;
+  if(namedPurchaseTarget){targetProduct=namedPurchaseTarget;referenceType='NAMED_QUERY_TARGET';authorityReason='NAMED_SQL_PURCHASE_SELECTION';}
+  else if(sqlPurchaseTarget){targetProduct=sqlPurchaseTarget;referenceType='SELECTION_REFERENT';authorityReason='UNIQUE_SQL_PURCHASE_SELECTION';}
+
   if(!targetProduct&&catalogCandidates.length===1){targetProduct=catalogCandidates[0];authorityReason='ONLY_CATALOG_CANDIDATE';}
-  if(referenceType==='SELECTION_REFERENT'&&recentSelection&&!sqlPurchaseTarget){targetProduct=recentSelection;authorityReason='RECENT_SELECTION';}
+  if(referenceType==='SELECTION_REFERENT'&&recentSelection&&!sqlPurchaseTarget&&!namedPurchaseTarget){targetProduct=recentSelection;authorityReason='RECENT_SELECTION';}
   if(!state.activeProduct&&fallbackReference==='RECOMMENDED_FALLBACK'&&knownFallbackTarget){targetProduct=knownFallbackTarget;referenceType='RECOMMENDED_FALLBACK';authorityReason='RECOMMENDED_FALLBACK';}
   if(referenceType==='ACTIVE_PRODUCT_FALLBACK'&&!state.activeProduct&&fallbackReference)referenceType=fallbackReference;
   if(!targetProduct){const rawUnknown=String(fallbackDecision?.targetProduct??decision.targetProduct??'').trim();if(looksLikeProductModel(rawUnknown)){targetProduct=rawUnknown;authorityReason='UNRESOLVED_MODEL_TEXT';}}
 
-  // Once the current turn resolves a real second product, a planner COMPARE intent
-  // becomes valid. This prevents an early stale-context check from degrading it.
-  if(plannerIntent==='COMPARE'&&state.activeProduct&&targetProduct&&!sameProduct(state.activeProduct,targetProduct))primaryIntent='COMPARE';
-
-  // 6/7 — A mention/query is not a purchase selection. selectedProduct changes
-  // only from an authorized selection signal or a unique purchase candidate.
-  const deterministicSelectionAuthorized=fallbackDecision?.explicitSwitch===true||['SELECTION_REFERENT','EXPLICIT_PRODUCT_SWITCH'].includes(String(fallbackReference??'')),referentialSelectionAuthorized=!fallbackDecision&&referenceType==='SELECTION_REFERENT'&&Boolean(recentSelection),selectionAuthorized=deterministicSelectionAuthorized||referentialSelectionAuthorized||Boolean(sqlPurchaseTarget);
-  let selectedProduct=selectionAuthorized?(sqlPurchaseTarget?targetProduct:knownCanonical(fallbackDecision?.selectedProduct??decision.selectedProduct??targetProduct,universe)??recentSelection):knownCanonical(state.selectedProduct,universe);
-  if(referenceType==='SELECTION_REFERENT'&&recentSelection&&!sqlPurchaseTarget)selectedProduct=recentSelection;
+  // 6/7 — A query/mention is not a selection. Selection changes only on authorized
+  // purchase/selection signals, while named purchase may retain NAMED_QUERY_TARGET.
+  const deterministicSelectionAuthorized=fallbackDecision?.explicitSwitch===true||['SELECTION_REFERENT','EXPLICIT_PRODUCT_SWITCH'].includes(String(fallbackReference??''));
+  const referentialSelectionAuthorized=!fallbackDecision&&referenceType==='SELECTION_REFERENT'&&Boolean(recentSelection);
+  const selectionAuthorized=deterministicSelectionAuthorized||referentialSelectionAuthorized||Boolean(sqlPurchaseTarget)||Boolean(namedPurchaseTarget);
+  let selectedProduct=selectionAuthorized
+    ?((sqlPurchaseTarget||namedPurchaseTarget)?targetProduct:knownCanonical(fallbackDecision?.selectedProduct??decision.selectedProduct??targetProduct,universe)??recentSelection)
+    :knownCanonical(state.selectedProduct,universe);
+  if(referenceType==='SELECTION_REFERENT'&&recentSelection&&!sqlPurchaseTarget&&!namedPurchaseTarget)selectedProduct=recentSelection;
   const explicitSwitch=Boolean(selectionAuthorized&&selectedProduct&&fold(selectedProduct)!==fold(state.activeProduct??''));
+
   const proposedNba=canonicalNba(decision.nextBestAction),fallbackNba=canonicalNba(fallbackDecision?.nextBestAction),nextBestAction=compatibleNba(primaryIntent,state,proposedNba,fallbackNba);
-  let comparisonProducts=unique([...(decision.comparisonProducts??[]).map(p=>knownCanonical(p,universe)),...(fallbackDecision?.comparisonProducts??[]).map(p=>knownCanonical(p,universe)),...(state.comparisonProducts??[]).map(p=>knownCanonical(p,universe))]);
+  let comparisonProducts=rawComparisonProducts.slice(0,2);
   const active=knownCanonical(state.activeProduct,universe);
 
-  // 7/7 — Mentioning another product beside the active one builds a comparison
-  // pair; it does not silently select/switch products unless selection was explicit.
-  const currentTurnTarget=knownCanonical(targetProduct,universe);
-  if(active&&currentTurnTarget&&!explicitSwitch&&fold(active)!==fold(currentTurnTarget))comparisonProducts=unique([active,currentTurnTarget,...currentMentions,...comparisonProducts]).slice(0,2);else comparisonProducts=comparisonProducts.slice(0,2);
-  const attributes=primaryIntent==='CAPABILITY'&&specificAttributeAuthority?fallbackAttributes:decisionAttributes,targetNeedsResolution=Boolean(targetProduct&&!universe.some(p=>fold(p)===fold(targetProduct!))),normalizedMentions=currentTurnTarget&&!sameStringListContains(currentMentions,currentTurnTarget)&&uniqueNewCatalogTarget&&fold(currentTurnTarget)===fold(uniqueNewCatalogTarget)?unique([...currentMentions,currentTurnTarget]):currentMentions;
+  // 7/7 — A validated second product can extend an existing comparison pair, but
+  // cannot silently switch active product unless selection was explicit.
+  const currentTurnTarget=canonicalOrModel(targetProduct,universe);
+  if(active&&currentTurnTarget&&!explicitSwitch&&!sameProduct(active,currentTurnTarget))comparisonProducts=unique([active,currentTurnTarget,...currentMentions,...comparisonProducts]).slice(0,2);
+  else comparisonProducts=comparisonProducts.slice(0,2);
 
-  if(state.sessionId&&(uniqueNewCatalogTarget||knownDecisionTarget&&state.activeProduct&&!sameProduct(knownDecisionTarget,state.activeProduct)||referenceType!=='ACTIVE_PRODUCT_FALLBACK'))console.log(JSON.stringify({event:'STECH_REFERENCE_TRACE',sessionId:state.sessionId,activeBefore:state.activeProduct??null,selectedBefore:state.selectedProduct??null,recommendedBefore:state.recommendedProduct??null,plannerTarget:decision.targetProduct??null,deterministicTarget:fallbackDecision?.targetProduct??null,plannerReference:decision.referenceType??null,deterministicReference:fallbackDecision?.referenceType??null,catalogCandidates,newCatalogCandidates,currentMentions:normalizedMentions,finalTarget:targetProduct??null,finalReference:referenceType??null,selectedProduct:selectedProduct??null,explicitSwitch,authorityReason,finalIntent:primaryIntent}));
+  const attributes=primaryIntent==='CAPABILITY'&&specificAttributeAuthority?fallbackAttributes:decisionAttributes;
+  const targetNeedsResolution=Boolean(targetProduct&&!universe.some(p=>sameProduct(p,targetProduct)));
+  const normalizedMentions=currentTurnTarget&&!sameStringListContains(currentMentions,currentTurnTarget)&&uniqueNewCatalogTarget&&sameProduct(currentTurnTarget,uniqueNewCatalogTarget)?unique([...currentMentions,currentTurnTarget]):currentMentions;
+  const commercialStage=strongStage(primaryIntent)??canonicalStage(decision.commercialStage)??canonicalStage(fallbackDecision?.commercialStage);
 
-  return{...decision,primaryIntent,secondaryIntents:unique(decision.secondaryIntents??[]).map(x=>canonicalIntent(x)).filter((x):x is string=>Boolean(x)),targetProduct,mentionedProducts:normalizedMentions,referenceType,explicitSwitch,selectedProduct,comparisonProducts,attributes,priorities:unique(decision.priorities??[]),commercialStage:canonicalStage(decision.commercialStage)??canonicalStage(fallbackDecision?.commercialStage),spinContribution:typeof decision.spinContribution==='string'&&decision.spinContribution.trim()&&!decision.spinContribution.includes('[object Object]')?decision.spinContribution.trim().slice(0,240):null,nextBestAction,needsSql:forcedSql(primaryIntent)||targetNeedsResolution,needsProductRag:forcedProductRag(primaryIntent),needsInstitutionalRag:forcedInstitutionalRag(primaryIntent),confidence:Number.isFinite(decision.confidence)?Math.max(0,Math.min(1,decision.confidence)):0.5};
+  if(state.sessionId&&(uniqueNewCatalogTarget||knownDecisionTarget&&state.activeProduct&&!sameProduct(knownDecisionTarget,state.activeProduct)||referenceType!=='ACTIVE_PRODUCT_FALLBACK'))console.log(JSON.stringify({event:'STECH_REFERENCE_TRACE',sessionId:state.sessionId,activeBefore:state.activeProduct??null,selectedBefore:state.selectedProduct??null,recommendedBefore:state.recommendedProduct??null,plannerTarget:decision.targetProduct??null,deterministicTarget:fallbackDecision?.targetProduct??null,plannerReference:decision.referenceType??null,deterministicReference:fallbackDecision?.referenceType??null,catalogCandidates,newCatalogCandidates,currentMentions:normalizedMentions,comparisonProducts,finalTarget:targetProduct??null,finalReference:referenceType??null,selectedProduct:selectedProduct??null,explicitSwitch,authorityReason,finalIntent:primaryIntent}));
+
+  return{...decision,primaryIntent,secondaryIntents:unique(decision.secondaryIntents??[]).map(x=>canonicalIntent(x)).filter((x):x is string=>Boolean(x)),targetProduct,mentionedProducts:normalizedMentions,referenceType,explicitSwitch,selectedProduct,comparisonProducts,attributes,priorities:unique(decision.priorities??[]),commercialStage,spinContribution:typeof decision.spinContribution==='string'&&decision.spinContribution.trim()&&!decision.spinContribution.includes('[object Object]')?decision.spinContribution.trim().slice(0,240):null,nextBestAction,needsSql:forcedSql(primaryIntent)||targetNeedsResolution,needsProductRag:forcedProductRag(primaryIntent),needsInstitutionalRag:forcedInstitutionalRag(primaryIntent),confidence:Number.isFinite(decision.confidence)?Math.max(0,Math.min(1,decision.confidence)):0.5};
 }
