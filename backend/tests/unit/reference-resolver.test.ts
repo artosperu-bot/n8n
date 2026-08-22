@@ -10,6 +10,30 @@ test('preference for one attribute does not switch product',()=>{const r=resolve
 test('selection referent me quedo con ese resolves recommended product and makes it active',()=>{const r=resolveReference('Me quedo con ese.',state);assert.equal(r.queryTarget,'Armor 25T Pro');assert.equal(r.explicitSwitch,true);assert.equal(r.nextActiveProduct,'Armor 25T Pro');});
 test('el otro resolves the alternative in the preserved comparison pair without switching',()=>{const r=resolveReference('¿Y el otro?',state);assert.equal(r.queryTarget,'Armor X13');assert.equal(r.explicitSwitch,false);assert.equal(r.nextActiveProduct,'Armor 22');});
 
+test('ese resolves the new recommendation after its change became customer-visible',()=>{
+  const r=resolveReference('ya ese quiero',{
+    activeProduct:'Armor 22',salientProduct:'Armor 22',recommendedProduct:'Armor 22',customerVisibleRecommendedProduct:'Armor 22',
+  });
+  assert.equal(r.queryTarget,'Armor 22');
+  assert.equal(r.selectedProduct,'Armor 22');
+});
+
+test('ese ignores an uncommunicated hidden recommendation',()=>{
+  const r=resolveReference('ya ese quiero',{
+    activeProduct:'Armor X12 Pro',salientProduct:'Armor 22',recommendedProduct:'Armor 22',customerVisibleRecommendedProduct:'Armor X12 Pro',
+  });
+  assert.equal(r.queryTarget,'Armor X12 Pro');
+  assert.equal(r.selectedProduct,'Armor X12 Pro');
+});
+
+test('ese follows the most recently shown explicit product over an older visible recommendation',()=>{
+  const r=resolveReference('ya ese quiero',{
+    activeProduct:'Product A',salientProduct:'Product B',recommendedProduct:'Product A',customerVisibleRecommendedProduct:'Product A',
+  });
+  assert.equal(r.queryTarget,'Product B');
+  assert.equal(r.selectedProduct,'Product B');
+});
+
 test('short contextual model alias selects Armor 22 instead of treating 22 as a date',()=>{
   const r=resolveReference('ya el 22 quiero',state);
   assert.equal(r.queryTarget,'Armor 22');

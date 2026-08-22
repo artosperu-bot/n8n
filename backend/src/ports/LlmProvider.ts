@@ -31,6 +31,9 @@ export type LlmWriteInput = {
   activeProduct?: string | null;
   selectedProduct?: string | null;
   recommendedProduct?: string | null;
+  previousRecommendedProduct?: string | null;
+  recommendationChanged?: boolean;
+  recommendationChangeReason?: string | null;
   useCase?: string | null;
   problem?: string | null;
   priorities?: string[];

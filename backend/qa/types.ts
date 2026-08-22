@@ -25,6 +25,7 @@ export type QaNbaEvaluation = {
   decisionPass:boolean;
   deliveryPass:boolean;
   actionabilityPass:boolean;
+  continuityPass:boolean;
   progressionPass:boolean;
 };
 
@@ -67,6 +68,7 @@ export type QaDimensionMetrics = {
   nbaDecisionQuality:{pass:number;total:number};
   nbaDeliveryQuality:{pass:number;total:number};
   nbaActionabilityQuality:{pass:number;total:number};
+  nbaContinuityQuality:{pass:number;total:number};
   commercialProgression:{pass:number;total:number};
   spinUtilityQuality:{pass:number;total:number};
   fabGroundingQuality:{pass:number;total:number};

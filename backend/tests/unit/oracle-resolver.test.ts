@@ -34,6 +34,8 @@ test('oracle resolves every product in a comparison as one authoritative set',as
   assert.ok(card.allowedFacts.some(x=>x.includes('P-ARMOR-22-256G')));
   assert.ok(card.allowedFacts.some(x=>x.startsWith('PANTALLA=')&&x.includes('P-ARMOR-22-256G')),'incluye pantalla recuperable del producto B');
   assert.ok(card.allowedFacts.some(x=>x.startsWith('MEMORIA=')&&x.includes('P-ARMOR-X13')),'incluye memoria recuperable del producto A');
+  assert.ok(card.allowedFacts.some(x=>x.startsWith('FISICO=')&&x.includes('P-ARMOR-X13')),'incluye físico del producto A');
+  assert.ok(card.allowedFacts.some(x=>x.startsWith('FISICO=')&&x.includes('P-ARMOR-22-256G')),'incluye físico del producto B');
 });
 
 test('oracle keeps policy and handoff domains independent',async()=>{

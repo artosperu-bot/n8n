@@ -345,6 +345,64 @@ test('soft close fallback consumes budget without an unrelated fact-unknown disc
   assert.match(result.answer,/disponibilidad|avanzar/i);
 });
 
+test('budget-driven recommendation change is communicated before soft close',async()=>{
+  const result=await safeWrite(capturingWriter('Listo, tomo esa información como referencia.'),{
+    message:'máximo 1500',intent:'RECOMMEND_WITHIN_BUDGET',
+    state:{activeProduct:'Armor X12 Pro',recommendedProduct:'Armor 22',budget:1500,priorities:['resistencia','bateria']},
+    decision:{nextBestAction:'SOFT_CLOSE'} as any,allowedProducts:['Armor X12 Pro','Armor 22'],
+    previousRecommendedProduct:'Armor X12 Pro',recommendedProduct:'Armor 22',
+    recommendationChanged:true,recommendationChangeReason:'batería 6600 mAh y carga 33 W',
+    rag:[{text:'Batería: 6600 mAh. Carga: 33 W.',source:'TEST:BATERIA',section:'BATERIA',domain:'PRODUCT',productId:'P-22'}],
+    quote:{product:'Armor 22',price:1199,stock:4,currency:'PEN',source:'FAKE_TEST_DATA'},
+  } as any,'Listo, tomo esa información como referencia.');
+  assert.match(result.answer,/Armor X12 Pro/i);
+  assert.match(result.answer,/Armor 22/i);
+  assert.match(result.answer,/cambi|ahora.*recom/i);
+  assert.match(result.answer,/bater[ií]a|6600|33 W/i);
+  assert.match(result.answer,/disponibilidad|stock/i);
+  assert.equal((result as any).recommendationContinuity?.communicated,true);
+  assert.equal(result.nextBestAction,'SOFT_CLOSE');
+});
+
+test('recommendation change without a verified reason cannot advance the new product',async()=>{
+  const result=await safeWrite(capturingWriter('¿Quieres que revise disponibilidad?'),{
+    message:'máximo 1500',intent:'RECOMMEND_WITHIN_BUDGET',
+    state:{activeProduct:'Product A',recommendedProduct:'Product B',budget:1500},
+    decision:{nextBestAction:'SOFT_CLOSE'} as any,allowedProducts:['Product A','Product B'],
+    previousRecommendedProduct:'Product A',recommendedProduct:'Product B',recommendationChanged:true,
+  } as any,'Listo, tomo esa información como referencia.');
+  assert.equal(result.nextBestAction,'ANSWER_ONLY');
+  assert.equal((result as any).recommendationContinuity?.allowed,false);
+  assert.equal((result as any).recommendationContinuity?.effectiveRecommendedProduct,'Product A');
+  assert.doesNotMatch(result.answer,/stock|disponibilidad|Product B/i);
+});
+
+test('ANSWER_ONLY question salvage still passes through recommendation continuity',async()=>{
+  const result=await safeWrite(capturingWriter('Ahora conviene Product B. ¿Quieres avanzar?'),{
+    message:'máximo 1500',intent:'RECOMMEND_WITHIN_BUDGET',
+    state:{activeProduct:'Product A',recommendedProduct:'Product B',budget:1500},
+    decision:{nextBestAction:'ANSWER_ONLY'} as any,allowedProducts:['Product A','Product B'],
+    previousRecommendedProduct:'Product A',recommendedProduct:'Product B',recommendationChanged:true,
+    recommendationChangeReason:'encaja en el presupuesto indicado',
+  } as any,'Tomo en cuenta tu presupuesto.');
+  assert.equal(result.nextBestAction,'ANSWER_ONLY');
+  assert.equal(result.recommendationContinuity?.communicated,true);
+  assert.match(result.answer,/Product A/i);
+  assert.match(result.answer,/Product B/i);
+  assert.match(result.answer,/cambi/i);
+  assert.doesNotMatch(result.answer,/\?/);
+});
+
+test('budget question acknowledges known construction context',async()=>{
+  const result=await safeWrite(capturingWriter('¿Cuál es tu presupuesto máximo?'),{
+    message:'Trabajo en construcción, se me cae el celular.',intent:'EVALUATE_USE',
+    state:{useCase:'trabajo',problem:'caidas_frecuentes',priorities:['resistencia_a_caidas']},
+    decision:{nextBestAction:'ASK_MISSING_FACT'} as any,missingFact:'presupuesto máximo',decisionImpact:true,
+  } as any,'¿Cuál es tu presupuesto máximo?');
+  assert.match(result.answer,/trabajo|ca[ií]da|resistencia/i);
+  assert.match(result.answer,/presupuesto/i);
+});
+
 test('unknown fact uses a natural no-action fallback',()=>{
   assert.equal(noEvidenceResponse(),'No tengo confirmado ese dato exacto.');
 });

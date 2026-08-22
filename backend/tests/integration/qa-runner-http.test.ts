@@ -112,9 +112,10 @@ test('QA report separates NBA decision, delivery and commercial progression',asy
   assert.deepEqual(report.dimensions?.nbaDecisionQuality,{pass:1,total:1});
   assert.deepEqual(report.dimensions?.nbaDeliveryQuality,{pass:0,total:1});
   assert.deepEqual(report.dimensions?.nbaActionabilityQuality,{pass:1,total:1});
+  assert.deepEqual(report.dimensions?.nbaContinuityQuality,{pass:1,total:1});
   assert.deepEqual(report.dimensions?.commercialProgression,{pass:0,total:1});
   assert.deepEqual((report.scenarios[0].turns[0] as any).nbaEvaluation,{
-    n1Required:true,n1Delivered:false,n1Reason:'INTEREST_REQUIRES_PROGRESSION',decisionPass:true,deliveryPass:false,actionabilityPass:true,progressionPass:false,
+    n1Required:true,n1Delivered:false,n1Reason:'INTEREST_REQUIRES_PROGRESSION',decisionPass:true,deliveryPass:false,actionabilityPass:true,continuityPass:true,progressionPass:false,
   });
 });
 

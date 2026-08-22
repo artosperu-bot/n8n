@@ -113,3 +113,48 @@ test('comparison attribute with a safe contextual advantage satisfies FAB',()=>{
   const findings=evaluateCommercial(observation('Armor 22 tiene 6600 mAh frente a 6320 mAh; esa mayor capacidad da más margen entre cargas.',{intent:'COMPARE',route:'RAG_COMPARISON',ragCount:2},{lastNba:'COMPARE',currentAttributes:['BATERIA'],comparisonProducts:['Armor X13','Armor 22']},'¿Cuál tiene mejor batería?'));
   assert.equal(findings.some(x=>x.code==='FAB_GROUNDING_MISSING'),false);
 });
+
+test('hidden A to B recommendation change is a RED continuity failure',()=>{
+  const findings=evaluateCommercial(observation(
+    'Listo. ¿Quieres que revise disponibilidad?',
+    {intent:'RECOMMEND_WITHIN_BUDGET',route:'RAG_RECOMMENDATION',queryTarget:'Product B'},
+    {lastNba:'SOFT_CLOSE',activeProduct:'Product B',recommendedProduct:'Product B',customerVisibleRecommendedProduct:'Product A',
+      recommendationChanged:true,recommendationChangeFrom:'Product A',recommendationChangeReason:'mejor batería',recommendationChangeCommunicated:false,
+      stageContinuityValid:true,commercialStage:'EVALUACION'},
+    'máximo 1500',
+  ));
+  assert.ok(findings.some(x=>x.code==='COMMERCIAL_PRODUCT_SWITCH_UNEXPLAINED'&&x.level==='RED'));
+});
+
+test('communicated recommendation change passes continuity evaluation',()=>{
+  const findings=evaluateCommercial(observation(
+    'Con la nueva información, cambio mi recomendación de Product A a Product B por su batería verificada. ¿Quieres que revise disponibilidad?',
+    {intent:'RECOMMEND_WITHIN_BUDGET',route:'RAG_RECOMMENDATION',queryTarget:'Product B'},
+    {lastNba:'SOFT_CLOSE',activeProduct:'Product B',recommendedProduct:'Product B',customerVisibleRecommendedProduct:'Product B',
+      recommendationChanged:true,recommendationChangeFrom:'Product A',recommendationChangeReason:'batería verificada',recommendationChangeCommunicated:true,
+      stageContinuityValid:true,commercialStage:'EVALUACION'},
+    'máximo 1500',
+  ));
+  assert.equal(findings.some(x=>x.code==='COMMERCIAL_PRODUCT_SWITCH_UNEXPLAINED'),false);
+});
+
+test('continuity evaluator detects a hidden mismatch without trusting self-reported flags',()=>{
+  const findings=evaluateCommercial(observation(
+    'Listo. ¿Quieres que revise disponibilidad?',
+    {intent:'RECOMMEND_WITHIN_BUDGET',queryTarget:'Product B'},
+    {lastNba:'SOFT_CLOSE',activeProduct:'Product B',recommendedProduct:'Product B',customerVisibleRecommendedProduct:'Product A',commercialStage:'EVALUACION'},
+    'máximo 1500',
+  ));
+  assert.ok(findings.some(x=>x.code==='COMMERCIAL_PRODUCT_SWITCH_UNEXPLAINED'&&x.level==='RED'));
+});
+
+test('explicit selected product is the valid customer referent over an older recommendation',()=>{
+  const findings=evaluateCommercial(observation(
+    'Perfecto. Para iniciar la reserva de Product B, envíame tu DNI.',
+    {intent:'PURCHASE',queryTarget:'Product B'},
+    {lastNba:'COLLECT_RESERVATION_DATA',selectedProduct:'Product B',activeProduct:'Product B',salientProduct:'Product B',
+      recommendedProduct:'Product A',customerVisibleRecommendedProduct:'Product A',explicitSwitch:true,purchaseSignal:true,commercialStage:'CIERRE'},
+    'ya ese quiero',
+  ));
+  assert.equal(findings.some(x=>x.code==='COMMERCIAL_PRODUCT_SWITCH_UNEXPLAINED'),false);
+});

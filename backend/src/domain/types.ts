@@ -33,6 +33,15 @@ export type TurnDecisionTrace = {
   targetProduct?:string|null;
   writerFallback?:string|null;
   recommendation?:RecommendationDecisionTrace|null;
+  continuity?:{
+    recommendationChanged:boolean;
+    from:string|null;
+    to:string|null;
+    reason:string|null;
+    communicated:boolean;
+    allowed:boolean;
+    stageContinuityValid:boolean;
+  };
 };
 
 export type ConversationState = {
@@ -44,6 +53,12 @@ export type ConversationState = {
   salientProduct?: string|null;
   selectedProduct?: string|null;
   recommendedProduct?: string|null;
+  customerVisibleRecommendedProduct?: string|null;
+  recommendationChanged?: boolean;
+  recommendationChangeFrom?: string|null;
+  recommendationChangeReason?: string|null;
+  recommendationChangeCommunicated?: boolean;
+  stageContinuityValid?: boolean;
   comparisonProducts?: string[];
   queryTarget?: string|null;
   explicitSwitch?: boolean;

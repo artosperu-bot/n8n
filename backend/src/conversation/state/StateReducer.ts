@@ -32,6 +32,8 @@ function sameProduct(a:string|null|undefined,b:string|null|undefined):boolean{
   return Boolean(a&&b&&a.trim().toLocaleLowerCase()===b.trim().toLocaleLowerCase());
 }
 
+const STAGE_RANK:Record<string,number>={DESCUBRIMIENTO:1,EVALUACION:2,OBJECION:2,CONSIDERACION:3,CIERRE:4,CIERRE_ASISTIDO:4};
+
 function topRecommendationTie(trace:any):boolean{
   const winnerReason=String(trace?.recommendation?.winnerReason??'').toUpperCase();
   if(winnerReason==='WINNER')return false;
@@ -80,9 +82,17 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
     && sameProduct(recommendationWinner,canonicalPatch.recommendedProduct)
     && !recommendationTopTie
   );
+  const previousRecommendation=previous.customerVisibleRecommendedProduct??previous.recommendedProduct??null;
+  const recommendationChanged=Boolean(
+    canonicalPatch.recommendationChanged
+    ??(previousRecommendation&&patchRecommendation&&!sameProduct(previousRecommendation,patchRecommendation)&&canonicalPatch.explicitSwitch!==true)
+  );
+  const recommendationChangeCommunicated=canonicalPatch.recommendationChangeCommunicated===true;
+  const recommendationChangeReason=String(canonicalPatch.recommendationChangeReason??'').trim()||null;
+  const productContinuityBlocked=Boolean(recommendationChanged&&canonicalPatch.explicitSwitch!==true&&(!recommendationChangeCommunicated||!recommendationChangeReason));
 
   let productFlowReason='STATE_PATCH';
-  if(recommendationFocus&&recommendationWinner){
+  if(recommendationFocus&&recommendationWinner&&!productContinuityBlocked){
     productFlowReason='RECOMMENDATION_WINNER_FOCUS';
     next.activeProduct=recommendationWinner;
     next.salientProduct=recommendationWinner;
@@ -94,6 +104,38 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
   }else if(recommendationTopTie&&currentRoute==='RAG_RECOMMENDATION'){
     productFlowReason='RECOMMENDATION_TIE_PRESERVE_FOCUS';
   }
+
+  if(productContinuityBlocked){
+    productFlowReason='RECOMMENDATION_CHANGE_BLOCKED';
+    next.activeProduct=beforeProducts.activeProduct;
+    next.activeProductId=beforeProducts.activeProductId;
+    next.activeProductCode=beforeProducts.activeProductCode;
+    next.queryTarget=beforeProducts.queryTarget;
+    next.salientProduct=beforeProducts.salientProduct;
+    next.selectedProduct=beforeProducts.selectedProduct;
+    next.recommendedProduct=previousRecommendation;
+    next.lastResolvedProductId=beforeProducts.lastResolvedProductId;
+    next.lastResolvedProductCode=beforeProducts.lastResolvedProductCode;
+    if(['SOFT_CLOSE','CHECK_STOCK','COLLECT_RESERVATION_DATA','EXECUTE_RESERVATION'].includes(String(next.lastNba??'').toUpperCase())){
+      next.lastNba='ANSWER_ONLY';
+      next.pendingCommercialAction='ANSWER_ONLY';
+    }
+  }
+
+  const clearsStaleRecommendation=Object.prototype.hasOwnProperty.call(canonicalPatch,'recommendedProduct')
+    &&canonicalPatch.recommendedProduct===null
+    &&currentRoute==='RAG_PRODUCT'
+    &&Boolean(canonicalPatch.queryTarget&&!sameProduct(canonicalPatch.queryTarget,previous.customerVisibleRecommendedProduct??previous.recommendedProduct));
+  if(next.recommendedProduct&&!productContinuityBlocked)next.customerVisibleRecommendedProduct=next.recommendedProduct;
+  else if(clearsStaleRecommendation)next.customerVisibleRecommendedProduct=null;
+  else next.customerVisibleRecommendedProduct=previous.customerVisibleRecommendedProduct??previous.recommendedProduct??null;
+
+  const previousStage=String(previous.commercialStage??'').toUpperCase();
+  const proposedStage=String(next.commercialStage??'').toUpperCase();
+  const previousStageRank=STAGE_RANK[previousStage]??0;const proposedStageRank=STAGE_RANK[proposedStage]??0;
+  const stageWouldRegress=Boolean(previousStageRank&&proposedStageRank&&proposedStageRank<previousStageRank&&currentRoute!=='RESERVATION_CANCELLED');
+  next.stageContinuityValid=!stageWouldRegress;
+  if(stageWouldRegress)next.commercialStage=previous.commercialStage??next.commercialStage;
 
   // Closing stage is deterministic authority. A stale semantic stage such as
   // DESCUBRIMIENTO/CONSIDERACION cannot move a purchase or human handoff backwards.
@@ -132,12 +174,23 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
       activeMatchesRecommendation:recommendationWinner?sameProduct(next.activeProduct,recommendationWinner):null,
       selectedPreserved:(next.selectedProduct??null)===(previous.selectedProduct??null)||Boolean(canonicalPatch.explicitSwitch),
       arbitraryWinnerRisk:recommendationTopTie,
+      productContinuityValid:!productContinuityBlocked,
+      stageContinuityValid:next.stageContinuityValid!==false,
     },
   };
 
   if(next.lastDecisionTrace){
     (next.lastDecisionTrace as any).productFlow=productFlow;
     (next.lastDecisionTrace as any).effectiveProduct=next.activeProduct??null;
+    (next.lastDecisionTrace as any).continuity={
+      recommendationChanged,
+      from:canonicalPatch.recommendationChangeFrom??previousRecommendation,
+      to:patchRecommendation,
+      reason:recommendationChangeReason,
+      communicated:recommendationChanged?recommendationChangeCommunicated:true,
+      allowed:!productContinuityBlocked,
+      stageContinuityValid:next.stageContinuityValid!==false,
+    };
   }
 
   if(next.sessionId&&(staleActiveDetected||recommendationTopTie||productFlowReason!=='STATE_PATCH')){

@@ -57,6 +57,11 @@ test('recommendation winner becomes active followup focus without becoming selec
     salientProduct:'Armor 22',
     selectedProduct:null,
     recommendedProduct:'Armor 22',
+    recommendationChanged:true,
+    recommendationChangeFrom:'Armor X12 Pro',
+    recommendationChangeReason:'batería 6600 mAh',
+    recommendationChangeCommunicated:true,
+    lastAssistantMessage:'Con la nueva información, cambio mi recomendación de Armor X12 Pro a Armor 22 por su batería 6600 mAh.',
     lastResolvedProductId:'P-ARMOR-22-256G',
     lastResolvedProductCode:'P000049',
     lastDecisionTrace:{
@@ -73,6 +78,7 @@ test('recommendation winner becomes active followup focus without becoming selec
   assert.equal(flow?.before?.activeProduct,'Armor X12 Pro');
   assert.equal(flow?.after?.activeProduct,'Armor 22');
   assert.equal(flow?.reason,'RECOMMENDATION_WINNER_FOCUS');
+  assert.equal(s.customerVisibleRecommendedProduct,'Armor 22');
 });
 
 test('explicit winner reason outranks equal technical scores when price was an authorized criterion',()=>{
@@ -117,4 +123,45 @@ test('explicit winner reason outranks equal technical scores when price was an a
   const flow=(s.lastDecisionTrace as any)?.productFlow;
   assert.equal(flow?.recommendationTopTie,false);
   assert.equal(flow?.reason,'RECOMMENDATION_WINNER_FOCUS');
+  assert.equal(s.customerVisibleRecommendedProduct,'Armor 22');
+});
+
+test('hidden recommendation change cannot redefine the customer-visible product',()=>{
+  const s=reduceState({
+    activeProduct:'Armor X12 Pro',activeProductId:'P-ARMOR-X12Pro',activeProductCode:'P000047',
+    queryTarget:'Armor X12 Pro',salientProduct:'Armor X12 Pro',recommendedProduct:'Armor X12 Pro',
+    customerVisibleRecommendedProduct:'Armor X12 Pro',commercialStage:'EVALUACION',
+  },{
+    lastIntent:'RECOMMEND_WITHIN_BUDGET',lastRoute:'RAG_RECOMMENDATION',lastNba:'SOFT_CLOSE',
+    activeProduct:'Armor X12 Pro',queryTarget:'Armor X12 Pro',salientProduct:'Armor 22',recommendedProduct:'Armor 22',
+    lastResolvedProductId:'P-ARMOR-22-256G',lastResolvedProductCode:'P000049',
+    recommendationChanged:true,recommendationChangeFrom:'Armor X12 Pro',recommendationChangeReason:'batería 6600 mAh',
+    recommendationChangeCommunicated:false,lastAssistantMessage:'¿Quieres que revise disponibilidad?',
+    lastDecisionTrace:{
+      deterministicIntent:'RECOMMEND_WITHIN_BUDGET',plannerIntent:'RECOMMEND',finalIntent:'RECOMMEND_WITHIN_BUDGET',
+      route:'RAG_RECOMMENDATION',nextBestAction:'SOFT_CLOSE',recommendation:null,
+    },
+  });
+  assert.equal(s.recommendedProduct,'Armor X12 Pro');
+  assert.equal(s.activeProduct,'Armor X12 Pro');
+  assert.equal(s.queryTarget,'Armor X12 Pro');
+  assert.equal(s.salientProduct,'Armor X12 Pro');
+  assert.equal(s.customerVisibleRecommendedProduct,'Armor X12 Pro');
+  assert.equal(s.lastNba,'ANSWER_ONLY');
+});
+
+test('commercial stage cannot regress before purchase',()=>{
+  const s=reduceState({commercialStage:'CONSIDERACION',purchaseSignal:false},{
+    commercialStage:'DESCUBRIMIENTO',purchaseSignal:false,lastIntent:'OTHER',lastRoute:'GENERAL_COMMERCIAL',lastNba:'ANSWER_ONLY',
+  });
+  assert.equal(s.commercialStage,'CONSIDERACION');
+  assert.equal(s.stageContinuityValid,false);
+});
+
+test('explicit reservation cancellation may return from closing to consideration',()=>{
+  const s=reduceState({commercialStage:'CIERRE',purchaseSignal:true},{
+    commercialStage:'CONSIDERACION',purchaseSignal:false,lastIntent:'OTHER',lastRoute:'RESERVATION_CANCELLED',lastNba:'ANSWER_ONLY',
+  });
+  assert.equal(s.commercialStage,'CONSIDERACION');
+  assert.equal(s.stageContinuityValid,true);
 });

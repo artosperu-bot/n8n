@@ -37,6 +37,35 @@ function unsupportedCommercialAction(answer:string,nba:string):boolean{
   return unsupported||advisor||stock||recommendation||alternative;
 }
 
+function sameProduct(a:unknown,b:unknown):boolean{
+  return Boolean(a&&b&&String(a).trim().toLocaleLowerCase('es')===String(b).trim().toLocaleLowerCase('es'));
+}
+
+export function assessCommercialContinuity(observation:QaTurnObservation):boolean{
+  const response=observation.response??{};const state=response.state??{};const debug=response.debug??{};const answer=String(response.answer??'');
+  if(state.stageContinuityValid===false)return false;
+  const recommended=state.recommendedProduct??null;const visibleRecommendation=state.customerVisibleRecommendedProduct??recommended;
+  const recommendationMismatch=Boolean(recommended&&visibleRecommendation&&!sameProduct(recommended,visibleRecommendation));
+  const explicitSelectedRecommendation=Boolean(state.explicitSwitch===true&&state.selectedProduct&&sameProduct(state.selectedProduct,recommended));
+  if(recommendationMismatch&&!explicitSelectedRecommendation)return false;
+  if(state.recommendationChanged===true){
+    const from=String(state.recommendationChangeFrom??'').trim();
+    const to=String(state.recommendedProduct??'').trim();
+    const reason=String(state.recommendationChangeReason??'').trim();
+    const communicated=state.recommendationChangeCommunicated===true;
+    const visible=String(state.customerVisibleRecommendedProduct??'').trim();
+    const text=answer.toLocaleLowerCase('es');
+    const explicitChange=/\b(?:cambio|cambia|cambiar|cambiar[ií]a|ahora (?:te )?recomiendo|nueva recomendaci[oó]n)\b/i.test(answer);
+    if(!from||!to||!reason||!communicated||!sameProduct(visible,to)||!explicitChange||!text.includes(from.toLocaleLowerCase('es'))||!text.includes(to.toLocaleLowerCase('es')))return false;
+  }
+  if(/\b(?:ese|esa|ese modelo|esa opci[oó]n)\b/i.test(observation.request.message)){
+    const visible=state.selectedProduct??(!recommendationMismatch?state.salientProduct:null)??visibleRecommendation??state.salientProduct??null;
+    const target=debug.queryTarget??state.queryTarget??state.activeProduct??null;
+    if(visible&&target&&!sameProduct(visible,target))return false;
+  }
+  return true;
+}
+
 export function assessNba(observation:QaTurnObservation):QaNbaEvaluation{
   const response=observation.response??{};const state=response.state??{};const debug=response.debug??{};const answer=String(response.answer??'');
   const nba=String(state.lastNba??'').toUpperCase();const intent=String(debug.intent??state.lastIntent??'').toUpperCase();const stage=String(state.commercialStage??'').toUpperCase();
@@ -51,7 +80,8 @@ export function assessNba(observation:QaTurnObservation):QaNbaEvaluation{
   const n1Delivered=actionDelivered(nba,answer)&&!repeatsKnown;
   const deliveryPass=n1Required?n1Delivered:Boolean(answer.trim());
   const actionabilityPass=!unsupportedCommercialAction(answer,nba);
-  return{n1Required,n1Delivered,n1Reason,decisionPass,deliveryPass,actionabilityPass,progressionPass:decisionPass&&deliveryPass&&actionabilityPass};
+  const continuityPass=assessCommercialContinuity(observation);
+  return{n1Required,n1Delivered,n1Reason,decisionPass,deliveryPass,actionabilityPass,continuityPass,progressionPass:decisionPass&&deliveryPass&&actionabilityPass&&continuityPass};
 }
 
 export function assessSpinUtility(observation:QaTurnObservation):boolean{
@@ -108,6 +138,7 @@ export function evaluateCommercial(observation:QaTurnObservation):QaFinding[]{
   if(nba.n1Required&&!nba.n1Delivered&&action!=='ANSWER_ONLY')findings.push({level:'YELLOW',code:'NBA_NOT_DELIVERED',message:`La respuesta no ejecuta de forma visible ${action}.`,rootCause:'NBA'});
   if(action==='ASK_MISSING_FACT'&&repeatsKnownQuestion(answer,state))findings.push({level:'YELLOW',code:'NBA_REPEATS_KNOWN',message:'La siguiente pregunta solicita contexto que ya estaba disponible.',rootCause:'NBA'});
   if(!nba.actionabilityPass)findings.push({level:'RED',code:'UNSUPPORTED_COMMERCIAL_ACTION',message:'La respuesta ofrece una acción que no está autorizada por el N+1 ejecutable.',rootCause:'NBA'});
+  if(!nba.continuityPass)findings.push({level:'RED',code:'COMMERCIAL_PRODUCT_SWITCH_UNEXPLAINED',message:'La decisión comercial cambió de producto o etapa sin una transición visible válida.',rootCause:'NBA'});
   if(!assessSpinUtility(observation))findings.push({level:'YELLOW',code:'SPIN_UTILITY_INVALID',message:'La pregunta no cumple unknown, decision impact y capacidad de consumo.',rootCause:'NBA'});
   if(!assessFabGrounding(observation))findings.push({level:'YELLOW',code:'FAB_GROUNDING_MISSING',message:'Un atributo verificado no se convirtió en un beneficio comercial seguro.',rootCause:'WRITER'});
   const message=observation.request.message.toLocaleLowerCase('es');

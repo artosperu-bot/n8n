@@ -42,6 +42,28 @@ function productName(q: ProductQuote | null | undefined): string | null {
 function same(a: string | null | undefined, b: string | null | undefined): boolean {
   return Boolean(a && b && fold(a) === fold(b));
 }
+function recommendationReasonForCriterion(reason:string,criterion:string):boolean{
+  const text=fold(reason);const key=criterion.toUpperCase();
+  if(key==='BATERIA')return /bateria|carga|mah/.test(text);
+  if(key==='RESISTENCIA')return /resisten|caida|ip68|ip69|mil.std/.test(text);
+  if(key==='MEMORIA')return /ram|memoria|almacen/.test(text);
+  if(key==='CAMARA')return /camara|mp|nocturna|video/.test(text);
+  if(key==='FISICO')return /peso|dimension|grosor/.test(text);
+  return text.includes(fold(criterion));
+}
+function verifiedRecommendationChangeReason(trace:RecommendationDecisionTrace|null,from:string|null,to:string|null,reasons:string[]):string|null{
+  if(!trace||!from||!to||same(from,to))return null;
+  if(trace.discardedCandidates.some(candidate=>same(candidate.product,from)&&candidate.reason==='BUDGET'))return 'encaja en el presupuesto indicado';
+  const winner=trace.rankedCandidates.find(candidate=>same(candidate.product,to));
+  const previous=trace.rankedCandidates.find(candidate=>same(candidate.product,from));
+  if(!winner||!previous)return null;
+  const differentiator=(winner.criteria??[])
+    .map(criterion=>({criterion,delta:Number(winner.criterionScores?.[criterion]??0)-Number(previous.criterionScores?.[criterion]??0)}))
+    .filter(item=>Number.isFinite(item.delta)&&item.delta>1e-9)
+    .sort((a,b)=>b.delta-a.delta)[0]?.criterion;
+  if(!differentiator)return null;
+  return reasons.find(reason=>recommendationReasonForCriterion(reason,differentiator))??null;
+}
 function normalizeIntent(intent: string, budget: number | null): string {
   if (intent === 'PRICE_AVAILABILITY') return 'PRICE';
   if (intent === 'IMAGES') return 'IMAGE';
@@ -470,7 +492,12 @@ export class HybridConversationEngine {
           :factUnknown?`Sobre ${subject}, ese detalle no está especificado.`
           :subject?'Esa opción encaja con los criterios indicados.'
           :(hasDecisionContext?'Aún no hay una opción que destaque con claridad.':'¿Para qué uso principal necesitas el equipo?');
-        writerResult=await safeWrite(this.#deps.llm,prepareCommercialWriteInput({message:input.message,intent,state:{...commercialState,recommendedProduct},quote,rag,deterministicAnswer:plan,decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts(recommendationAlternatives),alternatives:recommendationAlternatives}),fallback);answer=writerResult.answer;nba=writerResult.nextBestAction??nba;route=noWinner?'RAG_RECOMMENDATION_NO_WINNER':recommendationTurn&&recommendedProduct?'RAG_RECOMMENDATION':rag.length?'RAG_PRODUCT':'COMMERCIAL_REASONING';
+        const previousRecommendedProduct=previous.customerVisibleRecommendedProduct??previous.recommendedProduct??null;
+        const recommendationChanged=Boolean(previousRecommendedProduct&&recommendedProduct&&!same(previousRecommendedProduct,recommendedProduct)&&decision.explicitSwitch!==true);
+        const recommendationChangeReason=recommendationChanged?verifiedRecommendationChangeReason(recommendationTrace,previousRecommendedProduct,recommendedProduct,recommendationReasons):null;
+        writerResult=await safeWrite(this.#deps.llm,prepareCommercialWriteInput({message:input.message,intent,state:{...commercialState,recommendedProduct},quote,rag,deterministicAnswer:plan,decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts(recommendationAlternatives),alternatives:recommendationAlternatives,previousRecommendedProduct,recommendationChanged,recommendationChangeReason}),fallback);answer=writerResult.answer;nba=writerResult.nextBestAction??nba;
+        if(writerResult.recommendationContinuity?.changed&&!writerResult.recommendationContinuity.allowed)recommendedProduct=writerResult.recommendationContinuity.effectiveRecommendedProduct;
+        route=noWinner?'RAG_RECOMMENDATION_NO_WINNER':recommendationTurn&&recommendedProduct?'RAG_RECOMMENDATION':rag.length?'RAG_PRODUCT':'COMMERCIAL_REASONING';
       }else if(intent==='PURCHASE'){
         const selected=decision.selectedProduct??commercialState.selectedProduct??target??recommendedProduct??commercialState.activeProduct??null;quote=await this.#quote(selected,initialCandidates);
         if((commercialState.quantity??1)>=2){answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:selected,recommendedProduct},quote);handoff=true;handoffReason='CONTINUAR_VENTA';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';}
@@ -492,15 +519,21 @@ export class HybridConversationEngine {
       else if(intent==='CATALOG'&&this.#deps.erp.listCatalog){const rows=await this.#deps.erp.listCatalog({onlyWithStock:true}).catch(()=>[]);answer=rows.slice(0,6).map(x=>productName(x)).filter(Boolean).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarCatalogoVenta');route='SQL_CATALOG';}
       else{writerResult=await safeWrite(this.#deps.llm,prepareCommercialWriteInput({message:input.message,intent,state:commercialState,rag:[],deterministicAnswer:'Responde lo actual sin inventar ni repetir preguntas conocidas.',decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts()}),'Puedo ayudarte con productos, comparaciones, características, políticas o una compra.');answer=writerResult.answer;nba=writerResult.nextBestAction??nba;route='GENERAL_COMMERCIAL';}
 
+      const recommendationContinuity=writerResult?.recommendationContinuity;
+      const continuityBlocked=Boolean(recommendationContinuity?.changed&&!recommendationContinuity.allowed);
       const selectedProduct=String(decision.referenceType??'').toUpperCase()==='SELECTION_REFERENT'?(decision.selectedProduct??commercialState.selectedProduct??commercialState.salientProduct??target):(decision.selectedProduct??commercialState.selectedProduct??null);
       const explicitSwitch=decision.explicitSwitch&&Boolean(selectedProduct);let activeProduct=commercialState.activeProduct??null;if(!activeProduct&&quote)activeProduct=productName(quote);if(explicitSwitch&&selectedProduct)activeProduct=selectedProduct;
-      const salientProduct=productName(quote)??decision.targetProduct??recommendedProduct??commercialState.salientProduct??activeProduct;const comparisonProducts=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[])]).slice(0,2);
-      const targetResolvedQuote=quote;const activeQuote=await this.#quote(activeProduct,initialCandidates);const activeId=activeQuote?.productRagId??(same(activeProduct,previous.activeProduct)?previous.activeProductId:null)??null;const activeCode=activeQuote?.productCode??(same(activeProduct,previous.activeProduct)?previous.activeProductCode:null)??null;const origin=resolutionOrigin(decision.referenceType,explicitSwitch,Boolean(targetResolvedQuote?.productRagId),target,previous);
+      if(continuityBlocked)activeProduct=previous.activeProduct??previous.customerVisibleRecommendedProduct??previous.recommendedProduct??null;
+      const salientProduct=continuityBlocked?(previous.salientProduct??previous.customerVisibleRecommendedProduct??previous.recommendedProduct??activeProduct):(productName(quote)??decision.targetProduct??recommendedProduct??commercialState.salientProduct??activeProduct);const comparisonProducts=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[])]).slice(0,2);
+      const stateQueryTarget=continuityBlocked?(previous.queryTarget??previous.customerVisibleRecommendedProduct??previous.recommendedProduct??activeProduct):(decision.targetProduct??productName(quote)??commercialState.queryTarget??null);
+      const targetResolvedQuote=continuityBlocked?await this.#quote(activeProduct,initialCandidates):quote;const activeQuote=await this.#quote(activeProduct,initialCandidates);const activeId=activeQuote?.productRagId??(same(activeProduct,previous.activeProduct)?previous.activeProductId:null)??null;const activeCode=activeQuote?.productCode??(same(activeProduct,previous.activeProduct)?previous.activeProductCode:null)??null;const origin=resolutionOrigin(decision.referenceType,explicitSwitch,Boolean(targetResolvedQuote?.productRagId),target,previous);
 
-      const decisionTrace:TurnDecisionTrace={deterministicIntent:deterministicDecision.primaryIntent,plannerIntent:planner?.decision?.primaryIntent??null,finalIntent:intent,route,nextBestAction:nba??null,referenceType:decision.referenceType??null,targetProduct:decision.targetProduct??target,writerFallback:writerResult?.fallback?.error??null,recommendation:recommendationTrace};
+      const continuityTarget=recommendationContinuity?.changed&&recommendationContinuity.allowed?recommendedProduct:stateQueryTarget;
+      const decisionTrace:TurnDecisionTrace={deterministicIntent:deterministicDecision.primaryIntent,plannerIntent:planner?.decision?.primaryIntent??null,finalIntent:intent,route,nextBestAction:nba??null,referenceType:decision.referenceType??null,targetProduct:continuityTarget,writerFallback:writerResult?.fallback?.error??null,recommendation:recommendationTrace};
       const pendingMissingFact=nba==='ASK_MISSING_FACT'?(writerResult?.missingFact??(!target?'modelo de interés':null)):null;
       const nextState=reduceState(previous,{
-        contextVersion:previous.contextVersion??0,activeProduct,activeProductId:activeId,activeProductCode:activeCode,queryTarget:decision.targetProduct??productName(targetResolvedQuote)??commercialState.queryTarget??null,salientProduct,selectedProduct,recommendedProduct,comparisonProducts,explicitSwitch,
+        contextVersion:previous.contextVersion??0,activeProduct,activeProductId:activeId,activeProductCode:activeCode,queryTarget:stateQueryTarget,salientProduct,selectedProduct,recommendedProduct,comparisonProducts,explicitSwitch,
+        recommendationChanged:recommendationContinuity?.changed??false,recommendationChangeFrom:recommendationContinuity?.from??null,recommendationChangeReason:recommendationContinuity?.reason??null,recommendationChangeCommunicated:recommendationContinuity?.communicated??false,
         budget:commercialState.budget??null,lastIntent:intent,secondaryIntents:decision.secondaryIntents,lastRoute:route,lastSqlTools:sqlTools,requiresSql:decision.needsSql||sqlTools.length>0,requiresRag:decision.needsProductRag||decision.needsInstitutionalRag||rag.length>0,
         spinFacts:unique([...(commercialState.spinFacts??[]),decision.spinContribution]),lastSpinContribution:spinContributionCode(previous,commercialState,decision),lastNba:nba??null,pendingCommercialAction:nba??null,pendingMissingFact,currentAttributes:decision.attributes,customerType:commercialState.customerType,sector:commercialState.sector,useCase:commercialState.useCase,problem:commercialState.problem,priorities:commercialState.priorities,quantity:commercialState.quantity,invoiceRequired:commercialState.invoiceRequired,objection:commercialState.objection,interestSignal:facts.interestSignal,purchaseSignal:facts.purchaseSignal||intent==='PURCHASE',levelOfInterest:interest.levelOfInterest,interestEvents:interest.interestEvents,
         commercialStage:stageFor(intent,decision.commercialStage),commercialStrategy:strategyFor(intent),reservationStage,reservationDocument,reservationCustomerName,reservationAddress,handoffActive:handoff,blockAutomaticReply:handoff,handoffReason,lastResolvedProductId:targetResolvedQuote?.productRagId??null,lastResolvedProductCode:targetResolvedQuote?.productCode??null,lastProductResolutionConfidence:targetResolvedQuote?.productRagId?decision.confidence:0,lastProductResolutionOrigin:origin,lastDecisionTrace:decisionTrace,lastUserMessage:input.message,lastAssistantMessage:answer,
@@ -514,7 +547,7 @@ export class HybridConversationEngine {
       const plannerTelemetry=await this.#recordUsage(input.sessionId,turn,'SEMANTIC_PLAN',messageId,planner);const writerTelemetry=await this.#recordUsage(input.sessionId,turn,'COMMERCIAL_WRITE',messageId,writerResult?.llmResult??null);const telemetry=!plannerTelemetry.delivered?plannerTelemetry:writerTelemetry;let automation:{delivered:boolean;error?:string}={delivered:false};
       try{const handoffProduct=selectedProduct??(intent==='QUOTE'?target:null);automation=handoff?await this.#deps.automation.publish({type:'handoff.requested',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{product:handoffProduct,selectedProduct:selectedProduct??null,activeProduct:activeProduct??null,recommendedProduct:recommendedProduct??null,comparisonProducts,quantity:nextState.quantity??null,invoiceRequired:nextState.invoiceRequired??null,reason:handoffReason,context:nextState}}):await this.#deps.automation.publish({type:'conversation.turn.completed',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{intent,route,product:activeProduct,nextBestAction:nba}});}catch(error){automation={delivered:false,error:error instanceof Error?error.message:String(error)};}
 
-      return{sessionId:input.sessionId,answer,state:{...nextState,contextVersion:(previous.contextVersion??0)+1},debug:{intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,queryTarget:decision.targetProduct??target,activeProduct,salientProduct,selectedProduct,recommendedProduct,comparisonProducts,explicitSwitch,budget:commercialState.budget??null,priceObjection:budgetTurn.priceObjection,erp:quote,images,requestedUnknown,ragSources:unique(rag.map(x=>x.source)),ragCount:rag.length,imageCount:images.length,nextBestAction:nba,handoff,handoffReason,recommendationCriteria,recommendationReasons,recommendationTradeoffs,decisionTrace,planner:plannerDebug(planner),plannerFailure,writer:writerResult?{model:writerResult.model,fallback:writerResult.fallback}:undefined,telemetry,automation,durationMs:Math.max(0,Math.round(performance.now()-started))}};
+      return{sessionId:input.sessionId,answer,state:{...nextState,contextVersion:(previous.contextVersion??0)+1},debug:{intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,queryTarget:nextState.queryTarget??null,activeProduct:nextState.activeProduct??null,salientProduct:nextState.salientProduct??null,selectedProduct:nextState.selectedProduct??null,recommendedProduct:nextState.recommendedProduct??null,comparisonProducts,explicitSwitch,budget:commercialState.budget??null,priceObjection:budgetTurn.priceObjection,erp:quote,images,requestedUnknown,ragSources:unique(rag.map(x=>x.source)),ragCount:rag.length,imageCount:images.length,nextBestAction:nextState.lastNba??nba,handoff,handoffReason,recommendationCriteria,recommendationReasons,recommendationTradeoffs,decisionTrace,planner:plannerDebug(planner),plannerFailure,writer:writerResult?{model:writerResult.model,fallback:writerResult.fallback,recommendationContinuity:writerResult.recommendationContinuity}:undefined,telemetry,automation,durationMs:Math.max(0,Math.round(performance.now()-started))}};
     } catch(error) {
       console.error(JSON.stringify({event:'STECH_TURN_ERROR',sessionId:input.sessionId,messageId,error:safeError(error)}));
       if(leaseAcquired&&this.#deps.conversations.failTurn){try{await this.#deps.conversations.failTurn(input.sessionId,messageId,error instanceof Error?error.message:String(error));}catch{}}

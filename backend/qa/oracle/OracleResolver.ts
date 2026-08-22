@@ -29,7 +29,7 @@ export class OracleResolver {
     const comparisonProducts=[...new Set((input.spec.products??[]).map(x=>x.trim()).filter(Boolean))];
     const comparisonQuotes:ProductQuote[]=[];
     const evidenceSections=intent==='COMPARE'
-      ?[...new Set([...(input.spec.sections??[]),...productEvidenceSections({primary:'PRODUCT_INFO'},input.state??{})])]
+      ?[...new Set([...(input.spec.sections??[]),...productEvidenceSections({primary:'PRODUCT_INFO'},input.state??{}),'FISICO'])]
       :(input.spec.sections??[]);
 
     if(comparisonProducts.length&&['SQL','PRODUCT_RAG'].includes(domain)){

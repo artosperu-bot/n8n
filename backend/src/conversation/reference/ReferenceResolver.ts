@@ -5,6 +5,7 @@ export type ReferenceState = {
   salientProduct?: string | null;
   selectedProduct?: string | null;
   recommendedProduct?: string | null;
+  customerVisibleRecommendedProduct?: string | null;
   comparisonProducts?: string[];
 };
 
@@ -41,6 +42,7 @@ function productUniverse(state: ReferenceState, options: ReferenceOptions): stri
     state.salientProduct,
     state.selectedProduct,
     state.recommendedProduct,
+    state.customerVisibleRecommendedProduct,
     ...(state.comparisonProducts ?? []),
   ]);
 }
@@ -99,7 +101,7 @@ export function resolveReference(message: string, state: ReferenceState, options
   const recommendedRef = /\b(el\s+)?recomendad[oa]\b|\bel\s+que\s+me\s+recomendaste\b/.test(t);
   const selectionRef = /\b(me\s+quedo\s+con\s+ese|quiero\s+ese|ya\s+ese\s+quiero|elijo\s+ese|me\s+quedo\s+con\s+el\s+que\s+me\s+recomendaste)\b/.test(t);
   const otherRef = /\bel\s+otro\b/.test(t);
-  const recommended = canonicalProductName(state.recommendedProduct, universe);
+  const recommended = canonicalProductName(state.customerVisibleRecommendedProduct??state.recommendedProduct, universe);
 
   const mentionedProducts = unique([
     ...(recommendedRef && recommended ? [recommended] : []),
@@ -108,7 +110,9 @@ export function resolveReference(message: string, state: ReferenceState, options
   const named = directProducts[0] ?? null;
   const unknownNamedProduct = Boolean(options.unknownNamedProduct);
 
-  const recentSelection = state.selectedProduct ?? state.salientProduct ?? null;
+  const visibleRecommendation=state.customerVisibleRecommendedProduct??state.recommendedProduct??null;
+  const hiddenRecommendation=Boolean(state.recommendedProduct&&visibleRecommendation&&!sameProductName(state.recommendedProduct,visibleRecommendation));
+  const recentSelection = state.selectedProduct ?? (!hiddenRecommendation?state.salientProduct:null) ?? visibleRecommendation ?? state.salientProduct ?? null;
   const referentialTarget = selectionRef
     ? recentSelection ?? recommended ?? state.activeProduct ?? null
     : recommendedRef
@@ -150,4 +154,8 @@ export function resolveReference(message: string, state: ReferenceState, options
   else if (!state.activeProduct && recommended) reason = 'RECOMMENDED_FALLBACK';
 
   return { queryTarget, explicitSwitch, nextActiveProduct, selectedProduct, reason, mentionedProducts, unknownNamedProduct };
+}
+
+function sameProductName(a:string|null|undefined,b:string|null|undefined):boolean{
+  return Boolean(a&&b&&fold(a)===fold(b));
 }

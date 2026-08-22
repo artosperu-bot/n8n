@@ -8,6 +8,7 @@ import { FakeLlmProvider } from '../../src/adapters/fake/FakeLlmProvider.ts';
 import { NoopAutomationBus } from '../../src/adapters/fake/NoopAutomationBus.ts';
 import { NoopTelemetryRepository } from '../../src/adapters/fake/NoopTelemetryRepository.ts';
 import type { LlmDecisionInput, LlmDecisionResult, LlmProvider, LlmWriteInput, TurnDecision } from '../../src/ports/LlmProvider.ts';
+import type { RagRepository } from '../../src/ports/RagRepository.ts';
 
 const usage = { inputTokens:10, outputTokens:5, totalTokens:15, cachedInputTokens:0 };
 function result(decision:TurnDecision):LlmDecisionResult {
@@ -205,4 +206,41 @@ test('a supplied budget resolves the active price objection in current context',
   });
   assert.equal(result.state.budget,1200);
   assert.equal(result.state.objection,null);
+});
+
+test('budget reranking communicates the verified differentiator before ese can select the new product',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-continuity',{
+    sessionId:'s-continuity',contextVersion:0,turnCount:2,
+    activeProduct:'Armor X12 Pro',queryTarget:'Armor X12 Pro',salientProduct:'Armor X12 Pro',
+    recommendedProduct:'Armor X12 Pro',customerVisibleRecommendedProduct:'Armor X12 Pro',
+    useCase:'trabajo',problem:'caidas_frecuentes',priorities:['resistencia','bateria'],spinFacts:[],
+  });
+  const rag:RagRepository={
+    async search(){return[];},
+    async searchInstitutional(){return[];},
+    async searchProduct(_query,productId,sections){
+      const battery=productId.includes('22-')?'Batería: 6600 mAh. Carga cableada: 33 W.'
+        :productId.includes('X13')?'Batería: 6320 mAh. Carga cableada: 10 W.'
+          :'Batería: 4860 mAh. Carga cableada: 10 W.';
+      return sections.map(section=>({
+        text:section==='BATERIA'?battery:'Resistencia a caídas: 1.5 m. Profundidad IP68: 1.5 m. IP68: Sí.',
+        source:`TEST:${section}`,score:10,productId,section,domain:'PRODUCT' as const,
+      }));
+    },
+  };
+  const engine=new HybridConversationEngine({...deps(new FakeLlmProvider(),conversations),rag});
+  const budget=await engine.processTurn({sessionId:'s-continuity',message:'máximo 1500',messageId:'m-continuity-budget'});
+  assert.equal(budget.state.recommendedProduct,'Armor 22');
+  assert.equal(budget.state.customerVisibleRecommendedProduct,'Armor 22');
+  assert.equal(budget.state.recommendationChanged,true);
+  assert.equal(budget.state.recommendationChangeCommunicated,true);
+  assert.match(String(budget.state.recommendationChangeReason),/bater[ií]a|6600|33 W/i);
+  assert.match(budget.answer,/Armor X12 Pro/i);
+  assert.match(budget.answer,/Armor 22/i);
+  assert.match(budget.answer,/bater[ií]a|6600|33 W/i);
+
+  const purchase=await engine.processTurn({sessionId:'s-continuity',message:'ya ese quiero, ¿cómo compro?',messageId:'m-continuity-purchase'});
+  assert.equal(purchase.state.selectedProduct,'Armor 22');
+  assert.match(purchase.answer,/reserva de Armor 22/i);
 });
