@@ -35,6 +35,26 @@ function mentionsProductOutsideAllowlist(answer:string,allowed:string[]):boolean
 function evidenceText(input:LlmWriteInput):string {
   return fold((input.rag??[]).map(x=>x.text).join('\n'));
 }
+type NumericClaim={value:number;unit:string};
+function numericClaims(text:string):NumericClaim[]{
+  const claims:NumericClaim[]=[];
+  const pattern=/\b(\d+(?:[.,]\d+)?)\s*(mAh|GHz|MHz|MP|W|GB|TB|MB|Hz|fps|nm|µm|mm|cm|m\b|min(?:utos?)?|horas?|mes(?:es)?|años?|unidades?|%)/gi;
+  for(const match of text.matchAll(pattern)){
+    const index=match.index??0;
+    const prefix=fold(text.slice(Math.max(0,index-40),index));
+    if(/(?:\bno\s+(?:tiene|es|soporta|incluye|trae|cuenta con)|\bsin)\s+[^\d]{0,16}$/.test(prefix))continue;
+    const value=Number(match[1].replace(',','.'));
+    if(Number.isFinite(value))claims.push({value,unit:fold(match[2]).replace(/s$/,'')});
+  }
+  return claims;
+}
+function hasUnsupportedNumericFact(input:LlmWriteInput,answer:string):boolean{
+  const asserted=numericClaims(answer);
+  if(!asserted.length)return false;
+  const evidence=[...(input.rag??[]).map(x=>x.text),...(input.verifiedFacts??[]).map(x=>String(x.value))].join('\n');
+  const supported=numericClaims(evidence);
+  return asserted.some(claim=>!supported.some(fact=>fact.unit===claim.unit&&fact.value===claim.value));
+}
 function monetaryValues(text:string):string[]{
   return [...text.matchAll(/\bS\/\s*(\d+(?:[.,]\d{1,2})?)/gi)].map(m=>String(Number(m[1].replace(',','.'))));
 }
@@ -103,6 +123,7 @@ function guardGeneratedAnswer(input:LlmWriteInput,answer:string):string|null {
 
   const fabViolation=unsupportedFabInference(input,answer);
   if(fabViolation)return fabViolation;
+  if(hasUnsupportedNumericFact(input,answer))return 'UNSUPPORTED_NUMERIC_FACT';
 
   const lowLightClaim=/\b(?:mejor|superior|mucho\s+mejor|mayor)\b[^\n.]{0,55}\b(?:baja|poca)\s+luz\b|\b(?:baja|poca)\s+luz\b[^\n.]{0,55}\b(?:mejor|superior)\b/i;
   if(lowLightClaim.test(answer)){

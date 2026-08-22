@@ -92,3 +92,14 @@ test('verified price is allowed inside budget recommendation instead of forcing 
   assert.equal(r.fallback.delivered,true);
   assert.notEqual(r.fallback.error,'UNSOLICITED_PRICE');
 });
+
+test('rejects rounded technical values that change authoritative RAG facts',async()=>{
+  const r=await safeWrite(llm('El Armor 22 alcanza una frecuencia máxima de 2.0 GHz.'),{
+    ...base,
+    intent:'CAPABILITY',
+    allowedProducts:['Armor 22'],
+    rag:[{text:'Frecuencia máxima CPU: 2.05 GHz.',source:'TEST',productId:'P-ARMOR-22-256G',section:'RENDIMIENTO',domain:'PRODUCT'}],
+  } as any,'Puedo confirmar la frecuencia exacta en la ficha técnica.');
+  assert.equal(r.answer,'Puedo confirmar la frecuencia exacta en la ficha técnica.');
+  assert.equal(r.fallback.error,'UNSUPPORTED_NUMERIC_FACT');
+});
