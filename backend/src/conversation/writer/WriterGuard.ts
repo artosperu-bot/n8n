@@ -1,7 +1,8 @@
-import type { LlmProvider, LlmResult, LlmWriteInput } from '../../ports/LlmProvider.ts';
+import type { CommercialMove, LlmProvider, LlmResult, LlmWriteInput } from '../../ports/LlmProvider.ts';
 import { fold } from '../../shared/text.ts';
 import { prepareCommercialWriteInput } from '../commercial/CommercialWriteContract.ts';
 import { requestedUnsupportedCapability } from '../commercial/CommercialCapabilities.ts';
+import { renderCommercialMove, renderVerifiedFact } from '../commercial/ResponsePolicy.ts';
 
 export type WriterGuardResult = {
   answer: string;
@@ -10,6 +11,7 @@ export type WriterGuardResult = {
   model: string;
   llmResult: LlmResult | null;
   fallback: { delivered: boolean; error?: string };
+  commercialMoveKind?:CommercialMove['kind']|null;
   recommendationContinuity?:{
     changed:boolean;
     from:string|null;
@@ -124,8 +126,8 @@ function continuityState(input:LlmWriteInput,answer:string):RecommendationContin
   return{changed:true,from,to,reason,communicated,allowed:Boolean(reason&&communicated),effectiveRecommendedProduct:reason&&communicated?to:from};
 }
 function sameFold(a:string,b:string):boolean{return fold(a)===fold(b);}
-function blockedContinuityAnswer():string{
-  return 'Necesito reevaluar la recomendación con información verificable antes de avanzar.';
+function blockedContinuityAnswer(input:LlmWriteInput):string{
+  return cleanPresentation(String(input.directAnswer??''))||'Necesito reevaluar la recomendación con información verificable antes de avanzar.';
 }
 function communicateRecommendationChange(input:LlmWriteInput,answer:string):string{
   const continuity=continuityState(input,answer);
@@ -153,7 +155,7 @@ function omitsRamComponent(input:LlmWriteInput,answer:string):boolean{
 type NumericClaim={value:number;unit:string;index:number};
 function numericClaims(text:string):NumericClaim[]{
   const claims:NumericClaim[]=[];
-  const pattern=/\b(\d+(?:[.,]\d+)?)\s*(mAh|GHz|MHz|MP|W|GB|TB|MB|Hz|fps|nm|µm|mm|cm|m\b|min(?:utos?)?|horas?|mes(?:es)?|años?|unidades?|%)/gi;
+  const pattern=/\b(\d+(?:[.,]\d+)?)\s*(mAh|GHz|MHz|MP|W|GB|TB|MB|Hz|fps|nm|µm|kg|g\b|mm|cm|m\b|min(?:utos?)?|horas?|mes(?:es)?|años?|unidades?|%)/gi;
   for(const match of text.matchAll(pattern)){
     const index=match.index??0;
     const prefix=fold(text.slice(Math.max(0,index-40),index));
@@ -303,7 +305,11 @@ function commercialMoveDelivered(input:LlmWriteInput,answer:string):boolean{
   const text=fold(answer);
   if(move.kind==='STOCK_STATUS'){
     const status=move.verifiedFacts.find(fact=>fact.key==='DISPONIBILIDAD')?.value;
-    return status==='DISPONIBLE'?/\bdisponible\b/.test(text):status==='NO_DISPONIBLE'?/\bno\s+(?:esta\s+)?disponible\b/.test(text):false;
+    return status==='DISPONIBLE'
+      ?/\b(?:esta|sigue)\s+disponible\b|\bhay\s+(?:stock|disponibilidad|unidades?)\b|\btenemos\s+(?:stock|disponibilidad)\b/.test(text)
+      :status==='NO_DISPONIBLE'
+        ?/\bno\s+(?:esta\s+)?disponible\b|\bsin\s+stock\b|\bno\s+hay\s+stock\b/.test(text)
+        :false;
   }
   if(move.kind==='CONTEXTUAL_BENEFIT'){
     const context=move.relevantCustomerContext;
@@ -314,7 +320,32 @@ function commercialMoveDelivered(input:LlmWriteInput,answer:string):boolean{
     const factTokens=move.verifiedFacts.flatMap(fact=>fold(fact.value).split(/[^a-z0-9.,]+/)).filter(token=>token.length>=3||/\d/.test(token));
     return factTokens.some(token=>text.includes(token));
   }
+  if(move.kind==='RELATED_VERIFIED_FACT'&&move.verifiedFacts[0]?.key==='PRECIO'&&String(input.intent).toUpperCase()==='STOCK')return /\bprecio\b/.test(text);
   return move.verifiedFacts.some(fact=>fold(answer).includes(fold(fact.value)));
+}
+
+function preserveCommercialMove(input:LlmWriteInput,answer:string):string{
+  if(String(input.nextBestAction??'').toUpperCase()!=='RELATED_VALUE'||commercialMoveDelivered(input,answer))return answer;
+  const continuation=renderCommercialMove(input.commercialMove??null,input.intent);
+  return continuation?`${answer.trim()} ${continuation}`.trim():answer;
+}
+
+function directAnswerDelivered(directAnswer:string,answer:string):boolean{
+  const required=numericClaims(directAnswer);
+  if(required.length){
+    const actual=numericClaims(answer);
+    return required.every(wanted=>actual.some(value=>value.value===wanted.value&&value.unit===wanted.unit));
+  }
+  const ignored=new Set(['este','esta','tiene','para','sobre','producto','equipo','armor']);
+  const tokens=fold(directAnswer).split(/[^a-z0-9]+/).filter(token=>token.length>=4&&!ignored.has(token));
+  const text=fold(answer);
+  return tokens.length>0&&tokens.slice(0,4).every(token=>text.includes(token));
+}
+
+function preserveDirectAnswer(input:LlmWriteInput,answer:string):string{
+  const direct=cleanPresentation(String(input.directAnswer??''));
+  if(!direct||directAnswerDelivered(direct,answer))return answer;
+  return `${direct} ${answer.trim()}`.trim();
 }
 
 function stripTrailingQuestion(answer:string):string {
@@ -332,17 +363,28 @@ function internalFallback(answer:string):boolean{
   return /\b(?:SOFT_CLOSE|ANSWER_ONLY|RELATED_VALUE|ASK_MISSING_FACT|OFFER_ALTERNATIVE|COLLECT_RESERVATION_DATA|EXECUTE_RESERVATION|ASSISTED_HANDOFF|RECOMMEND_WITHIN_BUDGET|N\+1)\b|\bcompara\b[^.]{0,90}\bde forma sim[eé]trica\b/i.test(answer);
 }
 function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
-  if(requestedUnsupportedCapability(input.message))return /\b(?:prueba|demo|demostraci[oó]n|cita)\b/i.test(input.message)
-    ?'No tengo habilitada una agenda de pruebas desde aquí.'
-    :'No tengo habilitada esa gestión desde aquí.';
+  if(requestedUnsupportedCapability(input.message)){
+    const refusal=/\b(?:prueba|demo|demostraci[oó]n|cita)\b/i.test(input.message)
+      ?'No tengo habilitada una agenda de pruebas desde aquí.'
+      :'No tengo habilitada esa gestión desde aquí.';
+    const direct=cleanPresentation(String(input.directAnswer??''));
+    return direct?`${direct} ${refusal}`:refusal;
+  }
   const ram=ramProfile(input);
+  const providedFallback=cleanPresentation(fallbackAnswer);
+  const genericFit=/^(?:Esa opci[oó]n encaja con los criterios indicados|Listo, tomo esa informaci[oó]n como referencia)\.?$/i;
+  const groundedDirect=cleanPresentation(String(input.directAnswer??''));
+  let cleaned=groundedDirect||(providedFallback&&!genericFit.test(providedFallback)?providedFallback:'');
   if(ram&&/\bram\b/i.test(input.message)){
     const physical=Number.isInteger(ram.physical)?String(ram.physical):String(ram.physical).replace('.',',');
     const virtual=Number.isInteger(ram.virtual)?String(ram.virtual):String(ram.virtual).replace('.',',');
-    return `Tiene ${physical} GB de RAM física + hasta ${virtual} GB de RAM virtual.`;
+    cleaned=`Tiene ${physical} GB de RAM física + hasta ${virtual} GB de RAM virtual.`;
   }
-  let cleaned=cleanPresentation(fallbackAnswer);
+  if(!cleaned)cleaned=cleanPresentation(fallbackAnswer);
   const action=String(input.nextBestAction??input.decision?.nextBestAction??'').toUpperCase();
+  if(action==='RELATED_VALUE'&&input.commercialMove?.kind==='CONTEXTUAL_BENEFIT'&&genericFit.test(cleaned)){
+    cleaned=renderVerifiedFact(input.commercialMove.verifiedFacts[0])??cleaned;
+  }
   const factUnknown=/^(?:Sobre\s+[^,.]+,\s*)?(?:ese\s+detalle\s+no\s+est[aá]\s+especificado|no\s+tengo\s+confirmado\s+ese\s+dato\s+exacto)\.?$/i;
   if(['ASK_MISSING_FACT','SOFT_CLOSE','RECOMMEND','OFFER_ALTERNATIVE','COLLECT_RESERVATION_DATA'].includes(action)&&factUnknown.test(cleaned))cleaned='';
   if(!cleaned&&action==='SOFT_CLOSE')cleaned='Listo, tomo esa información como referencia.';
@@ -357,6 +399,7 @@ function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
   }
   if(action==='ASK_MISSING_FACT'&&/[¿?]/.test(cleaned)&&!questionConsumesMissingFact(input,cleaned))cleaned=stripTrailingQuestion(cleaned);
   cleaned=executeNba(input,cleaned);
+  cleaned=preserveCommercialMove(input,cleaned);
   if(String(input.decision?.nextBestAction??'').toUpperCase()!=='ANSWER_ONLY')return cleaned;
   return stripTrailingQuestion(cleaned)||'No tengo confirmado ese dato exacto.';
 }
@@ -365,27 +408,26 @@ export async function safeWrite(llm:LlmProvider,input:LlmWriteInput,fallbackAnsw
   try{
     const writeInput=input.commercialContractPrepared?input:prepareCommercialWriteInput(input);
     const result=await llm.write(writeInput);
-    let cleaned=executeNba(writeInput,cleanPresentation(result.text));
+    let cleaned=preserveDirectAnswer(writeInput,executeNba(writeInput,cleanPresentation(result.text)));
     let violation=guardGeneratedAnswer(writeInput,cleaned);
     if(violation==='NBA_ANSWER_ONLY_QUESTION'){
       const salvaged=stripTrailingQuestion(cleaned);
       if(salvaged&&!guardGeneratedAnswer(writeInput,salvaged)){cleaned=salvaged;violation=null;}
     }
-    if(violation==='COMMERCIAL_MOVE_NOT_DELIVERED')return{answer:safeFallback(writeInput,fallbackAnswer),nextBestAction:'ANSWER_ONLY',missingFact:null,model:result.model,llmResult:result,fallback:{delivered:false,error:violation},recommendationContinuity:continuityState(writeInput,fallbackAnswer)};
+    if(violation==='COMMERCIAL_MOVE_NOT_DELIVERED')return{answer:safeFallback(writeInput,fallbackAnswer),nextBestAction:writeInput.nextBestAction??null,missingFact:writeInput.missingFact??null,model:result.model,llmResult:result,fallback:{delivered:false,error:violation},commercialMoveKind:writeInput.commercialMove?.kind??null,recommendationContinuity:continuityState(writeInput,fallbackAnswer)};
     const guardedAnswer=violation?safeFallback(writeInput,fallbackAnswer):cleaned;
     const continuityBefore=continuityState(writeInput,guardedAnswer);
-    if(continuityBefore.changed&&!continuityBefore.reason)return{answer:blockedContinuityAnswer(),nextBestAction:'ANSWER_ONLY',missingFact:null,model:result.model,llmResult:result,fallback:{delivered:false,error:'RECOMMENDATION_CHANGE_WITHOUT_REASON'},recommendationContinuity:{...continuityBefore,communicated:false,allowed:false,effectiveRecommendedProduct:continuityBefore.from}};
+    if(continuityBefore.changed&&!continuityBefore.reason)return{answer:blockedContinuityAnswer(writeInput),nextBestAction:'ANSWER_ONLY',missingFact:null,model:result.model,llmResult:result,fallback:{delivered:false,error:'RECOMMENDATION_CHANGE_WITHOUT_REASON'},commercialMoveKind:writeInput.commercialMove?.kind??null,recommendationContinuity:{...continuityBefore,communicated:false,allowed:false,effectiveRecommendedProduct:continuityBefore.from}};
     const continuityAnswer=communicateRecommendationChange(writeInput,guardedAnswer);
     const continuity=continuityState(writeInput,continuityAnswer);
     const continuityPostViolation=continuityAnswer!==guardedAnswer?guardGeneratedAnswer(writeInput,continuityAnswer):null;
-    if(continuity.changed&&(!continuity.allowed||continuityPostViolation))return{answer:blockedContinuityAnswer(),nextBestAction:'ANSWER_ONLY',missingFact:null,model:result.model,llmResult:result,fallback:{delivered:false,error:continuityPostViolation??'RECOMMENDATION_CHANGE_NOT_COMMUNICATED'},recommendationContinuity:{...continuity,allowed:false,effectiveRecommendedProduct:continuity.from}};
-    return{answer:continuityAnswer,nextBestAction:writeInput.nextBestAction??null,missingFact:writeInput.missingFact??null,model:result.model,llmResult:result,fallback:violation?{delivered:false,error:violation}:{delivered:true},recommendationContinuity:continuity};
+    if(continuity.changed&&(!continuity.allowed||continuityPostViolation))return{answer:blockedContinuityAnswer(writeInput),nextBestAction:'ANSWER_ONLY',missingFact:null,model:result.model,llmResult:result,fallback:{delivered:false,error:continuityPostViolation??'RECOMMENDATION_CHANGE_NOT_COMMUNICATED'},commercialMoveKind:writeInput.commercialMove?.kind??null,recommendationContinuity:{...continuity,allowed:false,effectiveRecommendedProduct:continuity.from}};
+    return{answer:continuityAnswer,nextBestAction:writeInput.nextBestAction??null,missingFact:writeInput.missingFact??null,model:result.model,llmResult:result,fallback:violation?{delivered:false,error:violation}:{delivered:true},commercialMoveKind:writeInput.commercialMove?.kind??null,recommendationContinuity:continuity};
   }catch(error){
     const writeInput=input.commercialContractPrepared?input:prepareCommercialWriteInput(input);
     const fallback=safeFallback(writeInput,fallbackAnswer);const continuityBefore=continuityState(writeInput,fallback);
-    if(continuityBefore.changed&&!continuityBefore.reason)return{answer:blockedContinuityAnswer(),nextBestAction:'ANSWER_ONLY',missingFact:null,model:'deterministic-fallback-v0.4',llmResult:null,fallback:{delivered:false,error:'RECOMMENDATION_CHANGE_WITHOUT_REASON'},recommendationContinuity:{...continuityBefore,communicated:false,allowed:false,effectiveRecommendedProduct:continuityBefore.from}};
+    if(continuityBefore.changed&&!continuityBefore.reason)return{answer:blockedContinuityAnswer(writeInput),nextBestAction:'ANSWER_ONLY',missingFact:null,model:'deterministic-fallback-v0.4',llmResult:null,fallback:{delivered:false,error:'RECOMMENDATION_CHANGE_WITHOUT_REASON'},commercialMoveKind:writeInput.commercialMove?.kind??null,recommendationContinuity:{...continuityBefore,communicated:false,allowed:false,effectiveRecommendedProduct:continuityBefore.from}};
     const answer=communicateRecommendationChange(writeInput,fallback);const continuity=continuityState(writeInput,answer);
-    const relatedFailed=String(writeInput.nextBestAction??'').toUpperCase()==='RELATED_VALUE';
-    return{answer:continuity.allowed||!continuity.changed?answer:blockedContinuityAnswer(),nextBestAction:relatedFailed?'ANSWER_ONLY':continuity.allowed||!continuity.changed?writeInput.nextBestAction??null:'ANSWER_ONLY',missingFact:relatedFailed?null:continuity.allowed||!continuity.changed?writeInput.missingFact??null:null,model:'deterministic-fallback-v0.4',llmResult:null,fallback:{delivered:false,error:error instanceof Error?error.message:String(error)},recommendationContinuity:continuity};
+    return{answer:continuity.allowed||!continuity.changed?answer:blockedContinuityAnswer(writeInput),nextBestAction:continuity.allowed||!continuity.changed?writeInput.nextBestAction??null:'ANSWER_ONLY',missingFact:continuity.allowed||!continuity.changed?writeInput.missingFact??null:null,model:'deterministic-fallback-v0.4',llmResult:null,fallback:{delivered:false,error:error instanceof Error?error.message:String(error)},commercialMoveKind:writeInput.commercialMove?.kind??null,recommendationContinuity:continuity};
   }
 }

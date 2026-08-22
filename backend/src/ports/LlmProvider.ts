@@ -31,6 +31,8 @@ export type LlmWriteInput = {
   rag?: RagEvidence[];
   verifiedFacts?: VerifiedFact[];
   deterministicAnswer?: string | null;
+  /** Immutable grounded answer to the current question, composed before any commercial continuation. */
+  directAnswer?: string | null;
   decision?: TurnDecision | null;
   /** Canonical products the writer is allowed to present as real in this turn. */
   allowedProducts?: string[];

@@ -81,8 +81,10 @@ export function evaluateOracle(card:OracleCard,observation:QaTurnObservation):Qa
     if(numeric&&!containsNumber(answer,numeric))findings.push({level:'RED',code:'ORACLE_PRICE_MISMATCH',message:`La respuesta no refleja el precio oracle ${price}.`,rootCause:'SQL'});
   }
   const availability=card.allowedFacts.find(x=>x.startsWith('DISPONIBILIDAD='))?.split('=')[1]??null;
-  if(availability==='DISPONIBLE'&&!/disponible|sí hay|si hay|tenemos stock/i.test(answer))findings.push({level:'RED',code:'ORACLE_STOCK_MISMATCH',message:'Oracle indica disponibilidad y la respuesta no la expresa.',rootCause:'SQL'});
-  if(availability==='NO_DISPONIBLE'&&/\bdisponible\b|sí hay|si hay|tenemos stock/i.test(answer)&&!/no\s+disponible|sin\s+stock/i.test(answer))findings.push({level:'RED',code:'ORACLE_STOCK_MISMATCH',message:'Oracle indica no disponible pero la respuesta afirma disponibilidad.',rootCause:'SQL'});
+  const selectedMove=state.lastDecisionTrace?.commercialMoveKind??debug.decisionTrace?.commercialMoveKind??null;
+  const stockRequired=['STOCK','PRICE_AVAILABILITY'].includes(String(card.intentClass).toUpperCase())||selectedMove==='STOCK_STATUS';
+  if(stockRequired&&availability==='DISPONIBLE'&&!/disponible|sí hay|si hay|tenemos stock/i.test(answer))findings.push({level:'RED',code:'ORACLE_STOCK_MISMATCH',message:'Oracle indica disponibilidad y la respuesta no la expresa.',rootCause:'SQL'});
+  if(stockRequired&&availability==='NO_DISPONIBLE'&&/\bdisponible\b|sí hay|si hay|tenemos stock/i.test(answer)&&!/no\s+disponible|sin\s+stock/i.test(answer))findings.push({level:'RED',code:'ORACLE_STOCK_MISMATCH',message:'Oracle indica no disponible pero la respuesta afirma disponibilidad.',rootCause:'SQL'});
 
   if(card.authoritativeDomain==='SQL'&&card.intentClass==='IMAGE'&&card.allowedFacts.length){
     const allowed=new Set(card.allowedFacts.filter(x=>x.startsWith('IMAGE_URL=')).map(x=>x.slice('IMAGE_URL='.length)));

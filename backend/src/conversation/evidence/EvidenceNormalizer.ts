@@ -29,10 +29,10 @@ export function normalizeEvidence(input:{
   const q=input.quote??null;
   if(q){
     facts.push({domain:'SQL',key:'PRODUCTO',value:productName(q),productId:q.productRagId??null,source:q.source});
-    if(['PRICE','PRICE_AVAILABILITY','QUOTE'].includes(intent)&&q.price!=null){
+    if(['PRICE','PRICE_AVAILABILITY','QUOTE','STOCK'].includes(intent)&&q.price!=null){
       facts.push({domain:'SQL',key:'PRECIO',value:`${q.currency||'PEN'} ${Number(q.price).toFixed(2)}`,productId:q.productRagId??null,source:q.source});
     }
-    if(['PRICE','PRICE_AVAILABILITY','STOCK'].includes(intent)&&q.stock!=null){
+    if(['PRICE','PRICE_AVAILABILITY','STOCK','PRODUCT_INFO','ATTRIBUTE','CAPABILITY'].includes(intent)&&q.stock!=null){
       facts.push({domain:'SQL',key:'DISPONIBILIDAD',value:q.stock>0?'DISPONIBLE':'NO_DISPONIBLE',productId:q.productRagId??null,source:q.source});
     }
   }

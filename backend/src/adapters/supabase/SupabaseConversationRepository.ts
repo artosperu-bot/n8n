@@ -1,6 +1,7 @@
 import type { ConversationMessageMeta, ConversationRepository, TurnCompletionMeta } from '../../ports/ConversationRepository.ts';
 import type { ConversationState } from '../../domain/types.ts';
 import { deriveCommercialImplications } from '../../conversation/commercial/CommercialImplications.ts';
+import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from '../../conversation/commercial/UseCaseNormalizer.ts';
 
 type Options = {
   url: string;
@@ -34,6 +35,13 @@ function productStatus(state:ConversationState):string|null {
 }
 function cleanStrings(values:string[]|undefined):string[] {
   return (values ?? []).filter(v=>typeof v==='string' && v.trim() && v !== '[object Object]').map(v=>v.trim());
+}
+function normalizedCommercialState(state:ConversationState):ConversationState{
+  return{
+    ...state,
+    useCase:normalizeGenuineUseCase(state.useCase),
+    spinFacts:cleanStrings(state.spinFacts).map(normalizeUseCaseSpinFact).filter((value):value is string=>Boolean(value)),
+  };
 }
 function compactSpinContribution(state:ConversationState):string|null {
   const direct=String(state.lastSpinContribution ?? '').trim().toUpperCase();
@@ -71,7 +79,7 @@ function storedCanonicalState(value:unknown):ConversationState {
     recommendedProduct:text(canonical.recommendedProduct,legacyRecommended?.nombre??legacyRecommended?.nombre_corto),
     customerType:text(canonical.customerType,legacyCustomer?.tipo),
     sector:text(canonical.sector,legacyCustomer?.sector),
-    useCase:text(canonical.useCase,legacyCustomer?.actividad),
+    useCase:normalizeGenuineUseCase(text(canonical.useCase,legacyCustomer?.actividad)),
     problem:text(canonical.problem,legacyCustomer?.problema),
     priorities:valueOr(canonical.priorities,Array.isArray(legacyCustomer?.prioridades)?legacyCustomer.prioridades:undefined),
     budget:valueOr(canonical.budget,legacyCustomer?.presupuesto),
@@ -87,9 +95,12 @@ function storedCanonicalState(value:unknown):ConversationState {
   } as ConversationState;
 }
 function canonicalContext(state:ConversationState) {
+  state=normalizedCommercialState(state);
+  const normalizedUseCase=state.useCase??null;
   const flat={
     ...state,
-    spinFacts:cleanStrings(state.spinFacts),
+    useCase:normalizedUseCase,
+    spinFacts:cleanStrings(state.spinFacts).map(normalizeUseCaseSpinFact).filter((value):value is string=>Boolean(value)),
     priorities:cleanStrings(state.priorities),
     comparisonProducts:cleanStrings(state.comparisonProducts),
   };
@@ -111,7 +122,7 @@ function canonicalContext(state:ConversationState) {
     cliente:{
       tipo:state.customerType ?? null,
       sector:state.sector ?? null,
-      actividad:state.useCase ?? state.sector ?? null,
+      actividad:normalizedUseCase ?? state.sector ?? null,
       problema:state.problem ?? null,
       prioridades:cleanStrings(state.priorities),
       presupuesto:state.budget ?? null,
@@ -219,6 +230,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
   }
 
   async completeTurn(sessionId:string,userContent:string,assistantContent:string,state:ConversationState,meta:TurnCompletionMeta={}):Promise<void> {
+    state=normalizedCommercialState(state);
     const lease=this.#activeLease.get(sessionId);
     if(!lease) throw new Error(`Supabase atomic turn missing lease for ${sessionId}`);
     const currentVersion=Number(state.contextVersion ?? 0);
@@ -344,7 +356,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
 
   async saveState(sessionId: string, state: ConversationState): Promise<void> {
     await this.#ensureSession(sessionId);
-    const normalized = { ...state, sessionId };
+    const normalized = { ...normalizedCommercialState(state), sessionId };
     const legacyContext={...normalized,debug_trace:normalized.lastDecisionTrace??null};
     const body = [{ session_id:sessionId, canal:sessionId.startsWith('qa-')?'qa_live':'backend', contexto:legacyContext,
       ultima_intencion:normalized.lastIntent??null, ultima_accion:normalized.lastNba??null, ultima_ruta:normalized.lastRoute??null,

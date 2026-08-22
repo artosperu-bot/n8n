@@ -81,6 +81,18 @@ test('recommendation winner becomes active followup focus without becoming selec
   assert.equal(s.customerVisibleRecommendedProduct,'Armor 22');
 });
 
+test('query purposes are removed from canonical use-case and SPIN state',()=>{
+  const invalid=['conocer_precio','stock_availability','saber cuál tiene mejor batería','alternativa_mas_barata','agendar prueba del equipo'];
+  for(const value of invalid){
+    const state=reduceState({}, {useCase:value,spinFacts:[`uso:${value}`,value],spinResidual:value});
+    assert.equal(state.useCase,null,value);
+    assert.deepEqual(state.spinFacts,[],value);
+  }
+  const genuine=reduceState({}, {useCase:'trabajo en construcción',spinFacts:['uso:trabajo en construcción']});
+  assert.equal(genuine.useCase,'trabajo en construcción');
+  assert.deepEqual(genuine.spinFacts,['uso:trabajo en construcción']);
+});
+
 test('explicit winner reason outranks equal technical scores when price was an authorized criterion',()=>{
   const s=reduceState({
     sessionId:'qa-price-winner',

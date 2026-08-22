@@ -1,5 +1,6 @@
 import type { ConversationState } from '../../domain/types.ts';
 import { fold } from '../../shared/text.ts';
+import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from './UseCaseNormalizer.ts';
 
 export type CommercialFacts = Pick<ConversationState,
   'customerType' | 'sector' | 'useCase' | 'problem' | 'priorities' | 'quantity' | 'invoiceRequired' | 'objection' | 'interestSignal' | 'purchaseSignal' | 'spinFacts'
@@ -49,7 +50,7 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
   else if (/\b(seguridad|vigilancia)\b/.test(t)) sector = 'seguridad';
   else if (/\bcampo\b/.test(t)) sector = 'trabajo_campo';
 
-  let useCase = previous.useCase ?? null;
+  let useCase = normalizeGenuineUseCase(previous.useCase);
   if (/\bdelivery\b|\brepart(?:o|idor|iendo)\b/.test(t)) useCase = 'delivery';
   else if (/\btrabaj(?:o|an|amos)\s+en\s+campo\b/.test(t)) useCase = 'trabajo_en_campo';
   else if (/\buso\s+diario\b/.test(t)) useCase = 'uso_diario';
@@ -73,7 +74,7 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
     : (previous.interestSignal ?? false);
 
   const spinFacts = unique([
-    ...(previous.spinFacts ?? []),
+    ...(previous.spinFacts ?? []).map(normalizeUseCaseSpinFact).filter((value):value is string=>Boolean(value)),
     ...(customerType ? [`cliente:${customerType.toLowerCase()}`] : []),
     ...(sector ? [`sector:${sector}`] : []),
     ...(useCase ? [`uso:${useCase}`] : []),

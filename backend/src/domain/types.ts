@@ -32,6 +32,7 @@ export type TurnDecisionTrace = {
   referenceType?:string|null;
   targetProduct?:string|null;
   writerFallback?:string|null;
+  commercialMoveKind?:'STOCK_STATUS'|'CONTEXTUAL_BENEFIT'|'RELATED_VERIFIED_FACT'|null;
   recommendation?:RecommendationDecisionTrace|null;
   continuity?:{
     recommendationChanged:boolean;

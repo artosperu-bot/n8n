@@ -26,3 +26,19 @@ test('saveState projects commercial memory and trace ids into ia_contexto', asyn
   assert.equal(ctx.ultimo_request_id,'r-1');
   assert.equal(ctx.contexto.customerType,'BUSINESS');
 });
+
+test('saveState never persists a query purpose as customer activity or use case',async()=>{
+  const calls:any[]=[];
+  const fetcher:any=async(url:any,init:any={})=>{
+    calls.push({url:String(url),method:init.method??'GET',body:init.body?JSON.parse(init.body):null});
+    return {ok:true,json:async()=>[]};
+  };
+  const repo=new SupabaseConversationRepository({url:'https://example.supabase.co',key:'service',fetcher});
+  await repo.saveState('qa-query-purpose',{
+    useCase:'stock_availability',sector:null,spinFacts:['uso:stock_availability'],comparisonProducts:[],priorities:[],
+  });
+  const ctx=calls.find(call=>call.url.includes('/rest/v1/ia_contexto')&&call.method==='POST').body[0];
+  assert.equal(ctx.actividad_activa,null);
+  assert.equal(ctx.contexto.useCase,null);
+  assert.deepEqual(ctx.contexto.spinFacts,[]);
+});

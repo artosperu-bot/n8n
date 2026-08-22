@@ -71,3 +71,25 @@ test('unit-bearing factual numbers still require authoritative evidence',()=>{
   const findings=evaluateOracle(card,observation('Tiene batería de 6600 mAh.',{lastResolvedProductId:'P-ARMOR-22-256G'},{erp:{productRagId:'P-ARMOR-22-256G',shortName:'Armor 22'},ragSources:['SUPABASE_DOCUMENTS:BATERIA']}));
   assert.equal(findings.some(x=>x.code==='ORACLE_UNSUPPORTED_NUMERIC_FACT'),true);
 });
+
+test('attribute oracle does not require unrelated SQL availability',()=>{
+  const card:any={
+    intentClass:'CAPABILITY',authoritativeDomain:'PRODUCT_RAG',expectedProductId:null,expectedProductName:'Armor 22',expectedProducts:[],
+    allowedFacts:['RESISTENCIA=Resistencia a caídas: 1.5 m.','DISPONIBILIDAD=DISPONIBLE'],forbiddenFacts:[],expectedReferenceBehavior:null,
+    expectedStateDelta:{},expectedNbaClass:null,requiresHandoff:false,sourceRefs:['SUPABASE_DOCUMENTS:RESISTENCIA'],
+  };
+  const findings=evaluateOracle(card,observation('Resiste caídas de hasta 1.5 m.',{lastNba:'ANSWER_ONLY'},{ragSources:['SUPABASE_DOCUMENTS:RESISTENCIA']}));
+  assert.equal(findings.some(x=>x.code==='ORACLE_STOCK_MISMATCH'),false);
+});
+
+test('oracle requires availability when stock is the selected +1',()=>{
+  const card:any={
+    intentClass:'CAPABILITY',authoritativeDomain:'PRODUCT_RAG',expectedProductId:null,expectedProductName:'Armor 22',expectedProducts:[],
+    allowedFacts:['RESISTENCIA=Resistencia a caídas: 1.5 m.','DISPONIBILIDAD=DISPONIBLE'],forbiddenFacts:[],expectedReferenceBehavior:null,
+    expectedStateDelta:{},expectedNbaClass:null,requiresHandoff:false,sourceRefs:['SUPABASE_DOCUMENTS:RESISTENCIA'],
+  };
+  const findings=evaluateOracle(card,observation('Resiste caídas de hasta 1.5 m.',{
+    lastNba:'RELATED_VALUE',lastDecisionTrace:{commercialMoveKind:'STOCK_STATUS'},
+  },{ragSources:['SUPABASE_DOCUMENTS:RESISTENCIA']}));
+  assert.equal(findings.some(x=>x.code==='ORACLE_STOCK_MISMATCH'),true);
+});

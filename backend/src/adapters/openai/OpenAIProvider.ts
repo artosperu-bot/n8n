@@ -7,6 +7,7 @@ import type {
   LlmWriteInput,
   TurnDecision,
 } from '../../ports/LlmProvider.ts';
+import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from '../../conversation/commercial/UseCaseNormalizer.ts';
 
 type Options = { apiKey: string; model: string; baseUrl?: string; fetcher?: typeof fetch };
 
@@ -34,12 +35,12 @@ function normalizeDecision(raw: any): TurnDecision {
     selectedProduct: nullable(raw?.selectedProduct),
     comparisonProducts: arr(raw?.comparisonProducts),
     attributes: arr(raw?.attributes).map(x => x.toUpperCase()),
-    customerNeed: nullable(raw?.customerNeed),
+    customerNeed: normalizeGenuineUseCase(nullable(raw?.customerNeed)),
     customerProblem: nullable(raw?.customerProblem),
     priorities: arr(raw?.priorities),
     objection: nullable(raw?.objection),
     commercialStage: nullable(raw?.commercialStage),
-    spinContribution: nullable(raw?.spinContribution),
+    spinContribution: normalizeUseCaseSpinFact(nullable(raw?.spinContribution)),
     nextBestAction: nullable(raw?.nextBestAction),
     needsSql: false,
     needsProductRag: false,
@@ -127,6 +128,7 @@ export class OpenAIProvider implements LlmProvider {
       'Mencionar otro producto no significa cambiar; preferir un atributo tampoco; una selección explícita sí puede cambiar.',
       'Si existe un par de comparación, conserva ese contexto para preguntas como cuál es mejor, y en batería, y en cámara o el otro.',
       'No vuelvas a preguntar datos ya conocidos.',
+      'customerNeed solo puede describir cómo o dónde se usará realmente el producto; precio, stock, comparar, buscar una alternativa o agendar una prueba son intenciones, no casos de uso.',
       'Propón solo un siguiente paso comercial útil y acotado.',
       'nextBestAction DEBE ser exactamente uno de: ANSWER_ONLY, ASK_MISSING_FACT, OFFER_ALTERNATIVE, COMPARE, RECOMMEND, SOFT_CLOSE, ASSISTED_HANDOFF.',
       'Usa ANSWER_ONLY cuando la pregunta factual ya puede responderse; ASK_MISSING_FACT solo si falta un dato que realmente cambiaría la decisión.',
@@ -166,6 +168,7 @@ export class OpenAIProvider implements LlmProvider {
       'Responde normalmente en 1 a 3 frases; usa más solo si una comparación o ficha realmente lo necesita.',
       'Como guía flexible, una respuesta normal debe tender a 150 a 450 caracteres y una comparación a 350 a 750 caracteres. Prioriza conservar los hechos necesarios sobre cumplir una cifra exacta.',
       'Resuelve primero exactamente lo que el cliente pregunta. No repitas discovery ni preguntes algo que ya figura en CONTEXTO_COMERCIAL.',
+      'RESPUESTA_DIRECTA es el N ya grounded y es inmutable: consérvala antes de verbalizar la única continuación comercial.',
       'Si el cliente pregunta un solo dato factual, responde primero de forma directa. No repitas el mismo dato en una conclusión y luego en una viñeta.',
       'Para comparar o recomendar puedes usar hasta 3 viñetas con * y negrita **solo en producto, decisión o datos realmente útiles**. Empieza directamente con la postura; NO escribas etiquetas como “Conclusión:”, “Datos clave:”, “Consecuencia práctica:”, “Recomendación:” o “Trade-off:”.',
       'FAB es una técnica interna: Feature verificable → Advantage segura → Benefit contextual seguro. Úsala cuando verifiedFeatures coincide con useCase/problem/priorities/implications o cuando comparas/recomiendas. En un dato puntual aislado —precio, stock, peso o spec simple— el beneficio es opcional; nunca escribas Feature/Advantage/Benefit.',
@@ -195,7 +198,7 @@ export class OpenAIProvider implements LlmProvider {
       model: this.#model,
       ...(/^gpt-5(?:$|[-.])/i.test(this.#model) ? { text: { verbosity: 'low' } } : {}),
       instructions,
-      input: `CLIENTE:\n${input.message}\n\nCONTRATO_COMERCIAL:\n${JSON.stringify({resolvedCurrentIntent:input.resolvedCurrentIntent,commercialStage:input.commercialStage,commercialSignals:input.commercialSignals,knownFacts:input.knownFacts,missingFacts:input.missingFacts,missingFact:input.missingFact,decisionImpact:input.decisionImpact,verifiedFeatures:input.verifiedFeatures,commercialMove:input.commercialMove,resolvedProduct:input.resolvedProduct,recommendedProduct:input.recommendedProduct,previousRecommendedProduct:input.previousRecommendedProduct,recommendationChanged:input.recommendationChanged,recommendationChangeReason:input.recommendationChangeReason,levelOfInterest:input.levelOfInterest,attribute:input.attribute,implications:input.implications,pendingQuestion:input.pendingQuestion,pendingAction:input.pendingAction,supportedCapabilities:input.supportedCapabilities,EXECUTABLE_NBA:input.executableNba,capabilityAction:input.capabilityAction,alternatives:input.alternatives,customerContext:input.customerContext})}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_DE_RESPUESTA:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nVERIFICADOS:\n${evidence || 'SIN_DATO'}`,
+      input: `CLIENTE:\n${input.message}\n\nRESPUESTA_DIRECTA:\n${input.directAnswer??'SIN_RESPUESTA_DIRECTA'}\n\nCONTRATO_COMERCIAL:\n${JSON.stringify({resolvedCurrentIntent:input.resolvedCurrentIntent,commercialStage:input.commercialStage,commercialSignals:input.commercialSignals,knownFacts:input.knownFacts,missingFacts:input.missingFacts,missingFact:input.missingFact,decisionImpact:input.decisionImpact,verifiedFeatures:input.verifiedFeatures,commercialMove:input.commercialMove,resolvedProduct:input.resolvedProduct,recommendedProduct:input.recommendedProduct,previousRecommendedProduct:input.previousRecommendedProduct,recommendationChanged:input.recommendationChanged,recommendationChangeReason:input.recommendationChangeReason,levelOfInterest:input.levelOfInterest,attribute:input.attribute,implications:input.implications,pendingQuestion:input.pendingQuestion,pendingAction:input.pendingAction,supportedCapabilities:input.supportedCapabilities,EXECUTABLE_NBA:input.executableNba,capabilityAction:input.capabilityAction,alternatives:input.alternatives,customerContext:input.customerContext})}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_DE_RESPUESTA:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nVERIFICADOS:\n${evidence || 'SIN_DATO'}`,
     });
     return {
       text: this.#extractText(json),

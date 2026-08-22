@@ -4,6 +4,7 @@ const FACTUAL = new Set([
   'PRODUCT_INFO','ATTRIBUTE','CAPABILITY','PRICE_AVAILABILITY','PRICE','STOCK',
   'IMAGES','IMAGE','POLICY','WARRANTY','ORDER_STATUS',
 ]);
+const RELATED_VALUE_FACTUAL=new Set(['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','PRICE_AVAILABILITY','PRICE','STOCK']);
 
 const ALLOWED: Record<string, Set<string>> = {
   GREETING:new Set(['ASK_MISSING_FACT','ANSWER_ONLY']),
@@ -28,7 +29,7 @@ export function isNbaCompatible(intent:string, action:string|null|undefined, sta
   const a=String(action??'').toUpperCase();
   if (state.purchaseSignal===true || i==='PURCHASE') return a===purchaseAction(state);
   if (['HUMAN','QUOTE'].includes(i)) return a==='ASSISTED_HANDOFF';
-  if (FACTUAL.has(i)) return a==='ANSWER_ONLY'||a==='SOFT_CLOSE';
+  if (FACTUAL.has(i)) return a==='ANSWER_ONLY'||a==='SOFT_CLOSE'||(a==='RELATED_VALUE'&&RELATED_VALUE_FACTUAL.has(i));
   return ALLOWED[i]?.has(a) ?? ALLOWED.OTHER.has(a);
 }
 

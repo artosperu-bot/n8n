@@ -56,3 +56,20 @@ test('GPT-5 mini returns a structured semantic/commercial turn decision', async 
   assert.match(String(sent.input), /HISTORIA_RECIENTE/);
   assert.match(String(sent.input), /Armor 25T Pro/);
 });
+
+test('semantic extraction rejects a query purpose as customerNeed and SPIN use case',async()=>{
+  const fetcher:typeof fetch=async()=>Response.json({
+    model:'gpt-test',
+    output_text:JSON.stringify({
+      primaryIntent:'STOCK',secondaryIntents:[],targetProduct:'Armor 22',mentionedProducts:['Armor 22'],
+      referenceType:'NAMED_QUERY_TARGET',explicitSwitch:false,selectedProduct:null,comparisonProducts:[],attributes:[],
+      customerNeed:'stock_availability',customerProblem:null,priorities:[],objection:null,commercialStage:null,
+      spinContribution:'uso:stock_availability',nextBestAction:'ANSWER_ONLY',confidence:0.9,
+    }),
+    usage:{input_tokens:1,output_tokens:1,total_tokens:2},
+  });
+  const llm=new OpenAIProvider({apiKey:'test',model:'gpt-test',fetcher});
+  const result=await llm.decide!({message:'¿Tienen stock?',state:{}});
+  assert.equal(result.decision.customerNeed,null);
+  assert.equal(result.decision.spinContribution,null);
+});

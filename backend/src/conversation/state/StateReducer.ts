@@ -1,4 +1,5 @@
 import type { ConversationState } from '../../domain/types.ts';
+import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from '../commercial/UseCaseNormalizer.ts';
 
 export type StatePatch=Partial<ConversationState>&{spinResidual?:string};
 
@@ -50,8 +51,10 @@ function topRecommendationTie(trace:any):boolean{
 
 export function reduceState(previous:ConversationState,patch:StatePatch):ConversationState{
   const{spinResidual,spinFacts:patchSpinFacts,...canonicalPatch}=patch;
-  const spinFacts=[...new Set([...(previous.spinFacts??[]),...(patchSpinFacts??[])])];
-  if(spinResidual&&spinResidual.length>3&&!spinFacts.includes(spinResidual))spinFacts.push(spinResidual);
+  const spinFacts=[...new Set([...(previous.spinFacts??[]),...(patchSpinFacts??[])]
+    .map(normalizeUseCaseSpinFact).filter((value):value is string=>Boolean(value)))];
+  const normalizedResidual=normalizeUseCaseSpinFact(spinResidual);
+  if(normalizedResidual&&normalizedResidual.length>3&&!spinFacts.includes(normalizedResidual))spinFacts.push(normalizedResidual);
 
   const beforeProducts=productFlowState(previous);
   const incomingProducts=productFlowState(canonicalPatch);
@@ -63,6 +66,7 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
     turnCount:(previous.turnCount??0)+1,
     updatedAt:new Date().toISOString(),
   };
+  next.useCase=normalizeGenuineUseCase(next.useCase);
 
   const currentIntent=String(canonicalPatch.lastIntent??'').toUpperCase();
   const currentRoute=String(canonicalPatch.lastRoute??'').toUpperCase();

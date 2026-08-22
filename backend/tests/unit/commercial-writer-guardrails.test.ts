@@ -100,7 +100,7 @@ test('rejects rounded technical values that change authoritative RAG facts',asyn
     allowedProducts:['Armor 22'],
     rag:[{text:'Frecuencia máxima CPU: 2.05 GHz.',source:'TEST',productId:'P-ARMOR-22-256G',section:'RENDIMIENTO',domain:'PRODUCT'}],
   } as any,'No tengo confirmado ese dato exacto.');
-  assert.equal(r.answer,'No tengo confirmado ese dato exacto.');
+  assert.match(r.answer,/2[.,]05 GHz/i);
   assert.equal(r.fallback.error,'UNSUPPORTED_NUMERIC_FACT');
 });
 

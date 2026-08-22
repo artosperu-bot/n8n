@@ -3,16 +3,25 @@ import { fold } from '../../shared/text.ts';
 import { normalizeEvidence } from '../evidence/EvidenceNormalizer.ts';
 import { canExecuteCapability, evaluateTurnCapabilities, missingFactCapability, requestedUnsupportedCapability, type CommercialCapabilityAction } from './CommercialCapabilities.ts';
 import { deriveCommercialImplications } from './CommercialImplications.ts';
+import { normalizeGenuineUseCase } from './UseCaseNormalizer.ts';
+import { buildGroundedDirectAnswer } from './GroundedDirectAnswer.ts';
 
 function unique(values:Array<string|null|undefined>):string[]{
   return [...new Set(values.map(value=>String(value??'').trim()).filter(Boolean))];
 }
 
-function genuineUseCase(value:string|null):string|null{
-  const raw=String(value??'').trim();
-  const normalized=fold(raw).replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
-  if(!normalized||/^(?:(?:conocer|consultar|saber|ver|revisar)\s+(?:(?:el|la)\s+)?)?(?:precio|stock|disponibilidad|precio y stock|stock availability|saber disponibilidad)$/.test(normalized))return null;
-  return raw;
+function directAttributeFamily(attribute:string|null,fact:{key:string;value:string}):boolean{
+  const requested=fold(attribute??'').replace(/[^a-z0-9]+/g,'');
+  if(!requested)return false;
+  const content=fold(`${fact.key} ${fact.value}`).replace(/[^a-z0-9]+/g,'');
+  const families:Record<string,string[]>={
+    memoria:['ram','memoria'],ram:['ram','memoria'],
+    almacenamiento:['almacenamiento','rom','memoriainterna'],rom:['almacenamiento','rom','memoriainterna'],
+    bateria:['bateria','autonomia','carga'],autonomia:['bateria','autonomia','carga'],
+    resistencia:['resistencia','caida','ip68','ip69'],camara:['camara','foto','video','mp'],
+  };
+  const tokens=families[requested]??[requested];
+  return tokens.some(token=>content.includes(token));
 }
 
 function selectCommercialMove(input:LlmWriteInput,verifiedFacts:LlmWriteInput['verifiedFacts'],verifiedFeatures:LlmWriteInput['verifiedFeatures'],attribute:string|null,resolvedProduct:string|null,context:{useCase:string|null;problem:string|null;priorities:string[];budget:number|null;objection:string|null},levelOfInterest:number):CommercialMove|null{
@@ -23,10 +32,23 @@ function selectCommercialMove(input:LlmWriteInput,verifiedFacts:LlmWriteInput['v
     const stockFact=(verifiedFacts??[]).find(fact=>fact.domain==='SQL'&&fact.key==='DISPONIBILIDAD');
     if(stockFact)return{action:'RELATED_VALUE',kind:'STOCK_STATUS',targetProduct:resolvedProduct,intensity,reason:'VERIFIED_STOCK_RELATED_TO_PRICE',basis:['SQL'],attribute:null,verifiedFacts:[stockFact],relevantCustomerContext:context};
   }
-  const realContext={...context,useCase:genuineUseCase(context.useCase)};
+  const realContext={...context,useCase:normalizeGenuineUseCase(context.useCase)};
   const hasCustomerContext=Boolean(realContext.useCase||realContext.problem||realContext.priorities.length||realContext.objection);
   if(verifiedFeatures?.length&&hasCustomerContext){
     return{action:'RELATED_VALUE',kind:'CONTEXTUAL_BENEFIT',targetProduct:resolvedProduct,intensity,reason:'VERIFIED_FEATURE_WITH_CUSTOMER_CONTEXT',basis:['VERIFIED_PRODUCT_FEATURE','CUSTOMER_CONTEXT'],attribute,verifiedFacts:verifiedFeatures,relevantCustomerContext:realContext};
+  }
+  const directIntentKeys:Record<string,Set<string>>={
+    PRICE:new Set(['PRECIO']),PRICE_AVAILABILITY:new Set(['PRECIO','DISPONIBILIDAD']),STOCK:new Set(['DISPONIBILIDAD']),
+  };
+  const relatedFact=(verifiedFacts??[]).find(fact=>{
+    if(fact.key==='PRODUCTO'||fact.domain==='INSTITUTIONAL_RAG')return false;
+    if(directIntentKeys[intent]?.has(fact.key))return false;
+    return !directAttributeFamily(attribute,fact);
+  });
+  if(relatedFact){
+    const basis:CommercialMove['basis']=relatedFact.domain==='SQL'?['SQL']:['VERIFIED_PRODUCT_FEATURE'];
+    const kind=relatedFact.key==='DISPONIBILIDAD'?'STOCK_STATUS':'RELATED_VERIFIED_FACT';
+    return{action:'RELATED_VALUE',kind,targetProduct:resolvedProduct,intensity,reason:'DISTINCT_VERIFIED_RELATED_FACT',basis,attribute:relatedFact.key,verifiedFacts:[relatedFact],relevantCustomerContext:realContext};
   }
   return null;
 }
@@ -107,7 +129,7 @@ function collectMissingFacts(facts:{
 
 export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const state:any=input.state??{};
-  const useCase=input.useCase??state.useCase??null;
+  const useCase=normalizeGenuineUseCase(input.useCase??state.useCase??null);
   const problem=input.problem??state.problem??null;
   const priorities=unique(input.priorities??state.priorities??[]);
   const budget=input.budget??state.budget??null;
@@ -116,15 +138,20 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const activeProduct=input.activeProduct??state.activeProduct??null;
   const selectedProduct=input.selectedProduct??state.selectedProduct??input.decision?.selectedProduct??null;
   const recommendedProduct=input.recommendedProduct??state.recommendedProduct??null;
-  const resolvedTurnProduct=input.resolvedProduct??selectedProduct??recommendedProduct??activeProduct??input.quote?.shortName??input.quote?.product??null;
+  const factualIntent=new Set(['PRICE','PRICE_AVAILABILITY','STOCK','CAPABILITY','PRODUCT_INFO','ATTRIBUTE','WARRANTY','POLICY','ORDER_STATUS']).has(String(input.intent??'').toUpperCase());
+  const currentTurnProduct=input.resolvedProduct??input.quote?.shortName??input.quote?.product??input.decision?.targetProduct??null;
+  const resolvedTurnProduct=factualIntent
+    ?currentTurnProduct??selectedProduct??recommendedProduct??activeProduct
+    :input.resolvedProduct??selectedProduct??recommendedProduct??activeProduct??input.quote?.shortName??input.quote?.product??input.decision?.targetProduct??null;
   const objection=input.objection??state.objection??input.decision?.objection??null;
   const levelOfInterest=input.levelOfInterest??state.levelOfInterest??0;
-  const attribute=input.attribute??unique(state.currentAttributes??[])[0]??null;
+  const attribute=unique([input.attribute,...(input.decision?.attributes??[]),...(state.currentAttributes??[])])[0]??null;
   const implications=unique(input.implications??deriveCommercialImplications(problem,objection));
   const previousPendingAction=input.pendingAction??state.pendingCommercialAction??state.lastNba??null;
   const verifiedFacts=input.verifiedFacts??normalizeEvidence({intent:input.intent,quote:input.quote,rag:input.rag});
   const verifiedFeatures=input.verifiedFeatures??verifiedFacts.filter(fact=>fact.domain==='PRODUCT_RAG');
-  const moveContext={useCase:genuineUseCase(useCase),problem,priorities,budget,objection};
+  const directAnswer=input.directAnswer??buildGroundedDirectAnswer({message:input.message,intent:input.intent,attribute,resolvedProduct:resolvedTurnProduct,quote:input.quote,rag:input.rag,verifiedFacts});
+  const moveContext={useCase,problem,priorities,budget,objection};
   const commercialMove=selectCommercialMove(input,verifiedFacts,verifiedFeatures,attribute,resolvedTurnProduct,moveContext,levelOfInterest);
   const allowedProducts=unique(input.allowedProducts??[]);
   const alternatives=unique(input.alternatives??[]).filter(product=>includesProduct(allowedProducts,product));
@@ -166,10 +193,6 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
     const askAction=missingFactCapability(missingFact);
     if(askAction&&canExecuteCapability(askAction,turnCapabilities,decisionImpact)){nextBestAction='ASK_MISSING_FACT';capabilityAction=askAction;executable=true;}
   }
-  if(!executable&&nextBestAction==='RELATED_VALUE'){
-    const askAction=missingFactCapability(missingFact);
-    if(askAction&&canExecuteCapability(askAction,turnCapabilities,decisionImpact)){nextBestAction='ASK_MISSING_FACT';capabilityAction=askAction;executable=true;}
-  }
   if(unsupportedRequest){nextBestAction='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';executable=true;decisionImpact=false;missingFact=null;}
   if(!executable){nextBestAction='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';decisionImpact=false;missingFact=null;}
   if(nextBestAction!=='ASK_MISSING_FACT')missingFact=null;
@@ -181,7 +204,7 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   return {
     ...input,
     decision:input.decision?{...input.decision,nextBestAction}:input.decision,
-    allowedProducts,alternatives,verifiedFacts,verifiedFeatures,commercialMove,
+    allowedProducts,alternatives,verifiedFacts,verifiedFeatures,commercialMove,directAnswer,
     nextBestAction,commercialStage:input.commercialStage??state.commercialStage??input.decision?.commercialStage??null,
     knownFacts,missingFacts,missingFact,decisionImpact,interestSignal,purchaseSignal,objection,activeProduct,selectedProduct,recommendedProduct,
     useCase,problem,priorities,budget,
