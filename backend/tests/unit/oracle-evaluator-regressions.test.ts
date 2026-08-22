@@ -27,3 +27,27 @@ test('Oracle factual evidence keeps complete RAG text instead of writer truncati
   const result=oracleFacts('CAPABILITY',null,[{text:long,source:'SUPABASE_DOCUMENTS:MEMORIA',section:'MEMORIA',productId:'P-A',domain:'PRODUCT'}]);
   assert.ok(result.allowedFacts.some(x=>x.includes('512 GB')));
 });
+
+test('comparison oracle validates the complete product set instead of a single target',()=>{
+  const card:any={
+    intentClass:'COMPARE',authoritativeDomain:'PRODUCT_RAG',expectedProductId:null,expectedProductName:null,
+    expectedProducts:[{id:'P-ARMOR-X13',name:'Armor X13'},{id:'P-ARMOR-22-256G',name:'Armor 22'}],
+    allowedFacts:[],forbiddenFacts:[],expectedReferenceBehavior:'COMPARISON_PAIR',expectedStateDelta:{},
+    expectedNbaClass:null,requiresHandoff:false,sourceRefs:[],
+  };
+  const findings=evaluateOracle(card,observation('Comparación.',{
+    comparisonProducts:['Armor X13','Armor 22'],
+  },{}));
+  assert.equal(findings.some(x=>x.code==='ORACLE_PRODUCT_ID_MISMATCH'||x.code==='ORACLE_COMPARISON_SET_MISMATCH'),false);
+});
+
+test('comparison oracle rejects an incomplete observed product set',()=>{
+  const card:any={
+    intentClass:'COMPARE',authoritativeDomain:'PRODUCT_RAG',expectedProductId:null,expectedProductName:null,
+    expectedProducts:[{id:'P-ARMOR-X13',name:'Armor X13'},{id:'P-ARMOR-22-256G',name:'Armor 22'}],
+    allowedFacts:[],forbiddenFacts:[],expectedReferenceBehavior:'COMPARISON_PAIR',expectedStateDelta:{},
+    expectedNbaClass:null,requiresHandoff:false,sourceRefs:[],
+  };
+  const findings=evaluateOracle(card,observation('Comparación.',{comparisonProducts:['Armor X13']},{}));
+  assert.equal(findings.some(x=>x.code==='ORACLE_COMPARISON_SET_MISMATCH'),true);
+});

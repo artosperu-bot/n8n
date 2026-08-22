@@ -37,9 +37,9 @@ export const golden100Scenarios:QaScenario[]=[
     {message:'mandame fotos del equipo',oracleSpec:{domain:'SQL',intentClass:'IMAGE',expectedReferenceBehavior:'RECOMMENDED'}},
   ]},
   {id:'G100-06-COMPARE-X13-22',family:'COMPARISON',title:'Comparación sostenida X13 vs Armor 22',turns:[
-    {message:'estoy entre Armor X13 y Armor 22, comparalos',expected:{intent:'COMPARE'},oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',product:'Armor X13',sections:['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA']}},
-    {message:'cual tiene mejor bateria?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',product:'Armor X13',sections:['BATERIA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
-    {message:'y en camara?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',product:'Armor X13',sections:['CAMARA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
+    {message:'estoy entre Armor X13 y Armor 22, comparalos',expected:{intent:'COMPARE'},oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA']}},
+    {message:'cual tiene mejor bateria?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['BATERIA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
+    {message:'y en camara?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['CAMARA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
     {message:'precio del X13',oracleSpec:{domain:'SQL',intentClass:'PRICE',product:'Armor X13'}},
     {message:'y el otro?',oracleSpec:{domain:'SQL',intentClass:'PRICE',product:'Armor 22',expectedReferenceBehavior:'OTHER_IN_PAIR'}},
   ]},
@@ -131,7 +131,7 @@ export const golden100Scenarios:QaScenario[]=[
     {message:'quiero ver el Armor X13',oracleSpec:{domain:'MEMORY',intentClass:'PRODUCT_INFO',expectedState:{activeProduct:'Armor X13'}}},
     {message:'cuanto cuesta?',oracleSpec:{domain:'SQL',intentClass:'PRICE',product:'Armor X13'}},
     {message:'tambien estoy viendo el Armor 22',oracleSpec:{domain:'MEMORY',intentClass:'PRODUCT_INFO',expectedReferenceBehavior:'MENTION_NO_SWITCH',expectedState:{activeProduct:'Armor X13'}}},
-    {message:'q diferencia hay entre los dos?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',product:'Armor X13',sections:['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
+    {message:'q diferencia hay entre los dos?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
     {message:'prefiero el Armor 22',oracleSpec:{domain:'MEMORY',intentClass:'PRODUCT_INFO',expectedReferenceBehavior:'EXPLICIT_SWITCH',expectedState:{activeProduct:'Armor 22'}}},
   ]},
   {id:'G100-20-REAL-WRITING',family:'RELIABILITY',title:'Mensajes cortos, typos y referencias naturales',turns:[

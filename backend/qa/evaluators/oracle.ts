@@ -47,6 +47,14 @@ export function evaluateOracle(card:OracleCard,observation:QaTurnObservation):Qa
   const debug=response.debug??{};
   const answer=String(response.answer??'');
 
+  if(card.expectedProducts?.length){
+    const expected=new Set(card.expectedProducts.map(x=>String(x.name).trim().toLocaleLowerCase('es')));
+    const actual=new Set((Array.isArray(state.comparisonProducts)?state.comparisonProducts:[]).map((x:unknown)=>String(x).trim().toLocaleLowerCase('es')));
+    if(expected.size!==actual.size||[...expected].some(x=>!actual.has(x))){
+      findings.push({level:'RED',code:'ORACLE_COMPARISON_SET_MISMATCH',message:`Comparación oracle=${card.expectedProducts.map(x=>x.name).join(' / ')} actual=${[...actual].join(' / ')||'ninguna'}`,rootCause:'REFERENCE'});
+    }
+  }
+
   if(card.expectedProductId){
     const actual=debug.erp?.productRagId??state.lastResolvedProductId??null;
     if(!actual||!same(actual,card.expectedProductId))findings.push({level:'RED',code:'ORACLE_PRODUCT_ID_MISMATCH',message:`Producto oracle=${card.expectedProductId} actual=${String(actual)}`,rootCause:'REFERENCE'});
@@ -80,7 +88,7 @@ export function evaluateOracle(card:OracleCard,observation:QaTurnObservation):Qa
   }
 
   if(['PRODUCT_RAG','INSTITUTIONAL_RAG'].includes(card.authoritativeDomain)&&facts){
-    const productNums=new Set(numbers(card.expectedProductName??''));
+    const productNums=new Set(numbers([card.expectedProductName??'',...(card.expectedProducts??[]).map(x=>x.name)].join(' ')));
     const allowedNums=new Set(numbers(facts));
     const unsupported=assertedNumbers(answer).filter(n=>!productNums.has(n)&&!allowedNums.has(n));
     if(unsupported.length)findings.push({level:'RED',code:'ORACLE_UNSUPPORTED_NUMERIC_FACT',message:`Afirmaciones numéricas no respaldadas por Oracle: ${unsupported.join(', ')}`,rootCause:card.authoritativeDomain==='PRODUCT_RAG'?'PRODUCT_RAG':'INSTITUTIONAL_RAG'});

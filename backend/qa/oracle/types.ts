@@ -4,6 +4,7 @@ export type OracleSpec = {
   intentClass?: string;
   domain: OracleDomain;
   product?: string | null;
+  products?: string[];
   sections?: string[];
   institutionalTopic?: { category:string; subcategory?:string } | null;
   expectedReferenceBehavior?: string | null;
@@ -12,11 +13,14 @@ export type OracleSpec = {
   requiresHandoff?: boolean;
 };
 
+export type OracleExpectedProduct = { id:string | null; name:string };
+
 export type OracleCard = {
   intentClass: string;
   authoritativeDomain: OracleDomain;
   expectedProductId: string | null;
   expectedProductName: string | null;
+  expectedProducts: OracleExpectedProduct[];
   allowedFacts: string[];
   forbiddenFacts: string[];
   expectedReferenceBehavior: string | null;

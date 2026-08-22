@@ -20,6 +20,20 @@ test('oracle builds product technical truth by canonical product id and sections
   assert.equal(card.authoritativeDomain,'PRODUCT_RAG');
 });
 
+test('oracle resolves every product in a comparison as one authoritative set',async()=>{
+  const card=await oracle.resolve({
+    message:'Compara Armor X13 y Armor 22',
+    spec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['BATERIA']},
+  });
+  assert.deepEqual(card.expectedProducts,[
+    {id:'P-ARMOR-X13',name:'Armor X13'},
+    {id:'P-ARMOR-22-256G',name:'Armor 22'},
+  ]);
+  assert.ok(card.sourceRefs.some(x=>x.includes('BATERIA')));
+  assert.ok(card.allowedFacts.some(x=>x.includes('P-ARMOR-X13')));
+  assert.ok(card.allowedFacts.some(x=>x.includes('P-ARMOR-22-256G')));
+});
+
 test('oracle keeps policy and handoff domains independent',async()=>{
   const policy=await oracle.resolve({message:'¿Cuánto demora el envío a Lima?',spec:{domain:'INSTITUTIONAL_RAG',intentClass:'POLICY'}});
   assert.equal(policy.authoritativeDomain,'INSTITUTIONAL_RAG');
