@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { writeTrace } from '../../src/shared/trace.ts';
+import { installTraceConsoleSink, writeTrace } from '../../src/shared/trace.ts';
 
 function withTraceFile(run:(file:string)=>void){
   const dir=mkdtempSync(join(tmpdir(),'stech-trace-'));
@@ -59,4 +59,20 @@ test('is fail-soft when trace file cannot be written',()=>{
     if(previous===undefined)delete process.env.STECH_TRACE_FILE;
     else process.env.STECH_TRACE_FILE=previous;
   }
+});
+
+test('captures the four existing STECH console events without changing their producers',()=>{
+  withTraceFile(file=>{
+    installTraceConsoleSink();
+    console.log(JSON.stringify({event:'STECH_TURN_TRACE',sessionId:'qa-trace'}));
+    console.log(JSON.stringify({event:'STECH_REFERENCE_TRACE',sessionId:'qa-trace'}));
+    console.log(JSON.stringify({event:'STECH_PRODUCT_FLOW',sessionId:'qa-trace'}));
+    console.error(JSON.stringify({event:'STECH_TURN_ERROR',sessionId:'qa-trace',error:'DNI 12345678'}));
+    console.log(JSON.stringify({event:'UNRELATED_EVENT',sessionId:'qa-trace'}));
+    const lines=readFileSync(file,'utf8').trim().split('\n').map(line=>JSON.parse(line));
+    assert.deepEqual(lines.map(row=>row.event),[
+      'STECH_TURN_TRACE','STECH_REFERENCE_TRACE','STECH_PRODUCT_FLOW','STECH_TURN_ERROR',
+    ]);
+    assert.doesNotMatch(JSON.stringify(lines),/12345678/);
+  });
 });
