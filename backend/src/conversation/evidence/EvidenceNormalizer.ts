@@ -1,4 +1,5 @@
 import type { ProductQuote, RagEvidence, VerifiedFact } from '../../domain/types.ts';
+import { fold } from '../../shared/text.ts';
 
 function compact(value:string,max=320):string {
   const clean=value.replace(/\s+/g,' ').trim();
@@ -6,6 +7,31 @@ function compact(value:string,max=320):string {
 }
 function productName(q:ProductQuote):string {
   return String(q.shortName??q.product).trim();
+}
+
+const RAG_ENVELOPE_KEYS=new Set([
+  'producto','producto id','codigo','sku','seccion','grupo tecnico','titulo','contenido',
+]);
+function envelopeLabel(line:string):string|null {
+  const match=line.match(/^([^:\n]{2,40})\s*:\s*/);
+  if(!match)return null;
+  return fold(match[1]).replace(/\s+/g,' ').trim();
+}
+function displayText(raw:string):string {
+  const normalized=raw.replace(/\r\n?/g,'\n').trim();
+  if(!normalized)return '';
+  const lines=normalized.split('\n').map(line=>line.trim()).filter(Boolean);
+  const envelopeCount=lines.reduce((count,line)=>count+(RAG_ENVELOPE_KEYS.has(envelopeLabel(line)??'')?1:0),0);
+  if(envelopeCount<2)return compact(normalized);
+
+  const contentIndex=lines.findIndex(line=>envelopeLabel(line)==='contenido');
+  if(contentIndex>=0){
+    const first=lines[contentIndex].replace(/^[^:\n]{2,40}\s*:\s*/,'').trim();
+    const tail=lines.slice(contentIndex+1).filter(line=>!RAG_ENVELOPE_KEYS.has(envelopeLabel(line)??''));
+    return compact([first,...tail].filter(Boolean).join(' '));
+  }
+
+  return compact(lines.filter(line=>!RAG_ENVELOPE_KEYS.has(envelopeLabel(line)??'')).join(' '));
 }
 
 function memoryFacts(text:string,row:RagEvidence):VerifiedFact[] {
@@ -40,7 +66,7 @@ export function normalizeEvidence(input:{
   for(const row of input.rag??[]){
     const raw=String(row.text??'');
     if(String(row.section??'').toUpperCase()==='MEMORIA'||/\bRAM\b/i.test(raw))facts.push(...memoryFacts(raw,row));
-    const value=compact(raw);
+    const value=displayText(raw);
     if(!value)continue;
     const domain=row.domain==='INSTITUTIONAL'||row.source.startsWith('SUPABASE_INSTITUCIONAL')?'INSTITUTIONAL_RAG':'PRODUCT_RAG';
     const key=String(row.section??row.source.split(':').at(-1)??'EVIDENCIA').toUpperCase();
