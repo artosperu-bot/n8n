@@ -1,4 +1,8 @@
 import { createStechApp } from './app.ts';
+import { installTraceConsoleSink } from './shared/trace.ts';
+
+installTraceConsoleSink();
+
 const app=createStechApp();
 await app.listen(app.runtime.config.port,app.runtime.config.host);
 console.log(`STECH backend listening on http://${app.runtime.config.host}:${app.runtime.config.port}`);
