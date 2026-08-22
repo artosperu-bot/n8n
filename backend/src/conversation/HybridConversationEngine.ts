@@ -15,6 +15,7 @@ import { validateTurnDecision } from './decision/DecisionValidator.ts';
 import { resolveInstitutionalTopic } from './institutional/InstitutionalTopicResolver.ts';
 import { resolveIntentPlan } from './intent/IntentPlan.ts';
 import { nextBestAction } from './nba/NextBestAction.ts';
+import { evaluatePostAnswerCommercialProgression } from './nba/PostAnswerCommercialProgression.ts';
 import { rankRecommendations } from './recommendation/RecommendationPolicy.ts';
 import { resolveReference } from './reference/ReferenceResolver.ts';
 import { reduceState } from './state/StateReducer.ts';
@@ -434,7 +435,7 @@ export class HybridConversationEngine {
       const interest=updateInterestLevel({message:input.message,intent,attributes:decision.attributes,product:decision.selectedProduct??target,previous,current:{...commercialState,queryTarget:target,comparisonProducts:decision.comparisonProducts}});
       commercialState.levelOfInterest=interest.levelOfInterest;
       commercialState.interestEvents=interest.interestEvents;
-      let quote=await this.#quote(target,initialCandidates);const requestedUnknown=Boolean(target&&!quote);let recommendedProduct=commercialState.recommendedProduct??null;let rag:RagEvidence[]=[];let images:ProductImage[]=[];let nba=decision.nextBestAction??nextBestAction(intent,commercialState);let answer='';let writerResult:Awaited<ReturnType<typeof safeWrite>>|null=null;
+      let quote=await this.#quote(target,initialCandidates);const requestedUnknown=Boolean(target&&!quote);let recommendedProduct=commercialState.recommendedProduct??null;let rag:RagEvidence[]=[];let images:ProductImage[]=[];let nba=decision.nextBestAction??nextBestAction(intent,commercialState);let progressionTrace:ReturnType<typeof evaluatePostAnswerCommercialProgression>|null=null;let answer='';let writerResult:Awaited<ReturnType<typeof safeWrite>>|null=null;
       let handoff=intent==='HUMAN'||nba==='ASSISTED_HANDOFF'||(intent==='PURCHASE'&&(commercialState.quantity??1)>=2);let handoffReason=handoff?(intent==='HUMAN'?'SOLICITUD_HUMANO':'CONTINUAR_VENTA'):null;const sqlTools:string[]=[];let route='HYBRID';
       let recommendationReasons:string[]=[];let recommendationCriteria:string[]=[];let recommendationTradeoffs:string[]=[];let recommendationAlternatives:string[]=[];let recommendationTrace:RecommendationDecisionTrace|null=null;
       let reservationStage=commercialState.reservationStage??null;let reservationDocument=commercialState.reservationDocument??null;let reservationCustomerName=commercialState.reservationCustomerName??null;let reservationAddress=commercialState.reservationAddress??null;
@@ -449,8 +450,16 @@ export class HybridConversationEngine {
         const recoveryPlan=alternatives.length?(winner?`Ese modelo no figura disponible ahora. Presenta solamente estas alternativas reales: ${names}. Relaciónalas con la necesidad conocida y explica por qué pueden encajar.${reasonText} No menciones precio salvo que el cliente lo haya pedido.`:`Ese modelo no figura disponible ahora. Presenta ${names} como alternativas reales y neutrales. No declares una ganadora: falta evidencia diferenciadora. Pide un criterio útil para decidir.`):'No hay suficiente información para confirmar ese modelo o una alternativa adecuada. No inventes; ofrece revisar opciones reales o pasar con un asesor si corresponde.';
         const fallback=alternatives.length?`Ese modelo no figura disponible ahora. Sí tenemos ${names} como alternativas.`:noEvidenceResponse();
         writerResult=await safeWrite(this.#deps.llm,prepareCommercialWriteInput({message:input.message,intent,state:{...commercialState,recommendedProduct},rag,deterministicAnswer:recoveryPlan,decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts(alternativeNames),alternatives:alternativeNames}),fallback);answer=writerResult.answer;nba=writerResult.nextBestAction??nba;
-      }else if(intent==='PRICE'){sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_PRICE';answer=target?priceResponse(quote,nba==='SOFT_CLOSE'):'¿Qué modelo quieres consultar?';
-      }else if(intent==='STOCK'){sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_STOCK';answer=target?stockResponse(quote,facts.quantity,nba==='SOFT_CLOSE'):'¿Qué modelo quieres consultar?';
+      }else if(intent==='PRICE'){
+        sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_PRICE';
+        progressionTrace=evaluatePostAnswerCommercialProgression({intent,currentNba:nba,state:commercialState,resolvedProduct:productName(quote)??target,verifiedCurrentAnswer:quote?.price!=null});
+        const prepared=prepareCommercialWriteInput({message:input.message,intent,state:commercialState,quote,decision:{...decision,nextBestAction:progressionTrace.candidateNba},allowedProducts:writerProducts()});
+        nba=prepared.nextBestAction??'ANSWER_ONLY';answer=target?priceResponse(quote,nba==='SOFT_CLOSE'):'¿Qué modelo quieres consultar?';
+      }else if(intent==='STOCK'){
+        sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_STOCK';
+        progressionTrace=evaluatePostAnswerCommercialProgression({intent,currentNba:nba,state:commercialState,resolvedProduct:productName(quote)??target,verifiedCurrentAnswer:quote?.stock!=null});
+        const prepared=prepareCommercialWriteInput({message:input.message,intent,state:commercialState,quote,decision:{...decision,nextBestAction:progressionTrace.candidateNba},allowedProducts:writerProducts()});
+        nba=prepared.nextBestAction??'ANSWER_ONLY';answer=target?stockResponse(quote,facts.quantity,nba==='SOFT_CLOSE'):'¿Qué modelo quieres consultar?';
       }else if(intent==='IMAGE'){sqlTools.push('dbo.sp_BuscarImagenesProductoVenta');route='SQL_IMAGES';images=target&&this.#deps.erp.getProductImages?await this.#deps.erp.getProductImages(target,10).catch(()=>[]):[];answer=imageResponse(images)||noEvidenceResponse();
       }else if(intent==='POLICY'||intent==='WARRANTY'){
         route='RAG_INSTITUTIONAL';try{rag=this.#deps.rag.searchInstitutional?await this.#deps.rag.searchInstitutional(input.message,4):await this.#deps.rag.search(input.message,null);}catch{rag=[];}
@@ -495,6 +504,8 @@ export class HybridConversationEngine {
         const previousRecommendedProduct=previous.customerVisibleRecommendedProduct??previous.recommendedProduct??null;
         const recommendationChanged=Boolean(previousRecommendedProduct&&recommendedProduct&&!same(previousRecommendedProduct,recommendedProduct)&&decision.explicitSwitch!==true);
         const recommendationChangeReason=recommendationChanged?verifiedRecommendationChangeReason(recommendationTrace,previousRecommendedProduct,recommendedProduct,recommendationReasons):null;
+        progressionTrace=evaluatePostAnswerCommercialProgression({intent,currentNba:nba,state:{...commercialState,recommendedProduct},resolvedProduct:subject,verifiedCurrentAnswer:rag.length>0,verifiedAlternatives:recommendationAlternatives.length});
+        nba=progressionTrace.candidateNba;
         writerResult=await safeWrite(this.#deps.llm,prepareCommercialWriteInput({message:input.message,intent,state:{...commercialState,recommendedProduct},quote,rag,deterministicAnswer:plan,decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts(recommendationAlternatives),alternatives:recommendationAlternatives,previousRecommendedProduct,recommendationChanged,recommendationChangeReason}),fallback);answer=writerResult.answer;nba=writerResult.nextBestAction??nba;
         if(writerResult.recommendationContinuity?.changed&&!writerResult.recommendationContinuity.allowed)recommendedProduct=writerResult.recommendationContinuity.effectiveRecommendedProduct;
         route=noWinner?'RAG_RECOMMENDATION_NO_WINNER':recommendationTurn&&recommendedProduct?'RAG_RECOMMENDATION':rag.length?'RAG_PRODUCT':'COMMERCIAL_REASONING';
@@ -529,7 +540,7 @@ export class HybridConversationEngine {
       const targetResolvedQuote=continuityBlocked?await this.#quote(activeProduct,initialCandidates):quote;const activeQuote=await this.#quote(activeProduct,initialCandidates);const activeId=activeQuote?.productRagId??(same(activeProduct,previous.activeProduct)?previous.activeProductId:null)??null;const activeCode=activeQuote?.productCode??(same(activeProduct,previous.activeProduct)?previous.activeProductCode:null)??null;const origin=resolutionOrigin(decision.referenceType,explicitSwitch,Boolean(targetResolvedQuote?.productRagId),target,previous);
 
       const continuityTarget=recommendationContinuity?.changed&&recommendationContinuity.allowed?recommendedProduct:stateQueryTarget;
-      const decisionTrace:TurnDecisionTrace={deterministicIntent:deterministicDecision.primaryIntent,plannerIntent:planner?.decision?.primaryIntent??null,finalIntent:intent,route,nextBestAction:nba??null,referenceType:decision.referenceType??null,targetProduct:continuityTarget,writerFallback:writerResult?.fallback?.error??null,recommendation:recommendationTrace};
+      const decisionTrace:TurnDecisionTrace={deterministicIntent:deterministicDecision.primaryIntent,plannerIntent:planner?.decision?.primaryIntent??null,finalIntent:intent,route,nextBestAction:nba??null,referenceType:decision.referenceType??null,targetProduct:continuityTarget,writerFallback:writerResult?.fallback?.error??null,recommendation:recommendationTrace,progression:progressionTrace};
       const pendingMissingFact=nba==='ASK_MISSING_FACT'?(writerResult?.missingFact??(!target?'modelo de interés':null)):null;
       const nextState=reduceState(previous,{
         contextVersion:previous.contextVersion??0,activeProduct,activeProductId:activeId,activeProductCode:activeCode,queryTarget:stateQueryTarget,salientProduct,selectedProduct,recommendedProduct,comparisonProducts,explicitSwitch,

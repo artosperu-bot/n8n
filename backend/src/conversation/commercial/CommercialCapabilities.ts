@@ -94,7 +94,8 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
   const allowed=unique(input.allowedProducts??[]);const alternatives=unique(input.alternatives??[]).filter(option=>allowed.some(product=>same(product,option)));
   const product=resolvedProduct(input);const recommended=input.recommendedProduct??input.state?.recommendedProduct??null;const featureEvidence=(input.verifiedFeatures??[]).length>0;
   const institutional=hasInstitutionalEvidence(input);const message=fold(input.message??'');const decisionImpact=input.decisionImpact===true;
-  const interestContext=Boolean(input.interestSignal||input.purchaseSignal||input.selectedProduct||input.recommendedProduct||input.state?.selectedProduct||input.state?.recommendedProduct);
+  const matureCommercialContext=Number(input.levelOfInterest??input.state?.levelOfInterest??0)>=20&&Boolean(input.useCase||input.problem||(input.priorities??[]).length);
+  const interestContext=Boolean(input.interestSignal||input.purchaseSignal||input.selectedProduct||input.recommendedProduct||input.state?.selectedProduct||input.state?.recommendedProduct||matureCommercialContext);
   return {
     ...base,
     askUseCase:base.askUseCase&&decisionImpact&&!input.useCase,

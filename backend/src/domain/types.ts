@@ -42,6 +42,11 @@ export type TurnDecisionTrace = {
     allowed:boolean;
     stageContinuityValid:boolean;
   };
+  progression?:{
+    level:'HIGH'|'MEDIUM'|'LOW';
+    candidateNba:string;
+    reason:string;
+  }|null;
 };
 
 export type ConversationState = {

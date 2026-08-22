@@ -121,6 +121,41 @@ test('price after expressed interest delivers the computed soft close without co
   assert.match(result.answer,/avanz|compr|stock|reserv|apart/i);
 });
 
+test('price after meaningful prior interactions evaluates post-answer progression before responding',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-progressive-price',{
+    activeProduct:'Armor X13',queryTarget:'Armor X13',salientProduct:'Armor X13',
+    useCase:'trabajo de campo',priorities:['resistencia'],interestSignal:false,purchaseSignal:false,
+    levelOfInterest:20,interestEvents:['USE_CASE','ATTRIBUTE:ARMOR_X13:RESISTENCIA','STOCK:ARMOR_X13'],turnCount:4,
+  });
+  const result=await new HybridConversationEngine(deps(new FakeLlmProvider(),conversations)).processTurn({
+    sessionId:'s-progressive-price',message:'¿cuánto cuesta?',
+  });
+  assert.equal(result.debug.intent,'PRICE');
+  assert.equal(result.debug.nextBestAction,'SOFT_CLOSE');
+  assert.equal(result.debug.decisionTrace.progression?.level,'MEDIUM');
+  assert.match(result.answer,/S\/\s*899/);
+  assert.match(result.answer,/revisar stock/i);
+  assert.equal(result.state.purchaseSignal,false);
+});
+
+test('verified FAB answer with mature context can deliver one executable post-answer NBA',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-progressive-fab',{
+    activeProduct:'Armor 22',queryTarget:'Armor 22',salientProduct:'Armor 22',
+    problem:'golpes frecuentes',priorities:['resistencia'],interestSignal:false,purchaseSignal:false,
+    levelOfInterest:28,interestEvents:['USE_CASE','ATTRIBUTE:ARMOR_22:RESISTENCIA','PRICE:ARMOR_22','STOCK:ARMOR_22'],turnCount:5,
+  });
+  const result=await new HybridConversationEngine(deps(new FakeLlmProvider(),conversations)).processTurn({
+    sessionId:'s-progressive-fab',message:'¿aguanta caídas?',
+  });
+  assert.equal(result.debug.intent,'CAPABILITY');
+  assert.equal(result.debug.route,'RAG_PRODUCT');
+  assert.equal(result.debug.nextBestAction,'SOFT_CLOSE');
+  assert.equal((result.answer.match(/\?/g)??[]).length,1);
+  assert.match(result.answer,/disponibilidad/i);
+});
+
 test('direct image request remains a deterministic URL-only fast path', async () => {
   const engine = new HybridConversationEngine(deps(new FakeLlmProvider()));
   const r = await engine.processTurn({sessionId:'s-images',message:'Mándame imágenes del Armor 22'});

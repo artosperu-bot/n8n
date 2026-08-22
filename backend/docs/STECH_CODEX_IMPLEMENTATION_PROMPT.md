@@ -379,3 +379,31 @@ failures.json
 conversation-report.txt
 
 IMPLEMENTA AHORA.
+
+## Delta obligatorio: POST_ANSWER_COMMERCIAL_PROGRESSION
+
+No tratar `ANSWER_ONLY` como default por el solo hecho de que la intención actual sea factual. Después de recuperar y resolver la respuesta actual, actualizar las señales comerciales y evaluar si existe un siguiente movimiento útil, relevante y ejecutable.
+
+```text
+respuesta actual resuelta
+→ contexto comercial actualizado
+→ ProgressionOpportunity HIGH / MEDIUM / LOW
+→ candidateNBA único
+→ CAN_EXECUTE
+→ continuity gates
+→ executableNBA
+→ writer
+```
+
+La oportunidad debe considerar señales explícitas antes que scores, el historial no repetido de interés, la etapa y todos los hechos comerciales vigentes. Una consulta aislada puede terminar en `ANSWER_ONLY`; precio, stock o un FAB verificado después de interacciones significativas pueden avanzar solo si las precondiciones reales del turno permiten ejecutar el NBA.
+
+Regresiones compactas obligatorias:
+
+- precio después de interacciones significativas progresa cuando está soportado;
+- atributo verificado con problema/prioridad maduros puede progresar;
+- hecho técnico aislado permanece `ANSWER_ONLY`;
+- no se formula una pregunta inútil;
+- SPIN no desplaza una acción superior;
+- se entrega exactamente un NBA;
+- capability no ejecutable degrada de forma segura;
+- producto y etapa conservan continuidad.

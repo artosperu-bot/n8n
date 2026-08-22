@@ -711,3 +711,30 @@ Métricas recomendadas:
 - `fabGroundingQuality`
 
 N+1 no queda PASS si una acción no es ejecutable aunque el texto “suene comercial”.
+
+---
+
+## 21. Progresión comercial después de responder
+
+Resolver correctamente la consulta actual no cierra por defecto la decisión comercial. Una vez resuelta con su autoridad correspondiente, el motor debe reevaluar el contexto actualizado:
+
+```text
+RESOLVE_CURRENT_ANSWER
+→ UPDATE_COMMERCIAL_CONTEXT
+→ POST_ANSWER_COMMERCIAL_PROGRESSION
+→ CANDIDATE_NBA
+→ CAN_EXECUTE
+→ CONTINUITY_GATES
+→ EXECUTABLE_NBA
+→ WRITER
+```
+
+`ANSWER_ONLY` es el fallback seguro final cuando no existe una progresión útil, relevante y ejecutable; no es el resultado automático de toda consulta factual.
+
+La evaluación usa `purchaseSignal`, `interestSignal`, etapa, `levelOfInterest`, objeción, productos vigentes, presupuesto, uso, problema, prioridades, atributos, acciones/preguntas pendientes, hechos SPIN e `interestEvents`. Las señales explícitas siempre vencen al score.
+
+- `HIGH`: compra, selección o interés explícito con una acción soportada.
+- `MEDIUM`: contexto maduro y respuesta verificada que habilitan una progresión útil.
+- `LOW`: dato aislado, contexto insuficiente o ausencia de una acción soportada; termina en `ANSWER_ONLY`.
+
+No se fuerza una pregunta para aparentar progresión. SPIN solo puede aportar un `missingFact` desconocido, decisivo y consumible, y nunca desplaza una acción de mayor valor. El turno entrega exactamente un NBA y `CAN_EXECUTE` puede degradarlo únicamente a una pregunta válida o a `ANSWER_ONLY`, sin inventar otra promesa.
