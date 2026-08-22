@@ -42,6 +42,10 @@ export const coreScenarios: QaScenario[] = [
     { message: '¿Cuánto cuesta el Armor X13?', expected: { intent: 'PRICE', queryTarget: 'Armor X13' } },
     { message: 'Me quedo con ese', expected: { intent: 'PURCHASE', queryTarget: 'Armor X13', activeProduct: 'Armor X13' } },
   ] },
+  { id: 'B2C-CONDITIONAL-INTEREST', family: 'CLOSING', title: 'Interés por disponibilidad no confirma compra', turns: [
+    { message: 'Estoy viendo el Armor X13', expected: { activeProduct: 'Armor X13' } },
+    { message: 'Si está disponible me interesa', expected: { intent: 'STOCK', activeProduct: 'Armor X13' } },
+  ] },
   { id: 'YA-ENTENDI-CONTINUITY', family: 'INTENT', title: 'Ya entendí no crea contexto nuevo', turns: [
     { message: 'Estoy viendo el Armor X13', expected: { activeProduct: 'Armor X13' } },
     { message: 'Ya entendí', expected: { activeProduct: 'Armor X13' } },

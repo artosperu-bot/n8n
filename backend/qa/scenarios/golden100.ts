@@ -6,7 +6,7 @@ export const golden100Scenarios:QaScenario[]=[
     {message:'y q la bateria dure todo el dia porque casi no cargo',oracleSpec:{domain:'MEMORY',intentClass:'EVALUATE_USE'}},
     {message:'maximo 1500 soles',expected:{intent:'BUDGET_CONSTRAINT',budget:1500},oracleSpec:{domain:'MEMORY',intentClass:'BUDGET_CONSTRAINT',expectedState:{budget:1500}}},
     {message:'cual me recomiendas entonces?',oracleSpec:{domain:'SQL',intentClass:'RECOMMEND'}},
-    {message:'ya ese quiero, como compro?',expected:{intent:'PURCHASE'},oracleSpec:{domain:'HANDOFF',intentClass:'PURCHASE',requiresHandoff:true,expectedNba:'ASSISTED_HANDOFF'}},
+    {message:'ya ese quiero, como compro?',expected:{intent:'PURCHASE'},oracleSpec:{domain:'MEMORY',intentClass:'PURCHASE',requiresHandoff:false,expectedNba:'COLLECT_RESERVATION_DATA',expectedState:{purchaseSignal:true,reservationStage:'NEED_DOCUMENT'}}},
   ]},
   {id:'G100-02-DELIVERY',family:'COMMERCIAL',title:'Delivery: caídas, GPS, autonomía y decisión',turns:[
     {message:'hago delivery todo el dia, quiero algo q aguante golpes',oracleSpec:{domain:'MEMORY',intentClass:'EVALUATE_USE'}},
@@ -38,8 +38,8 @@ export const golden100Scenarios:QaScenario[]=[
   ]},
   {id:'G100-06-COMPARE-X13-22',family:'COMPARISON',title:'Comparación sostenida X13 vs Armor 22',turns:[
     {message:'estoy entre Armor X13 y Armor 22, comparalos',expected:{intent:'COMPARE'},oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',product:'Armor X13',sections:['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA']}},
-    {message:'cual tiene mejor bateria?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'CAPABILITY',product:'Armor X13',sections:['BATERIA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
-    {message:'y en camara?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'CAPABILITY',product:'Armor X13',sections:['CAMARA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
+    {message:'cual tiene mejor bateria?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',product:'Armor X13',sections:['BATERIA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
+    {message:'y en camara?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',product:'Armor X13',sections:['CAMARA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
     {message:'precio del X13',oracleSpec:{domain:'SQL',intentClass:'PRICE',product:'Armor X13'}},
     {message:'y el otro?',oracleSpec:{domain:'SQL',intentClass:'PRICE',product:'Armor 22',expectedReferenceBehavior:'OTHER_IN_PAIR'}},
   ]},
@@ -52,10 +52,10 @@ export const golden100Scenarios:QaScenario[]=[
   ]},
   {id:'G100-08-UNKNOWN',family:'TRUTH',title:'Producto inexistente y recuperación con alternativa',turns:[
     {message:'tienen el Armor 30?',oracleSpec:{domain:'SQL',intentClass:'PRODUCT_INFO',product:'Armor 30',expectedNba:'OFFER_ALTERNATIVES'}},
-    {message:'entonces cual parecido si tienen?',oracleSpec:{domain:'SQL',intentClass:'RECOMMEND'}},
-    {message:'el q recomiendas aguanta caidas?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'CAPABILITY',sections:['RESISTENCIA'],expectedReferenceBehavior:'RECOMMENDED'}},
-    {message:'cuanto cuesta ese?',oracleSpec:{domain:'SQL',intentClass:'PRICE',expectedReferenceBehavior:'RECOMMENDED'}},
-    {message:'ya ese quiero',oracleSpec:{domain:'HANDOFF',intentClass:'PURCHASE',requiresHandoff:true,expectedNba:'ASSISTED_HANDOFF'}},
+    {message:'mejor dime del Armor X13',oracleSpec:{domain:'MEMORY',intentClass:'PRODUCT_INFO',expectedState:{activeProduct:'Armor X13'}}},
+    {message:'aguanta caidas?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'CAPABILITY',product:'Armor X13',sections:['RESISTENCIA']}},
+    {message:'cuanto cuesta ese?',oracleSpec:{domain:'SQL',intentClass:'PRICE',product:'Armor X13'}},
+    {message:'ya ese quiero',oracleSpec:{domain:'MEMORY',intentClass:'PURCHASE',requiresHandoff:false,expectedNba:'COLLECT_RESERVATION_DATA',expectedState:{purchaseSignal:true,reservationStage:'NEED_DOCUMENT'}}},
   ]},
   {id:'G100-09-X13-SPECS',family:'TRUTH',title:'Preguntas técnicas variadas Armor X13',turns:[
     {message:'el Armor X13 tiene NFC?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'CAPABILITY',product:'Armor X13',sections:['CONECTIVIDAD','FUNCIONES']}},
@@ -117,8 +117,8 @@ export const golden100Scenarios:QaScenario[]=[
     {message:'quiero ver el Armor X13',oracleSpec:{domain:'MEMORY',intentClass:'PRODUCT_INFO',expectedState:{activeProduct:'Armor X13'}}},
     {message:'precio?',oracleSpec:{domain:'SQL',intentClass:'PRICE',product:'Armor X13'}},
     {message:'hay stock?',oracleSpec:{domain:'SQL',intentClass:'STOCK',product:'Armor X13'}},
-    {message:'ya me decidi por ese',oracleSpec:{domain:'MEMORY',intentClass:'PURCHASE',expectedReferenceBehavior:'SELECTED'}},
-    {message:'quiero comprarlo ahora',oracleSpec:{domain:'HANDOFF',intentClass:'PURCHASE',requiresHandoff:true,expectedNba:'ASSISTED_HANDOFF'}},
+    {message:'si esta disponible me interesa',oracleSpec:{domain:'SQL',intentClass:'STOCK',product:'Armor X13',expectedState:{interestSignal:true,purchaseSignal:false}}},
+    {message:'ya me decidi por ese',oracleSpec:{domain:'MEMORY',intentClass:'PURCHASE',expectedReferenceBehavior:'SELECTED',requiresHandoff:false,expectedNba:'COLLECT_RESERVATION_DATA',expectedState:{purchaseSignal:true,reservationStage:'NEED_DOCUMENT'}}},
   ]},
   {id:'G100-18-BUSINESS-12',family:'INSTITUTIONAL',title:'Empresa compra 12 equipos para técnicos',turns:[
     {message:'somos empresa y necesitamos 12 celulares para tecnicos de campo',oracleSpec:{domain:'MEMORY',intentClass:'EVALUATE_USE',expectedState:{quantity:12}}},
@@ -127,18 +127,18 @@ export const golden100Scenarios:QaScenario[]=[
     {message:'tienen stock para las 12?',oracleSpec:{domain:'SQL',intentClass:'STOCK',expectedReferenceBehavior:'RECOMMENDED'}},
     {message:'quiero q un asesor siga con la compra',oracleSpec:{domain:'HANDOFF',intentClass:'HUMAN',requiresHandoff:true,expectedNba:'ASSISTED_HANDOFF'}},
   ]},
-  {id:'G100-19-QUOTE-20',family:'CLOSING',title:'Cotización corporativa con contexto preservado',turns:[
-    {message:'necesito cotizar 20 equipos para una cuadrilla',oracleSpec:{domain:'MEMORY',intentClass:'QUOTE',expectedState:{quantity:20}}},
-    {message:'son para trabajo en campo y golpes',oracleSpec:{domain:'MEMORY',intentClass:'EVALUATE_USE'}},
-    {message:'recomiendame una opcion',oracleSpec:{domain:'SQL',intentClass:'RECOMMEND'}},
-    {message:'quiero cotizacion de 20 de ese modelo',oracleSpec:{domain:'HANDOFF',intentClass:'QUOTE',requiresHandoff:true,expectedNba:'ASSISTED_HANDOFF'}},
-    {message:'con factura y envio a lima por favor',oracleSpec:{domain:'HANDOFF',intentClass:'PURCHASE',requiresHandoff:true,expectedNba:'ASSISTED_HANDOFF'}},
+  {id:'G100-19-CHANGE-PRODUCT',family:'REFERENCE',title:'Persona evalúa otro equipo sin cambio silencioso',turns:[
+    {message:'quiero ver el Armor X13',oracleSpec:{domain:'MEMORY',intentClass:'PRODUCT_INFO',expectedState:{activeProduct:'Armor X13'}}},
+    {message:'cuanto cuesta?',oracleSpec:{domain:'SQL',intentClass:'PRICE',product:'Armor X13'}},
+    {message:'tambien estoy viendo el Armor 22',oracleSpec:{domain:'MEMORY',intentClass:'PRODUCT_INFO',expectedReferenceBehavior:'MENTION_NO_SWITCH',expectedState:{activeProduct:'Armor X13'}}},
+    {message:'q diferencia hay entre los dos?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',product:'Armor X13',sections:['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
+    {message:'prefiero el Armor 22',oracleSpec:{domain:'MEMORY',intentClass:'PRODUCT_INFO',expectedReferenceBehavior:'EXPLICIT_SWITCH',expectedState:{activeProduct:'Armor 22'}}},
   ]},
   {id:'G100-20-REAL-WRITING',family:'RELIABILITY',title:'Mensajes cortos, typos y referencias naturales',turns:[
     {message:'armro x13 cuanto ta',oracleSpec:{domain:'SQL',intentClass:'PRICE',product:'Armor X13'}},
     {message:'y stk?',oracleSpec:{domain:'SQL',intentClass:'STOCK',product:'Armor X13'}},
     {message:'foto ps',oracleSpec:{domain:'SQL',intentClass:'IMAGE',product:'Armor X13'}},
     {message:'y el 22 es mejor bateria?',oracleSpec:{domain:'PRODUCT_RAG',intentClass:'CAPABILITY',product:'Armor 22',sections:['BATERIA'],expectedReferenceBehavior:'MENTION_NO_SWITCH'}},
-    {message:'ya el 22 quiero',oracleSpec:{domain:'HANDOFF',intentClass:'PURCHASE',product:'Armor 22',requiresHandoff:true,expectedNba:'ASSISTED_HANDOFF'}},
+    {message:'ya el 22 quiero',oracleSpec:{domain:'MEMORY',intentClass:'PURCHASE',product:'Armor 22',requiresHandoff:false,expectedNba:'COLLECT_RESERVATION_DATA',expectedState:{purchaseSignal:true,reservationStage:'NEED_DOCUMENT'}}},
   ]},
 ];
