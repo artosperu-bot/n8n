@@ -8,6 +8,17 @@ function productName(q:ProductQuote):string {
   return String(q.shortName??q.product).trim();
 }
 
+function memoryFacts(text:string,row:RagEvidence):VerifiedFact[] {
+  const facts:VerifiedFact[]=[];
+  const combined=text.match(/\b(\d+(?:[.,]\d+)?)\s*GB\s*\+\s*(\d+(?:[.,]\d+)?)\s*GB\s*(?:de\s*)?(?:RAM\s*)?virtual\b/i);
+  const physical=combined?.[1]??text.match(/\b(?:memoria\s+)?RAM\s*(?:f[ií]sica)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];
+  const virtual=combined?.[2]??text.match(/\b(?:ampliaci[oó]n\s+de\s+)?RAM\s+virtual\s*[:=]?\s*(?:de\s+)?(?:hasta\s+)?(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];
+  const base={domain:'PRODUCT_RAG' as const,productId:row.productId??null,source:row.source};
+  if(physical)facts.push({...base,key:'RAM_FISICA',value:`${physical.replace(',','.')} GB`});
+  if(virtual)facts.push({...base,key:'RAM_VIRTUAL',value:`hasta ${virtual.replace(',','.')} GB`});
+  return facts;
+}
+
 export function normalizeEvidence(input:{
   intent:string;
   quote?:ProductQuote|null;
@@ -27,7 +38,9 @@ export function normalizeEvidence(input:{
   }
 
   for(const row of input.rag??[]){
-    const value=compact(String(row.text??''));
+    const raw=String(row.text??'');
+    if(String(row.section??'').toUpperCase()==='MEMORIA'||/\bRAM\b/i.test(raw))facts.push(...memoryFacts(raw,row));
+    const value=compact(raw);
     if(!value)continue;
     const domain=row.domain==='INSTITUTIONAL'||row.source.startsWith('SUPABASE_INSTITUCIONAL')?'INSTITUTIONAL_RAG':'PRODUCT_RAG';
     const key=String(row.section??row.source.split(':').at(-1)??'EVIDENCIA').toUpperCase();

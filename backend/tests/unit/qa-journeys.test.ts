@@ -60,3 +60,12 @@ test('CORE includes unknown recovery and sustained comparison regressions',()=>{
   const comparison=coreScenarios.find(s=>s.id==='CORE-COMPARISON-PAIR');
   assert.deepEqual(comparison?.turns.map(t=>t.message),['estoy entre Armor X13 y Armor 22, comparalos','cual tiene mejor bateria?','y en camara?']);
 });
+
+test('CORE live remains a compact commercial pass of at most 25 turns',()=>{
+  const turns=coreScenarios.flatMap(s=>s.turns);
+  assert.ok(turns.length<=25,`CORE has ${turns.length} turns`);
+  const text=turns.map(t=>t.message).join(' ');
+  for(const expected of [/construcci[oó]n/i,/uso|redes|whatsapp/i,/ram/i,/bater[ií]a/i,/compar/i,/m[aá]ximo|presupuesto/i,/caro/i,/si est[aá] disponible me interesa/i,/como compro|quiero comprar/i]){
+    assert.match(text,expected);
+  }
+});

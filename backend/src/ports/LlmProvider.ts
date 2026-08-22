@@ -16,6 +16,24 @@ export type LlmWriteInput = {
   decision?: TurnDecision | null;
   /** Canonical products the writer is allowed to present as real in this turn. */
   allowedProducts?: string[];
+  /** Explicit commercial contract. These fields are derived once before the writer. */
+  nextBestAction?: string | null;
+  commercialStage?: string | null;
+  knownFacts?: Record<string, unknown>;
+  missingFact?: string | null;
+  interestSignal?: boolean;
+  purchaseSignal?: boolean;
+  objection?: string | null;
+  activeProduct?: string | null;
+  selectedProduct?: string | null;
+  recommendedProduct?: string | null;
+  useCase?: string | null;
+  problem?: string | null;
+  priorities?: string[];
+  budget?: number | null;
+  verifiedFeatures?: VerifiedFact[];
+  customerContext?: Record<string, unknown>;
+  commercialGoal?: string | null;
 };
 
 export type LlmDecisionInput = {

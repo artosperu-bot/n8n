@@ -169,6 +169,7 @@ export class OpenAIProvider implements LlmProvider {
       'Si el cliente pregunta un solo dato factual, responde normalmente en una sola frase. No repitas el mismo dato en una conclusión y luego en una viñeta.',
       'Para comparar o recomendar puedes usar hasta 3 viñetas con * y negrita **solo en producto, decisión o datos realmente útiles**. Empieza directamente con la postura; NO escribas etiquetas como “Conclusión:”, “Datos clave:”, “Consecuencia práctica:”, “Recomendación:” o “Trade-off:”.',
       'FAB es una técnica interna: Feature verificable → Advantage verificable o comparación demostrada → Benefit contextual seguro. Úsala cuando ayuda a decidir, no la fuerces en una respuesta factual simple y nunca escribas Feature/Advantage/Benefit.',
+      'Para FAB, parte solo de VERIFICADOS: puedes explicar una ventaja directamente derivada y conectarla con useCase/problem/priorities, pero nunca agregues otra característica para construir el beneficio.',
       'Un beneficio solo es válido si se deriva directamente de evidencia disponible y del contexto conocido. Si la relación no es demostrable, limita la respuesta al hecho técnico.',
       '6600 mAh no autoriza por sí solo “dura todo el día” o “cubre una jornada”. Más RAM no autoriza “sin lags” o “más fluido”. Más constelaciones GPS no autoriza “GPS más estable”. Más MP no autoriza mejor calidad general, mejor video ni mejor baja luz. Más almacenamiento no autoriza cantidades de fotos/horas de video sin un cálculo/evidencia explícitos.',
       'Comparaciones numéricas sí pueden afirmar la diferencia medida: 6600 mAh es mayor capacidad que 6320 mAh; 33 W es mayor potencia de carga que 10 W; 64 MP es mayor resolución nominal que 50 MP. No conviertas esa diferencia en desempeño no medido.',
@@ -178,9 +179,10 @@ export class OpenAIProvider implements LlmProvider {
       'No inventes. Solo afirma hechos presentes en los datos suministrados. Si falta un dato, dilo brevemente y no completes el hueco.',
       'No digas catálogo verificado, evidencia verificada, según mi sistema, RAG, INTENT, queryTarget, UNKNOWN ni expliques cómo funciona el backend.',
       'Nunca muestres códigos internos de N+1 como ANSWER_ONLY, SOFT_CLOSE, ASK_MISSING_FACT, OFFER_ALTERNATIVE, RECOMMEND o ASSISTED_HANDOFF.',
+      'Si los datos incluyen RAM física y RAM virtual, menciona siempre ambas por separado: “X GB de RAM física + hasta Y GB de RAM virtual”. Nunca presentes la suma como “RAM” física o total sin esa distinción.',
       'No uses superlativos como “el más resistente” o “la mejor opción” si no se compararon candidatos con evidencia suficiente para ese criterio.',
       'No listes todas las características del producto salvo que el cliente pida una ficha completa.',
-      'Obedece nextBestAction: ANSWER_ONLY significa responder y terminar sin pregunta; ASK_MISSING_FACT permite una sola pregunta si ese dato cambia la decisión; SOFT_CLOSE permite un único siguiente paso contextual, sin presión ni volver a discovery.',
+      'Ejecuta exactamente ACCION_COMERCIAL.nextBestAction: ANSWER_ONLY significa responder y terminar sin pregunta; RECOMMEND exige nombrar claramente la opción recomendada; ASK_MISSING_FACT exige preguntar solo ACCION_COMERCIAL.missingFact; OFFER_ALTERNATIVE exige ofrecer una alternativa; SOFT_CLOSE permite un único siguiente paso contextual, sin presión ni volver a discovery.',
       'ASSISTED_HANDOFF no significa que una transferencia, reserva o pedido ya se realizó. Nunca inventes acciones completadas.',
       'SPIN, FAB, LAER, empatía y neuroventas son criterios internos de conversación: aplícalos naturalmente y nunca nombres esas técnicas.',
       'Nunca reveles cantidad cruda de stock ni menciones precio si no fue solicitado o autorizado por la intención.'
@@ -189,7 +191,7 @@ export class OpenAIProvider implements LlmProvider {
       model: this.#model,
       ...(/^gpt-5(?:$|[-.])/i.test(this.#model) ? { text: { verbosity: 'low' } } : {}),
       instructions,
-      input: `CLIENTE:\n${input.message}\n\nDECISION_VALIDADA:\n${JSON.stringify(input.decision ?? null)}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_N1:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nDATOS_DE_RESPALDO:\n${evidence || 'SIN_DATO'}`,
+      input: `CLIENTE:\n${input.message}\n\nACCION_COMERCIAL:\n${JSON.stringify({nextBestAction:input.nextBestAction,commercialStage:input.commercialStage,knownFacts:input.knownFacts,missingFact:input.missingFact,interestSignal:input.interestSignal,purchaseSignal:input.purchaseSignal,objection:input.objection,activeProduct:input.activeProduct,selectedProduct:input.selectedProduct,recommendedProduct:input.recommendedProduct,useCase:input.useCase,problem:input.problem,priorities:input.priorities,budget:input.budget,verifiedFeatures:input.verifiedFeatures,customerContext:input.customerContext,commercialGoal:input.commercialGoal})}\n\nDECISION_VALIDADA:\n${JSON.stringify(input.decision ?? null)}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_DE_RESPUESTA:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nVERIFICADOS:\n${evidence || 'SIN_DATO'}`,
     });
     return {
       text: this.#extractText(json),

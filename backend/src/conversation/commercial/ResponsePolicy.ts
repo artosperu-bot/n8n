@@ -6,13 +6,13 @@ function shortProduct(value: string | null | undefined): string {
 }
 
 export function priceResponse(quote: ProductQuote | null, softClose = false): string {
-  if (!quote || quote.price == null) return 'No tengo un precio confirmado en este momento.';
+  if (!quote || quote.price == null) return 'El precio no está disponible en este momento.';
   const fact=`${shortProduct(quote.shortName ?? quote.product)} está a S/ ${quote.price}.`;
   return softClose?`${fact} Si te cuadra, puedo revisar stock para avanzar.`:fact;
 }
 
 export function stockResponse(quote: ProductQuote | null, requestedQuantity?: number | null, softClose = false): string {
-  if (!quote || quote.stock == null) return 'No puedo confirmar la disponibilidad en este momento.';
+  if (!quote || quote.stock == null) return 'La disponibilidad está pendiente de actualización.';
   if (requestedQuantity != null && requestedQuantity > 1) {
     return quote.stock >= requestedQuantity
       ? 'Sí, está disponible para esa cantidad.'
@@ -59,5 +59,5 @@ export function ambiguousReferenceResponse(): string {
 }
 
 export function noEvidenceResponse(): string {
-  return 'No tengo ese dato confirmado todavía. Si quieres, te ayudo con lo que sí puedo verificar.';
+  return 'Ese detalle no está especificado. Puedo ayudarte con otro aspecto del equipo.';
 }

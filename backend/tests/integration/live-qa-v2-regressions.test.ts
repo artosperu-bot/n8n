@@ -63,3 +63,23 @@ test('recommendation turn exposes a compact decision trace for Supabase diagnosi
   assert.ok(trace.recommendation?.winner);
   assert.deepEqual((r.state as any).lastDecisionTrace,trace);
 });
+
+test('comparison RECOMMEND is delivered visibly from compared evidence',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('compare-recommend',{sessionId:'compare-recommend',turnCount:1,activeProduct:'Armor X13',comparisonProducts:['Armor X13','Armor 22'],priorities:['bateria'],spinFacts:[]});
+  const batteryRag:any={
+    async search(){return[];},async searchInstitutional(){return[];},
+    async searchProduct(_q:string,productId:string,sections:string[]){return sections.map(section=>({
+      text:section==='BATERIA'?(productId.includes('22')?'Capacidad de batería: 6600 mAh. Carga cableada: 33 W.':'Capacidad de batería: 6320 mAh. Carga cableada: 10 W.'):`Sección ${section}.`,
+      source:`TEST:${productId}:${section}`,score:1,productId,section,domain:'PRODUCT' as const,
+    }));},
+  };
+  const llm:LlmProvider={
+    async decide(){return{decision:decision({primaryIntent:'COMPARE',comparisonProducts:['Armor X13','Armor 22'],attributes:['BATERIA'],priorities:['bateria'],nextBestAction:'RECOMMEND',needsSql:true,needsProductRag:true}),model:'gpt-test',usage,durationMs:1};},
+    async write(){return{text:'Armor 22 tiene 6600 mAh y 33 W; Armor X13, 6320 mAh y 10 W.',model:'gpt-test',usage,durationMs:1};},
+  };
+  const result=await new HybridConversationEngine({conversations,telemetry:new NoopTelemetryRepository(),erp:new FakeErpRepository(),rag:batteryRag,llm,automation:new NoopAutomationBus()}).processTurn({sessionId:'compare-recommend',message:'¿cuál tiene mejor batería?'});
+  assert.equal(result.debug.nextBestAction,'RECOMMEND');
+  assert.equal(result.state.recommendedProduct,'Armor 22');
+  assert.match(result.answer,/te recomiendo\s+(?:el\s+)?Armor 22/i);
+});
