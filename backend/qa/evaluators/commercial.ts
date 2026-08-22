@@ -54,6 +54,39 @@ export function assessNba(observation:QaTurnObservation):QaNbaEvaluation{
   return{n1Required,n1Delivered,n1Reason,decisionPass,deliveryPass,actionabilityPass,progressionPass:decisionPass&&deliveryPass&&actionabilityPass};
 }
 
+export function assessSpinUtility(observation:QaTurnObservation):boolean{
+  const response=observation.response??{};const state=response.state??{};const answer=String(response.answer??'');
+  if(String(state.lastNba??'').toUpperCase()!=='ASK_MISSING_FACT')return true;
+  if(state.purchaseSignal===true||['CIERRE','CIERRE_ASISTIDO'].includes(String(state.commercialStage??'').toUpperCase()))return false;
+  const missing=String(state.pendingMissingFact??'').toLocaleLowerCase('es');
+  if(!missing||repeatsKnownQuestion(answer,state))return false;
+  const consumable=/uso|problema|prioridad|criterio|presupuesto|tope|modelo|producto/.test(missing);
+  if(!consumable)return false;
+  if(/uso/.test(missing)&&(state.useCase||state.sector))return false;
+  if(/problema/.test(missing)&&state.problem)return false;
+  if(/prioridad|criterio/.test(missing)&&(state.priorities?.length??0)>0)return false;
+  if(/presupuesto|tope/.test(missing)&&state.budget!=null)return false;
+  if(/modelo|producto/.test(missing)&&(state.activeProduct||state.selectedProduct||state.recommendedProduct||state.queryTarget))return false;
+  return /\?/.test(answer);
+}
+
+export function assessFabGrounding(observation:QaTurnObservation):boolean{
+  const response=observation.response??{};const state=response.state??{};const debug=response.debug??{};const answer=String(response.answer??'');
+  const attributes=Array.isArray(state.currentAttributes)?state.currentAttributes.map((x:unknown)=>String(x).toUpperCase()):[];
+  if(!attributes.length||Number(debug.ragCount??0)<=0||!/^RAG_(?:PRODUCT|COMPARISON|RECOMMENDATION)/.test(String(debug.route??'')))return true;
+  const feature=attributes.some((attribute:string)=>{
+    if(attribute==='RAM')return /\bram\b|\bmemoria\b|\bgb\b/i.test(answer);
+    if(attribute==='BATERIA')return /bater[ií]a|carga|mah|\bw\b/i.test(answer);
+    if(attribute==='RESISTENCIA')return /resisten|ip6[89]|ca[ií]da|golpe/i.test(answer);
+    if(attribute==='CAMARA')return /c[aá]mara|sensor|\bmp\b|visi[oó]n nocturna/i.test(answer);
+    if(attribute==='PANTALLA')return /pantalla|pulgad|\bhz\b|resoluci[oó]n/i.test(answer);
+    if(attribute==='FISICO')return /peso|pesa|gramos|\bg\b|dimensi|grosor/i.test(answer);
+    return new RegExp(`\\b${attribute.replace(/[^A-Z0-9]/g,'')}\\b`,'i').test(answer);
+  });
+  const benefit=/\b(?:para|te ayuda|te da|m[aá]s margen|mejor encaje|[uú]til|permite|facilita|reduce|conviene|ideal)\b/i.test(answer);
+  return feature&&benefit;
+}
+
 export function evaluateCommercial(observation:QaTurnObservation):QaFinding[]{
   const findings:QaFinding[]=[];if(!observation.ok)return findings;
   const response=observation.response??{};const answer=String(response.answer??'');const debug=response.debug??{};const state=response.state??{};
@@ -71,6 +104,8 @@ export function evaluateCommercial(observation:QaTurnObservation):QaFinding[]{
   if(nba.n1Required&&!nba.n1Delivered&&action!=='ANSWER_ONLY')findings.push({level:'YELLOW',code:'NBA_NOT_DELIVERED',message:`La respuesta no ejecuta de forma visible ${action}.`,rootCause:'NBA'});
   if(action==='ASK_MISSING_FACT'&&repeatsKnownQuestion(answer,state))findings.push({level:'YELLOW',code:'NBA_REPEATS_KNOWN',message:'La siguiente pregunta solicita contexto que ya estaba disponible.',rootCause:'NBA'});
   if(!nba.actionabilityPass)findings.push({level:'RED',code:'UNSUPPORTED_COMMERCIAL_ACTION',message:'La respuesta ofrece una acción que no está autorizada por el N+1 ejecutable.',rootCause:'NBA'});
+  if(!assessSpinUtility(observation))findings.push({level:'YELLOW',code:'SPIN_UTILITY_INVALID',message:'La pregunta no cumple unknown, decision impact y capacidad de consumo.',rootCause:'NBA'});
+  if(!assessFabGrounding(observation))findings.push({level:'YELLOW',code:'FAB_GROUNDING_MISSING',message:'Un atributo verificado no se convirtió en un beneficio comercial seguro.',rootCause:'WRITER'});
   const message=observation.request.message.toLocaleLowerCase('es');
   if(/construcci[oó]n|se me caen|se me cae|trabajo en campo|bater[ií]a se me acaba/.test(message)&&!/entiendo|construcci[oó]n|ca[ií]da|resistente|trabajo|bater[ií]a|campo/i.test(answer))findings.push({level:'YELLOW',code:'CONTEXT_NOT_ACKNOWLEDGED',message:'No refleja el contexto/problema explícito del cliente.'});
   const llm=debug.llm;

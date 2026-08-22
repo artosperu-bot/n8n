@@ -68,6 +68,8 @@ export type QaDimensionMetrics = {
   nbaDeliveryQuality:{pass:number;total:number};
   nbaActionabilityQuality:{pass:number;total:number};
   commercialProgression:{pass:number;total:number};
+  spinUtilityQuality:{pass:number;total:number};
+  fabGroundingQuality:{pass:number;total:number};
   purchaseProgression:{pass:number;total:number};
   persistence:{pass:number;total:number};
 };

@@ -70,6 +70,8 @@ export type ConversationState = {
   objection?: string|null;
   interestSignal?: boolean;
   purchaseSignal?: boolean;
+  levelOfInterest?: number;
+  interestEvents?: string[];
   commercialStage?: string|null;
   commercialStrategy?: string|null;
   reservationStage?: ReservationStage|null;

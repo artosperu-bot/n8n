@@ -16,7 +16,7 @@ test('writer boundary receives explicit commercial context and visibly executes 
   let captured:any=null;
   const result=await safeWrite(capturingWriter('Tiene IP68 y resistencia a caídas de 1.5 m.',input=>{captured=input;}),{
     message:'trabajo en construcción, cuál me recomiendas?',intent:'RECOMMEND',
-    state:{activeProduct:'Armor 22',recommendedProduct:'Armor 22',useCase:'trabajo en construcción',problem:'caídas frecuentes',priorities:['resistencia'],interestSignal:true,purchaseSignal:false,commercialStage:'EVALUACION'},
+    state:{activeProduct:'Armor 22',recommendedProduct:'Armor 22',useCase:'trabajo en construcción',problem:'caídas frecuentes',priorities:['resistencia'],interestSignal:true,purchaseSignal:false,commercialStage:'EVALUACION',levelOfInterest:42,currentAttributes:['RESISTENCIA'],pendingCommercialAction:'RECOMMEND'},
     decision:{nextBestAction:'RECOMMEND'} as any,
     rag:[{text:'Resistencia a caídas: 1.5 m. Certificación IP68: Sí.',source:'TEST:RESISTENCIA',score:1,section:'RESISTENCIA',domain:'PRODUCT',productId:'P-22'}],
     allowedProducts:['Armor 22'],
@@ -37,6 +37,10 @@ test('writer boundary receives explicit commercial context and visibly executes 
   assert.equal(captured.recommendedProduct,'Armor 22');
   assert.deepEqual(captured.priorities,['resistencia']);
   assert.ok(captured.verifiedFeatures.some((f:any)=>f.key==='RESISTENCIA'));
+  assert.equal(captured.levelOfInterest,42);
+  assert.equal(captured.attribute,'RESISTENCIA');
+  assert.deepEqual(captured.implications,['RIESGO_INTERRUPCION_POR_DANO']);
+  assert.equal(captured.pendingAction,'RECOMMEND');
   assert.deepEqual(captured.customerContext.useCase,'trabajo en construcción');
   assert.match(captured.commercialGoal,/recomendar/i);
   assert.match(result.answer,/te recomiendo\s+(?:el\s+)?Armor 22/i);
@@ -334,4 +338,13 @@ test('supportedCapabilities contains only operations whose turn preconditions pa
   assert.equal(prepared.supportedCapabilities?.includes('ASK_USE_CASE'),false);
   assert.equal(prepared.supportedCapabilities?.includes('CHECK_PRICE'),false);
   assert.equal(prepared.supportedCapabilities?.includes('SCHEDULE_DEMO'),false);
+});
+
+test('writer receives only the final executable pending question and action',()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'Gracias.',intent:'OTHER',state:{pendingMissingFact:'presupuesto máximo',pendingCommercialAction:'ASK_MISSING_FACT',budget:1200},
+    decision:{nextBestAction:'ANSWER_ONLY'} as any,
+  });
+  assert.equal(prepared.pendingQuestion,null);
+  assert.equal(prepared.pendingAction,'ANSWER_ONLY');
 });

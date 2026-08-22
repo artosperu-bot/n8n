@@ -130,3 +130,20 @@ test('QA actionability is RED when ANSWER_ONLY invents a demo operation',async()
   assert.equal(report.scenarios[0].turns[0].status,'RED');
   assert.ok(report.scenarios[0].turns[0].findings.some(x=>x.code==='UNSUPPORTED_COMMERCIAL_ACTION'));
 });
+
+test('QA exposes SPIN utility and FAB grounding as independent quality dimensions',async()=>{
+  let turn=0;
+  const {report}=await runLiveQa({
+    baseUrl:'http://test',writeArtifacts:false,logger:{log(){},table(){},error(){}} as any,
+    fetcher:async(url)=>{
+      if(String(url).endsWith('/health'))return Response.json({status:'ok',modes:{}});
+      turn+=1;
+      return turn===1
+        ?Response.json({answer:'¿Cuál es tu presupuesto?',state:{lastNba:'ASK_MISSING_FACT',pendingMissingFact:'presupuesto máximo',budget:1200},debug:{intent:'EVALUATE_USE'}})
+        :Response.json({answer:'Tiene RAM.',state:{lastNba:'ANSWER_ONLY',currentAttributes:['RAM']},debug:{intent:'CAPABILITY',ragCount:1,route:'RAG_PRODUCT'}});
+    },
+    scenarios:[{id:'SPIN-FAB',family:'COMMERCIAL',title:'quality dimensions',turns:[{message:'Máximo 1200'},{message:'¿Cuánta RAM tiene?'}]}],
+  });
+  assert.deepEqual(report.dimensions?.spinUtilityQuality,{pass:1,total:2});
+  assert.deepEqual(report.dimensions?.fabGroundingQuality,{pass:1,total:2});
+});

@@ -1,5 +1,6 @@
 import type { ConversationMessageMeta, ConversationRepository, TurnCompletionMeta } from '../../ports/ConversationRepository.ts';
 import type { ConversationState } from '../../domain/types.ts';
+import { deriveCommercialImplications } from '../../conversation/commercial/CommercialImplications.ts';
 
 type Options = {
   url: string;
@@ -44,14 +45,6 @@ function compactSpinContribution(state:ConversationState):string|null {
   if(/^problema:/.test(latest)) return 'PROBLEMA';
   if(/^(?:situacion|uso|sector|cliente):/.test(latest)) return 'SITUACION';
   return null;
-}
-function commercialImplications(state:ConversationState):string[]{
-  const value=`${state.problem??''} ${state.objection??''}`.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const implications:string[]=[];
-  if(/caida|golpe|agua|polvo|rotur|romp/.test(value))implications.push('PRIORIZAR_RESISTENCIA');
-  if(/bateria|autonomia|carga|se apaga/.test(value))implications.push('PRIORIZAR_BATERIA');
-  if(/precio|caro|presupuesto/.test(value))implications.push('AJUSTAR_PRESUPUESTO');
-  return implications;
 }
 function recommendationCandidates(state:ConversationState):string[]{
   const traced=state.lastDecisionTrace?.recommendation?.eligibleCandidates?.map(x=>x.product)??[];
@@ -288,11 +281,12 @@ export class SupabaseConversationRepository implements ConversationRepository {
       problemas_detectados:state.problem ? [state.problem] : [],
       prioridades_detectadas:cleanStrings(state.priorities),
       atributo_detectado:cleanStrings(state.currentAttributes)?.[0]??null,
-      implicaciones_detectadas:commercialImplications(state),
+      implicaciones_detectadas:deriveCommercialImplications(state.problem,state.objection),
       pregunta_pendiente_turno:state.lastNba==='ASK_MISSING_FACT'&&state.pendingMissingFact?{missingFact:state.pendingMissingFact}:null,
       accion_pendiente_turno:(state.pendingCommercialAction??state.lastNba) ? {accion:state.pendingCommercialAction??state.lastNba} : null,
       contexto_comercial_snapshot:context,
       objecion_detectada:state.objection ? {tipo:state.objection} : null,
+      nivel_interes:state.levelOfInterest ?? 0,
       tipo_conversacion:meta.conversationType ?? (sessionId.startsWith('qa-') ? 'QA_LIVE' : null),
       modelo:meta.model ?? null,
       tokens_entrada:meta.inputTokens ?? null,

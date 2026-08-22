@@ -2,6 +2,7 @@ import type { LlmWriteInput } from '../../ports/LlmProvider.ts';
 import { fold } from '../../shared/text.ts';
 import { normalizeEvidence } from '../evidence/EvidenceNormalizer.ts';
 import { canExecuteCapability, evaluateTurnCapabilities, missingFactCapability, requestedUnsupportedCapability, type CommercialCapabilityAction } from './CommercialCapabilities.ts';
+import { deriveCommercialImplications } from './CommercialImplications.ts';
 
 function unique(values:Array<string|null|undefined>):string[]{
   return [...new Set(values.map(value=>String(value??'').trim()).filter(Boolean))];
@@ -92,6 +93,10 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const selectedProduct=input.selectedProduct??state.selectedProduct??input.decision?.selectedProduct??null;
   const recommendedProduct=input.recommendedProduct??state.recommendedProduct??null;
   const objection=input.objection??state.objection??input.decision?.objection??null;
+  const levelOfInterest=input.levelOfInterest??state.levelOfInterest??0;
+  const attribute=input.attribute??unique(state.currentAttributes??[])[0]??null;
+  const implications=unique(input.implications??deriveCommercialImplications(problem,objection));
+  const previousPendingAction=input.pendingAction??state.pendingCommercialAction??state.lastNba??null;
   const verifiedFacts=input.verifiedFacts??normalizeEvidence({intent:input.intent,quote:input.quote,rag:input.rag});
   const verifiedFeatures=input.verifiedFeatures??verifiedFacts.filter(fact=>fact.domain==='PRODUCT_RAG');
   const allowedProducts=unique(input.allowedProducts??[]);
@@ -137,7 +142,9 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   if(!executable){nextBestAction='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';decisionImpact=false;missingFact=null;}
   if(nextBestAction!=='ASK_MISSING_FACT')missingFact=null;
   const resolvedProduct=selectedProduct??recommendedProduct??activeProduct;
-  const commercialSignals={purchaseSignal,interestSignal,objection,selectedProduct,recommendedProduct,activeProduct,commercialStage:input.commercialStage??state.commercialStage??input.decision?.commercialStage??null,budget,problem,priorities,useCase,pendingCommercialAction:state.pendingCommercialAction??null};
+  const pendingQuestion=nextBestAction==='ASK_MISSING_FACT'?missingFact:null;
+  const pendingAction=nextBestAction;
+  const commercialSignals={purchaseSignal,interestSignal,objection,selectedProduct,recommendedProduct,activeProduct,commercialStage:input.commercialStage??state.commercialStage??input.decision?.commercialStage??null,levelOfInterest,budget,problem,implications,priorities,attribute,useCase,pendingCommercialAction:previousPendingAction};
 
   return {
     ...input,
@@ -150,6 +157,7 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
     commercialGoal:input.commercialGoal??commercialGoal(nextBestAction),capabilityAction,turnCapabilities,
     resolvedCurrentIntent:String(input.intent??'OTHER').toUpperCase(),commercialSignals,resolvedProduct,
     supportedCapabilities:supportedCapabilityNames(turnCapabilities),executableNba:nextBestAction,
+    levelOfInterest,attribute,implications,pendingQuestion,pendingAction,
     commercialContractPrepared:true,
   };
 }

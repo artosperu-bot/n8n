@@ -6,7 +6,7 @@ import { imageScenarios } from '../qa/scenarios/images.ts';
 import { journeyScenarios } from '../qa/scenarios/journeys.ts';
 import { golden100Scenarios } from '../qa/scenarios/golden100.ts';
 import { createMessageId, createRunId, createSessionId } from '../qa/id.ts';
-import { assessNba, evaluateCommercial } from '../qa/evaluators/commercial.ts';
+import { assessFabGrounding, assessNba, assessSpinUtility, evaluateCommercial } from '../qa/evaluators/commercial.ts';
 import { evaluateHard } from '../qa/evaluators/hard.ts';
 import { evaluateOracle, evaluatePersistence } from '../qa/evaluators/oracle.ts';
 import { OracleResolver } from '../qa/oracle/OracleResolver.ts';
@@ -60,7 +60,7 @@ function inferRootCause(f:QaFinding):QaRootCause|null{
 }
 function dimension(pass:boolean,metric:{pass:number;total:number}){metric.total+=1;if(pass)metric.pass+=1;}
 function buildDimensions(results:QaScenarioResult[]):{dimensions:QaDimensionMetrics;rootCauses:Partial<Record<QaRootCause,number>>}{
-  const dimensions:QaDimensionMetrics={productIdentity:{pass:0,total:0},referenceAccuracy:{pass:0,total:0},factualAccuracy:{pass:0,total:0},noFabrication:{pass:0,total:0},memoryConsistency:{pass:0,total:0},questionResolved:{pass:0,total:0},nbaQuality:{pass:0,total:0},nbaDecisionQuality:{pass:0,total:0},nbaDeliveryQuality:{pass:0,total:0},nbaActionabilityQuality:{pass:0,total:0},commercialProgression:{pass:0,total:0},purchaseProgression:{pass:0,total:0},persistence:{pass:0,total:0}};
+  const dimensions:QaDimensionMetrics={productIdentity:{pass:0,total:0},referenceAccuracy:{pass:0,total:0},factualAccuracy:{pass:0,total:0},noFabrication:{pass:0,total:0},memoryConsistency:{pass:0,total:0},questionResolved:{pass:0,total:0},nbaQuality:{pass:0,total:0},nbaDecisionQuality:{pass:0,total:0},nbaDeliveryQuality:{pass:0,total:0},nbaActionabilityQuality:{pass:0,total:0},commercialProgression:{pass:0,total:0},spinUtilityQuality:{pass:0,total:0},fabGroundingQuality:{pass:0,total:0},purchaseProgression:{pass:0,total:0},persistence:{pass:0,total:0}};
   const rootCauses:Partial<Record<QaRootCause,number>>={};
   for(const turn of results.flatMap(s=>s.turns)){
     const red=turn.findings.filter(f=>f.level==='RED');
@@ -79,6 +79,8 @@ function buildDimensions(results:QaScenarioResult[]):{dimensions:QaDimensionMetr
     dimension(nba.deliveryPass,dimensions.nbaDeliveryQuality);
     dimension(nba.actionabilityPass,dimensions.nbaActionabilityQuality);
     dimension(nba.progressionPass,dimensions.commercialProgression);
+    dimension(assessSpinUtility(turn.observation),dimensions.spinUtilityQuality);
+    dimension(assessFabGrounding(turn.observation),dimensions.fabGroundingQuality);
     if(card?.requiresHandoff)dimension(turn.observation.response?.state?.handoffActive===true&&!roots.has('HANDOFF'),dimensions.purchaseProgression);
     if(card)dimension(!roots.has('PERSISTENCE'),dimensions.persistence);
   }

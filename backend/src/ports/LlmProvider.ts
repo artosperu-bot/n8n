@@ -45,6 +45,11 @@ export type LlmWriteInput = {
   resolvedProduct?: string | null;
   supportedCapabilities?: string[];
   executableNba?: string;
+  levelOfInterest?: number;
+  attribute?: string | null;
+  implications?: string[];
+  pendingQuestion?: string | null;
+  pendingAction?: string | null;
   imageUrls?: string[];
   /** Internal boundary marker: the engine prepared and validated the commercial contract. */
   commercialContractPrepared?: boolean;

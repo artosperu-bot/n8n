@@ -7,6 +7,7 @@ import type { TelemetryRepository } from '../ports/TelemetryRepository.ts';
 import type { ChatInput, ChatTurnResult, ConversationState, ProductImage, ProductQuote, RagEvidence, RecommendationDecisionTrace, TurnDecisionTrace } from '../domain/types.ts';
 import { classifyBudgetTurn } from './budget/BudgetResolver.ts';
 import { extractCommercialFacts } from './commercial/CommercialFacts.ts';
+import { updateInterestLevel } from './commercial/InterestLevel.ts';
 import { prepareCommercialWriteInput } from './commercial/CommercialWriteContract.ts';
 import { productEvidenceSections } from './commercial/ProductEvidencePolicy.ts';
 import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, stockResponse } from './commercial/ResponsePolicy.ts';
@@ -360,7 +361,8 @@ export class HybridConversationEngine {
 
       const facts=extractCommercialFacts(input.message,previous);
       const budgetTurn=classifyBudgetTurn(input.message,{prevBudget:previous.budget??null});
-      const baseState:ConversationState={...previous,budget:budgetTurn.budget?.max??previous.budget??null,customerType:facts.customerType,sector:facts.sector,useCase:facts.useCase,problem:facts.problem,priorities:facts.priorities,quantity:facts.quantity,invoiceRequired:facts.invoiceRequired,objection:budgetTurn.priceObjection?'precio':facts.objection,interestSignal:facts.interestSignal,purchaseSignal:facts.purchaseSignal,spinFacts:facts.spinFacts};
+      const resolvedObjection=budgetTurn.priceObjection?'precio':(budgetTurn.budget||facts.purchaseSignal)?null:facts.objection;
+      const baseState:ConversationState={...previous,budget:budgetTurn.budget?.max??previous.budget??null,customerType:facts.customerType,sector:facts.sector,useCase:facts.useCase,problem:facts.problem,priorities:facts.priorities,quantity:facts.quantity,invoiceRequired:facts.invoiceRequired,objection:resolvedObjection,interestSignal:facts.interestSignal,purchaseSignal:facts.purchaseSignal,spinFacts:facts.spinFacts};
 
       let deterministicDecision=fallbackDecision(input.message,baseState);
       if(budgetTurn.budget&&!budgetTurn.priceObjection){
@@ -407,6 +409,9 @@ export class HybridConversationEngine {
       }
 
       const target=decision.targetProduct??commercialState.selectedProduct??commercialState.recommendedProduct??commercialState.activeProduct??null;
+      const interest=updateInterestLevel({message:input.message,intent,attributes:decision.attributes,product:decision.selectedProduct??target,previous,current:{...commercialState,queryTarget:target,comparisonProducts:decision.comparisonProducts}});
+      commercialState.levelOfInterest=interest.levelOfInterest;
+      commercialState.interestEvents=interest.interestEvents;
       let quote=await this.#quote(target,initialCandidates);const requestedUnknown=Boolean(target&&!quote);let recommendedProduct=commercialState.recommendedProduct??null;let rag:RagEvidence[]=[];let images:ProductImage[]=[];let nba=decision.nextBestAction??nextBestAction(intent,commercialState);let answer='';let writerResult:Awaited<ReturnType<typeof safeWrite>>|null=null;
       let handoff=intent==='HUMAN'||nba==='ASSISTED_HANDOFF'||(intent==='PURCHASE'&&(commercialState.quantity??1)>=2);let handoffReason=handoff?(intent==='HUMAN'?'SOLICITUD_HUMANO':'CONTINUAR_VENTA'):null;const sqlTools:string[]=[];let route='HYBRID';
       let recommendationReasons:string[]=[];let recommendationCriteria:string[]=[];let recommendationTradeoffs:string[]=[];let recommendationAlternatives:string[]=[];let recommendationTrace:RecommendationDecisionTrace|null=null;
@@ -491,7 +496,7 @@ export class HybridConversationEngine {
       const nextState=reduceState(previous,{
         contextVersion:previous.contextVersion??0,activeProduct,activeProductId:activeId,activeProductCode:activeCode,queryTarget:decision.targetProduct??productName(targetResolvedQuote)??commercialState.queryTarget??null,salientProduct,selectedProduct,recommendedProduct,comparisonProducts,explicitSwitch,
         budget:commercialState.budget??null,lastIntent:intent,secondaryIntents:decision.secondaryIntents,lastRoute:route,lastSqlTools:sqlTools,requiresSql:decision.needsSql||sqlTools.length>0,requiresRag:decision.needsProductRag||decision.needsInstitutionalRag||rag.length>0,
-        spinFacts:unique([...(commercialState.spinFacts??[]),decision.spinContribution]),lastSpinContribution:spinContributionCode(previous,commercialState,decision),lastNba:nba??null,pendingCommercialAction:nba??null,pendingMissingFact,currentAttributes:decision.attributes,customerType:commercialState.customerType,sector:commercialState.sector,useCase:commercialState.useCase,problem:commercialState.problem,priorities:commercialState.priorities,quantity:commercialState.quantity,invoiceRequired:commercialState.invoiceRequired,objection:commercialState.objection,interestSignal:facts.interestSignal,purchaseSignal:facts.purchaseSignal||intent==='PURCHASE',
+        spinFacts:unique([...(commercialState.spinFacts??[]),decision.spinContribution]),lastSpinContribution:spinContributionCode(previous,commercialState,decision),lastNba:nba??null,pendingCommercialAction:nba??null,pendingMissingFact,currentAttributes:decision.attributes,customerType:commercialState.customerType,sector:commercialState.sector,useCase:commercialState.useCase,problem:commercialState.problem,priorities:commercialState.priorities,quantity:commercialState.quantity,invoiceRequired:commercialState.invoiceRequired,objection:commercialState.objection,interestSignal:facts.interestSignal,purchaseSignal:facts.purchaseSignal||intent==='PURCHASE',levelOfInterest:interest.levelOfInterest,interestEvents:interest.interestEvents,
         commercialStage:stageFor(intent,decision.commercialStage),commercialStrategy:strategyFor(intent),reservationStage,reservationDocument,reservationCustomerName,reservationAddress,handoffActive:handoff,blockAutomaticReply:handoff,handoffReason,lastResolvedProductId:targetResolvedQuote?.productRagId??null,lastResolvedProductCode:targetResolvedQuote?.productCode??null,lastProductResolutionConfidence:targetResolvedQuote?.productRagId?decision.confidence:0,lastProductResolutionOrigin:origin,lastDecisionTrace:decisionTrace,lastUserMessage:input.message,lastAssistantMessage:answer,
       });
 

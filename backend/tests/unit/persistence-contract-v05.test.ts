@@ -78,6 +78,7 @@ test('atomic persistence maps long SPIN facts to the canonical spin_aporte enum'
   await repo.completeTurn('s-spin','Trabajo en construcción','Respuesta',{
     sessionId:'s-spin', contextVersion:0, turnCount:1,
     lastIntent:'RECOMMEND', lastRoute:'RAG_PRODUCT', lastNba:'ASK_MISSING_FACT',pendingCommercialAction:'ASK_MISSING_FACT',pendingMissingFact:'presupuesto máximo',currentAttributes:['RESISTENCIA'],problem:'caídas frecuentes',
+    levelOfInterest:31,interestEvents:['ATTRIBUTE:ARMOR 22:RESISTENCIA','USE_CASE'],
     spinFacts:['situacion:trabajo_en_construccion','problema:caidas_frecuentes','necesidad:resistencia_y_bateria'],
     priorities:['resistencia','bateria'], comparisonProducts:[],
   } as any,{ model:'gpt-5-mini-2025-08-07' });
@@ -87,7 +88,9 @@ test('atomic persistence maps long SPIN facts to the canonical spin_aporte enum'
   assert.equal(persistBody?.p_conversacion?.atributo_detectado,'RESISTENCIA');
   assert.deepEqual(persistBody?.p_conversacion?.pregunta_pendiente_turno,{missingFact:'presupuesto máximo'});
   assert.deepEqual(persistBody?.p_conversacion?.accion_pendiente_turno,{accion:'ASK_MISSING_FACT'});
-  assert.deepEqual(persistBody?.p_conversacion?.implicaciones_detectadas,['PRIORIZAR_RESISTENCIA']);
+  assert.deepEqual(persistBody?.p_conversacion?.implicaciones_detectadas,['RIESGO_INTERRUPCION_POR_DANO']);
+  assert.equal(persistBody?.p_conversacion?.nivel_interes,31);
+  assert.equal(persistBody?.p_contexto?.contexto?.levelOfInterest,31);
 });
 
 test('atomic persistence includes compact decision trace inside commercial snapshot without schema changes', async () => {

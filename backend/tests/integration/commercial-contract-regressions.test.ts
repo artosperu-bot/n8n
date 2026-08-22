@@ -177,3 +177,32 @@ test('natural weight question routes to FISICO product evidence',async()=>{
   assert.equal(r.debug.queryTarget,'Armor 22');
   assert.ok(r.debug.ragSources?.some(source=>/FISICO/.test(source)));
 });
+
+test('interest level rewards useful progression without inflating repeated technical questions',async()=>{
+  const conversations=new MemoryConversationRepository();
+  const engine=new HybridConversationEngine(deps(new FakeLlmProvider(),conversations));
+  const first=await engine.processTurn({sessionId:'s-interest-level',message:'¿Cuánta RAM tiene el Armor 22?',messageId:'m-interest-1'});
+  const repeated=await engine.processTurn({sessionId:'s-interest-level',message:'¿Cuánta RAM tiene el Armor 22?',messageId:'m-interest-2'});
+  const price=await engine.processTurn({sessionId:'s-interest-level',message:'¿Cuánto cuesta?',messageId:'m-interest-3'});
+  const purchase=await engine.processTurn({sessionId:'s-interest-level',message:'Ya ese quiero, ¿cómo compro?',messageId:'m-interest-4'});
+
+  assert.equal(first.state.levelOfInterest,4);
+  assert.equal(repeated.state.levelOfInterest,4);
+  assert.equal(price.state.levelOfInterest,12);
+  assert.equal(purchase.state.levelOfInterest,57);
+  assert.equal(purchase.state.purchaseSignal,true);
+});
+
+test('a supplied budget resolves the active price objection in current context',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-objection-resolved',{
+    sessionId:'s-objection-resolved',turnCount:2,activeProduct:'Armor 22',objection:'precio',
+    pendingMissingFact:'presupuesto máximo',pendingCommercialAction:'ASK_MISSING_FACT',lastNba:'ASK_MISSING_FACT',
+    comparisonProducts:[],spinFacts:[],priorities:['precio'],
+  });
+  const result=await new HybridConversationEngine(deps(new FakeLlmProvider(),conversations)).processTurn({
+    sessionId:'s-objection-resolved',message:'Máximo 1200',messageId:'m-objection-budget',
+  });
+  assert.equal(result.state.budget,1200);
+  assert.equal(result.state.objection,null);
+});
