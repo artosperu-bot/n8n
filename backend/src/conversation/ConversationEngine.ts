@@ -24,6 +24,7 @@ import { canonicalProductName, resolveReference } from './reference/ReferenceRes
 import { planRoute } from './router/RoutePlanner.ts';
 import { reduceState } from './state/StateReducer.ts';
 import { safeWrite } from './writer/WriterGuard.ts';
+import { prepareCommercialWriteInput } from './commercial/CommercialWriteContract.ts';
 import { fold } from '../shared/text.ts';
 
 type Dependencies = {
@@ -452,7 +453,7 @@ export class ConversationEngine {
 
     const shouldUseLlm = !forceNoLlm && !NO_LLM_INTENTS.has(intent) && rag.length > 0;
     if (shouldUseLlm) {
-      const guarded = await safeWrite(this.deps.llm, { message: input.message, intent, state, quote, rag, deterministicAnswer }, deterministicAnswer ?? noEvidenceResponse());
+      const guarded = await safeWrite(this.deps.llm, prepareCommercialWriteInput({ message: input.message, intent, state, quote, rag, deterministicAnswer }), deterministicAnswer ?? noEvidenceResponse());
       answer = guarded.answer;
       actualModel = guarded.model;
       writerFallback = guarded.fallback;

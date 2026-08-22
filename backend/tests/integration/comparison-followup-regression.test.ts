@@ -37,6 +37,7 @@ test('comparison pair followup retrieves the requested section for both products
   const engine=new HybridConversationEngine({conversations,telemetry:new NoopTelemetryRepository(),erp:new FakeErpRepository(),rag,llm,automation:new NoopAutomationBus()});
   const result=await engine.processTurn({sessionId:'s-pair',message:'cual tiene mejor bateria?'});
   assert.equal(result.debug.intent,'COMPARE');
+  assert.equal(result.debug.nextBestAction,'COMPARE');
   assert.deepEqual(new Set(calls.map(x=>x.productId)),new Set(['P-ARMOR-X13','P-ARMOR-22-256G']));
   assert.ok(calls.every(x=>x.sections.includes('BATERIA')));
   assert.deepEqual(new Set((writeInput?.rag??[]).map(x=>x.productId)),new Set(['P-ARMOR-X13','P-ARMOR-22-256G']));

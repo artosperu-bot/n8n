@@ -16,10 +16,13 @@ export type LlmWriteInput = {
   decision?: TurnDecision | null;
   /** Canonical products the writer is allowed to present as real in this turn. */
   allowedProducts?: string[];
+  /** Canonical, verified products that may be offered as alternatives this turn. */
+  alternatives?: string[];
   /** Explicit commercial contract. These fields are derived once before the writer. */
   nextBestAction?: string | null;
   commercialStage?: string | null;
   knownFacts?: Record<string, unknown>;
+  missingFacts?: string[];
   missingFact?: string | null;
   interestSignal?: boolean;
   purchaseSignal?: boolean;
@@ -34,6 +37,8 @@ export type LlmWriteInput = {
   verifiedFeatures?: VerifiedFact[];
   customerContext?: Record<string, unknown>;
   commercialGoal?: string | null;
+  /** Internal boundary marker: the engine prepared and validated the commercial contract. */
+  commercialContractPrepared?: boolean;
 };
 
 export type LlmDecisionInput = {

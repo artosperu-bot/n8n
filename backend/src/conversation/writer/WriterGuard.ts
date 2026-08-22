@@ -1,9 +1,10 @@
 import type { LlmProvider, LlmResult, LlmWriteInput } from '../../ports/LlmProvider.ts';
-import { normalizeEvidence } from '../evidence/EvidenceNormalizer.ts';
 import { fold } from '../../shared/text.ts';
+import { prepareCommercialWriteInput } from '../commercial/CommercialWriteContract.ts';
 
 export type WriterGuardResult = {
   answer: string;
+  nextBestAction: string | null;
   model: string;
   llmResult: LlmResult | null;
   fallback: { delivered: boolean; error?: string };
@@ -35,46 +36,6 @@ function mentionsProductOutsideAllowlist(answer:string,allowed:string[]):boolean
 function evidenceText(input:LlmWriteInput):string {
   return fold((input.rag??[]).map(x=>x.text).join('\n'));
 }
-function inferredMissingFact(input:LlmWriteInput):string|null {
-  if(input.missingFact)return input.missingFact;
-  const state:any=input.state??{};
-  if(!state.useCase)return 'uso principal';
-  if(!(state.priorities?.length))return 'prioridad principal';
-  if(state.budget==null&&String(input.intent).toUpperCase()==='BUDGET_CONSTRAINT')return 'presupuesto máximo';
-  return 'criterio diferenciador';
-}
-function commercialGoal(action:string|null):string|null {
-  switch(String(action??'').toUpperCase()){
-    case 'RECOMMEND':return 'recomendar una opción con razones verificables';
-    case 'COMPARE':return 'resolver la comparación con diferencias verificables';
-    case 'ASK_MISSING_FACT':return 'obtener un solo dato que cambie la decisión';
-    case 'OFFER_ALTERNATIVE':return 'presentar una alternativa útil sin asumir elección';
-    case 'SOFT_CLOSE':return 'proponer un siguiente paso comercial breve';
-    case 'ANSWER_ONLY':return 'resolver la pregunta sin agregar discovery';
-    default:return null;
-  }
-}
-function structuredWriteInput(input:LlmWriteInput):LlmWriteInput {
-  const state:any=input.state??{};
-  const action=input.nextBestAction??input.decision?.nextBestAction??null;
-  const useCase=input.useCase??state.useCase??null;
-  const problem=input.problem??state.problem??null;
-  const priorities=input.priorities??state.priorities??[];
-  const budget=input.budget??state.budget??null;
-  const objection=input.objection??state.objection??input.decision?.objection??null;
-  const knownFacts=input.knownFacts??{useCase,problem,priorities,budget,objection};
-  const verifiedFacts=input.verifiedFacts??normalizeEvidence({intent:input.intent,quote:input.quote,rag:input.rag});
-  const customerContext=input.customerContext??{useCase,problem,priorities,budget,objection};
-  return {...input,
-    verifiedFacts,verifiedFeatures:input.verifiedFeatures??verifiedFacts.filter(x=>x.domain==='PRODUCT_RAG'),customerContext,
-    nextBestAction:action,commercialStage:input.commercialStage??state.commercialStage??input.decision?.commercialStage??null,
-    knownFacts,missingFact:String(action??'').toUpperCase()==='ASK_MISSING_FACT'?inferredMissingFact(input):input.missingFact??null,
-    interestSignal:input.interestSignal??state.interestSignal??false,purchaseSignal:input.purchaseSignal??state.purchaseSignal??false,
-    objection,activeProduct:input.activeProduct??state.activeProduct??null,selectedProduct:input.selectedProduct??state.selectedProduct??input.decision?.selectedProduct??null,
-    recommendedProduct:input.recommendedProduct??state.recommendedProduct??null,useCase,problem,priorities,budget,
-    commercialGoal:input.commercialGoal??commercialGoal(action),
-  };
-}
 function executesRecommendation(answer:string,product:string):boolean {
   return new RegExp(`\\b(?:te\\s+)?recomiendo\\b[^.!?]{0,45}\\b${escapes(product)}\\b`,'i').test(answer);
 }
@@ -93,7 +54,11 @@ function executeNba(input:LlmWriteInput,answer:string):string {
       :'¿Qué criterio pesa más para ti: batería, cámara o resistencia?';
     return `${answer.trim()} ${question}`.trim();
   }
-  if(action==='OFFER_ALTERNATIVE'&&!/\b(?:alternativ|otra\s+opci[oó]n|puedo\s+mostrarte)\b/i.test(answer))return `${answer.trim()} Puedo mostrarte una alternativa disponible.`.trim();
+  if(action==='OFFER_ALTERNATIVE'){
+    const alternatives=unique(input.alternatives??[]).slice(0,2);
+    const namesOne=alternatives.some(product=>new RegExp(`\\b${escapes(product)}\\b`,'i').test(answer));
+    return alternatives.length&&!namesOne?`${answer.trim()} Una opción real es ${alternatives.join(' o ')}.`.trim():answer;
+  }
   if(action==='SOFT_CLOSE'&&!/[¿?]/.test(answer))return `${answer.trim()} ¿Quieres que revisemos disponibilidad para avanzar?`.trim();
   return answer;
 }
@@ -110,7 +75,7 @@ function conflatesVirtualRam(input:LlmWriteInput,answer:string):boolean {
   const claims=[...answer.matchAll(/\b(\d+(?:[.,]\d+)?)\s*GB\s+(?:de\s+)?RAM\b/gi)];
   return claims.some(m=>Number(m[1].replace(',','.'))===total&&!/\bvirtual\b/i.test(answer.slice(m.index??0,(m.index??0)+55)));
 }
-type NumericClaim={value:number;unit:string};
+type NumericClaim={value:number;unit:string;index:number};
 function numericClaims(text:string):NumericClaim[]{
   const claims:NumericClaim[]=[];
   const pattern=/\b(\d+(?:[.,]\d+)?)\s*(mAh|GHz|MHz|MP|W|GB|TB|MB|Hz|fps|nm|µm|mm|cm|m\b|min(?:utos?)?|horas?|mes(?:es)?|años?|unidades?|%)/gi;
@@ -119,7 +84,7 @@ function numericClaims(text:string):NumericClaim[]{
     const prefix=fold(text.slice(Math.max(0,index-40),index));
     if(/(?:\bno\s+(?:tiene|es|soporta|incluye|trae|cuenta con)|\bsin)\s+[^\d]{0,16}$/.test(prefix))continue;
     const value=Number(match[1].replace(',','.'));
-    if(Number.isFinite(value))claims.push({value,unit:fold(match[2]).replace(/s$/,'')});
+    if(Number.isFinite(value))claims.push({value,unit:fold(match[2]).replace(/s$/,''),index});
   }
   return claims;
 }
@@ -128,7 +93,14 @@ function hasUnsupportedNumericFact(input:LlmWriteInput,answer:string):boolean{
   if(!asserted.length)return false;
   const evidence=[...(input.rag??[]).map(x=>x.text),...(input.verifiedFacts??[]).map(x=>String(x.value))].join('\n');
   const supported=numericClaims(evidence);
-  return asserted.some(claim=>!supported.some(fact=>fact.unit===claim.unit&&fact.value===claim.value));
+  const ram=ramProfile(input);
+  return asserted.some(claim=>{
+    if(supported.some(fact=>fact.unit===claim.unit&&fact.value===claim.value))return false;
+    const context=fold(answer.slice(Math.max(0,claim.index-20),claim.index+55));
+    const labelledRam=/ram\s+fisica/.test(fold(answer))&&/ram\s+virtual/.test(fold(answer));
+    if(ram&&claim.unit==='gb'&&claim.value===ram.physical+ram.virtual&&labelledRam&&/combinad/.test(context))return false;
+    return true;
+  });
 }
 function monetaryValues(text:string):string[]{
   return [...text.matchAll(/\bS\/\s*(\d+(?:[.,]\d{1,2})?)/gi)].map(m=>String(Number(m[1].replace(',','.'))));
@@ -262,17 +234,18 @@ function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
 
 export async function safeWrite(llm:LlmProvider,input:LlmWriteInput,fallbackAnswer:string):Promise<WriterGuardResult>{
   try{
-    const writeInput=structuredWriteInput(input);
+    const writeInput=input.commercialContractPrepared?input:prepareCommercialWriteInput(input);
     const result=await llm.write(writeInput);
     const cleaned=executeNba(writeInput,cleanPresentation(result.text));
     const violation=guardGeneratedAnswer(writeInput,cleaned);
     if(violation==='NBA_ANSWER_ONLY_QUESTION'){
       const salvaged=stripTrailingQuestion(cleaned);
-      if(salvaged&&!guardGeneratedAnswer(writeInput,salvaged))return{answer:salvaged,model:result.model,llmResult:result,fallback:{delivered:true}};
+      if(salvaged&&!guardGeneratedAnswer(writeInput,salvaged))return{answer:salvaged,nextBestAction:writeInput.nextBestAction??null,model:result.model,llmResult:result,fallback:{delivered:true}};
     }
-    if(violation)return{answer:safeFallback(writeInput,fallbackAnswer),model:result.model,llmResult:result,fallback:{delivered:false,error:violation}};
-    return{answer:cleaned,model:result.model,llmResult:result,fallback:{delivered:true}};
+    if(violation)return{answer:safeFallback(writeInput,fallbackAnswer),nextBestAction:writeInput.nextBestAction??null,model:result.model,llmResult:result,fallback:{delivered:false,error:violation}};
+    return{answer:cleaned,nextBestAction:writeInput.nextBestAction??null,model:result.model,llmResult:result,fallback:{delivered:true}};
   }catch(error){
-    return{answer:safeFallback(input,fallbackAnswer),model:'deterministic-fallback-v0.4',llmResult:null,fallback:{delivered:false,error:error instanceof Error?error.message:String(error)}};
+    const writeInput=input.commercialContractPrepared?input:prepareCommercialWriteInput(input);
+    return{answer:safeFallback(writeInput,fallbackAnswer),nextBestAction:writeInput.nextBestAction??null,model:'deterministic-fallback-v0.4',llmResult:null,fallback:{delivered:false,error:error instanceof Error?error.message:String(error)}};
   }
 }
