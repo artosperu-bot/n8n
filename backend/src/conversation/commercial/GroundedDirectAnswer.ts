@@ -22,16 +22,30 @@ function compact(value:string,max=420):string{
   return /[.!?…]$/.test(clipped)?clipped:`${clipped}.`;
 }
 
-function matchingEvidence(input:GroundedDirectAnswerInput):RagEvidence|null{
-  const attribute=fold(input.attribute??'');
+function attributePattern(attribute:string|null):RegExp|null{
+  const normalized=fold(attribute??'');
   const aliases:Record<string,RegExp>={
     fisico:/peso|dimension|grosor|fisico/,memoria:/ram|memoria|almacen/,ram:/ram|memoria/,
     bateria:/bateria|autonomia|carga/,resistencia:/resisten|caida|ip68|ip69|mil/,camara:/camara|foto|video|mp/,
   };
-  const escaped=attribute.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  const pattern=aliases[attribute]??(attribute?new RegExp(escaped,'i'):null);
+  if(aliases[normalized])return aliases[normalized];
+  if(!normalized)return null;
+  const escaped=normalized.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return new RegExp(escaped,'i');
+}
+
+function matchingEvidence(input:GroundedDirectAnswerInput):RagEvidence|null{
+  const pattern=attributePattern(input.attribute);
   const matched=(input.rag??[]).find(row=>pattern?.test(fold(`${row.section??''} ${row.text}`)))??null;
-  return matched??(attribute?null:input.rag?.[0]??null);
+  return matched??(pattern?null:input.rag?.[0]??null);
+}
+
+function customerDisplayFact(input:GroundedDirectAnswerInput):VerifiedFact|null{
+  const facts=(input.verifiedFacts??[]).filter(fact=>fact.domain==='PRODUCT_RAG');
+  if(!facts.length)return null;
+  const pattern=attributePattern(input.attribute);
+  if(!pattern)return facts[0]??null;
+  return facts.find(fact=>pattern.test(fold(`${fact.key} ${fact.value}`)))??null;
 }
 
 export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):string|null{
@@ -47,10 +61,9 @@ export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):strin
 
   const evidence=matchingEvidence(input);
   const raw=String(evidence?.text??'');
-  if(!raw)return null;
   const requested=fold(`${input.message} ${input.attribute??''}`);
 
-  if(/peso|fisico/.test(requested)){
+  if(raw&&/peso|fisico/.test(requested)){
     const weight=raw.match(/\bpeso(?:\s+(?:del\s+)?(?:producto|equipo))?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(kg|g)\b/i);
     if(weight)return `${productName(input)} pesa ${weight[1]} ${weight[2]}.`;
   }
@@ -61,7 +74,12 @@ export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):strin
     if(physical&&virtual)return `Tiene ${physical} de RAM física + ${virtual} de RAM virtual.`;
   }
 
-  const labelled=raw.trim().match(/^([^:\n]{2,80})\s*:\s*([^\n]+?)\s*\.?$/);
+  // Raw RAG is evidence, not presentation text. Only normalized PRODUCT_RAG facts may
+  // become the generic direct answer when no exact extractor above applies.
+  const display=customerDisplayFact(input)?.value??'';
+  if(!display)return null;
+
+  const labelled=display.trim().match(/^([^:\n]{2,80})\s*:\s*([^\n]+?)\s*\.?$/);
   if(labelled){
     const label=labelled[1].trim();
     const value=labelled[2].trim().replace(/[.!?]+$/,'');
@@ -71,5 +89,5 @@ export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):strin
     return `${label}: ${value}.`;
   }
 
-  return compact(raw);
+  return compact(display);
 }
