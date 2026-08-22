@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeEvidence } from '../../src/conversation/evidence/EvidenceNormalizer.ts';
 import { prepareCommercialWriteInput } from '../../src/conversation/commercial/CommercialWriteContract.ts';
+import { noEvidenceResponse } from '../../src/conversation/commercial/ResponsePolicy.ts';
 import { safeWrite } from '../../src/conversation/writer/WriterGuard.ts';
 import type { LlmProvider, LlmWriteInput } from '../../src/ports/LlmProvider.ts';
 
@@ -183,7 +184,8 @@ test('purchase signal prevents an invalid return to discovery',()=>{
     message:'Ya ese quiero, ¿cómo compro?',intent:'PURCHASE',state:{activeProduct:'Armor 22',purchaseSignal:true,priorities:['resistencia']},
     decision:{nextBestAction:'ASK_MISSING_FACT'} as any,allowedProducts:['Armor 22'],
   });
-  assert.equal(prepared.nextBestAction,'SOFT_CLOSE');
+  assert.equal(prepared.nextBestAction,'COLLECT_RESERVATION_DATA');
+  assert.equal(prepared.capabilityAction,'RESERVATION_DATA_COLLECTION');
   assert.equal(prepared.missingFact,null);
 });
 
@@ -197,4 +199,76 @@ test('FAB guard rejects a numeric feature not present in verified features',asyn
   assert.equal(result.fallback.error,'UNSUPPORTED_NUMERIC_FACT');
   assert.match(result.answer,/1[.,]5\s*m/i);
   assert.doesNotMatch(result.answer,/2\s*m/i);
+});
+
+test('SOFT_CLOSE may offer a stock check only with a resolved product and SQL evidence',async()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'me interesa',intent:'EVALUATE_USE',state:{activeProduct:'Armor 22',interestSignal:true},
+    decision:{nextBestAction:'SOFT_CLOSE'} as any,allowedProducts:['Armor 22'],
+    quote:{product:'Armor 22',shortName:'Armor 22',price:1399,stock:2,currency:'PEN',source:'TEST_SQL'},
+  } as any);
+  assert.equal(prepared.nextBestAction,'SOFT_CLOSE');
+  assert.equal(prepared.capabilityAction,'SOFT_CLOSE_TO_STOCK');
+  const result=await safeWrite(capturingWriter('El Armor 22 encaja con lo que buscas.'),prepared,'El Armor 22 encaja con lo que buscas.');
+  assert.match(result.answer,/disponibilidad|stock/i);
+});
+
+test('SOFT_CLOSE without a resolved SQL product degrades to ANSWER_ONLY',()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'me interesa',intent:'EVALUATE_USE',state:{interestSignal:true},
+    decision:{nextBestAction:'SOFT_CLOSE'} as any,allowedProducts:[],
+  });
+  assert.equal(prepared.nextBestAction,'ANSWER_ONLY');
+  assert.equal(prepared.capabilityAction,'ANSWER_ONLY');
+});
+
+test('unsupported commercial action degrades without choosing another promise',()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'¿Pueden agendarme una prueba?',intent:'OTHER',state:{activeProduct:'Armor 22'},
+    decision:{nextBestAction:'ASK_MISSING_FACT'} as any,allowedProducts:['Armor 22'],
+  });
+  assert.equal(prepared.nextBestAction,'ANSWER_ONLY');
+  assert.equal(prepared.capabilityAction,'ANSWER_ONLY');
+});
+
+test('missing fact without decision impact cannot become a discovery question',()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'busco un equipo',intent:'OTHER',state:{},decision:{nextBestAction:'ASK_MISSING_FACT'} as any,
+    missingFact:'uso principal',decisionImpact:false,
+  } as any);
+  assert.equal(prepared.nextBestAction,'ANSWER_ONLY');
+  assert.equal(prepared.missingFact,null);
+});
+
+test('customer-facing sourcing language is rejected with natural fallback',async()=>{
+  for(const text of ['Según la ficha técnica, tiene NFC.','Según la fuente consultada, tiene NFC.','Los datos recuperados indican que tiene NFC.']){
+    const result=await safeWrite(capturingWriter(text),{
+      message:'¿tiene NFC?',intent:'CAPABILITY',state:{activeProduct:'Armor 22'},decision:{nextBestAction:'ANSWER_ONLY'} as any,
+      rag:[{text:'NFC: Sí.',source:'TEST:CONECTIVIDAD',score:1,section:'CONECTIVIDAD',domain:'PRODUCT',productId:'P-22'}],allowedProducts:['Armor 22'],
+    },'Sí, tiene NFC.');
+    assert.equal(result.answer,'Sí, tiene NFC.');
+    assert.equal(result.fallback.error,'ROBOTIC_META_LANGUAGE');
+  }
+});
+
+test('technical use of fuente de alimentación is not mistaken for internal sourcing language',async()=>{
+  const result=await safeWrite(capturingWriter('La fuente de alimentación compatible se conecta por USB-C.'),{
+    message:'¿cómo se conecta la fuente de alimentación?',intent:'CAPABILITY',state:{activeProduct:'Armor 22'},decision:{nextBestAction:'ANSWER_ONLY'} as any,
+    rag:[{text:'La fuente de alimentación compatible se conecta por USB-C.',source:'TEST:CARGA',score:1,section:'BATERIA',domain:'PRODUCT',productId:'P-22'}],allowedProducts:['Armor 22'],
+  },'Se conecta por USB-C.');
+  assert.equal(result.fallback.error,undefined);
+  assert.match(result.answer,/fuente de alimentación/i);
+});
+
+test('writer cannot invent an unsupported operational action',async()=>{
+  const result=await safeWrite(capturingWriter('Te agendo una prueba del equipo para mañana.'),{
+    message:'quiero conocerlo',intent:'PRODUCT_INFO',state:{activeProduct:'Armor 22'},decision:{nextBestAction:'ANSWER_ONLY'} as any,
+    allowedProducts:['Armor 22'],
+  },'Puedo contarte sus características confirmadas.');
+  assert.equal(result.answer,'Puedo contarte sus características confirmadas.');
+  assert.equal(result.fallback.error,'UNSUPPORTED_OPERATIONAL_PROMISE');
+});
+
+test('unknown fact uses a natural no-action fallback',()=>{
+  assert.equal(noEvidenceResponse(),'No tengo confirmado ese dato exacto.');
 });

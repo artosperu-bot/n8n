@@ -59,5 +59,5 @@ export function ambiguousReferenceResponse(): string {
 }
 
 export function noEvidenceResponse(): string {
-  return 'Ese detalle no está especificado. Puedo ayudarte con otro aspecto del equipo.';
+  return 'No tengo confirmado ese dato exacto.';
 }

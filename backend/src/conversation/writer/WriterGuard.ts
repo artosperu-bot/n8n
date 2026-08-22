@@ -169,8 +169,16 @@ function guardGeneratedAnswer(input:LlmWriteInput,answer:string):string|null {
 
   const roboticMeta=/\b(?:cat[aá]logo\s+verificado|evidencia\s+verificada|datos\s+(?:disponibles|suministrados)|seg[uú]n\s+(?:mi|el)\s+sistema(?:\s+interno)?|seg[uú]n\s+el\s+rag|querytarget|\bintent\b)\b/i;
   const internalControl=/\b(?:SOFT_CLOSE|ANSWER_ONLY|ASK_MISSING_FACT|OFFER_ALTERNATIVE|COLLECT_RESERVATION_DATA|EXECUTE_RESERVATION|ASSISTED_HANDOFF|RECOMMEND_WITHIN_BUDGET|N\+1)\b/;
-  const qaLanguage=/\b(?:no\s+hay\s+evidencia(?:\s+comparativa)?|las\s+fuentes\s+no\s+indican|trade-?off|criterio\s+diferenciador|confidence|score|RAG)\b/i;
-  if(roboticMeta.test(answer)||internalControl.test(answer)||qaLanguage.test(answer))return 'ROBOTIC_META_LANGUAGE';
+  const qaLanguage=/\b(?:no\s+hay\s+evidencia(?:\s+comparativa)?|las\s+fuentes\s+no\s+indican|trade-?off|criterio\s+diferenciador|confidence|score|RAG|oracle|datos\s+recuperados)\b/i;
+  const internalSourcing=/\b(?:seg[uú]n\s+(?:la|su|una)\s+ficha\s+t[eé]cnica|ficha\s+t[eé]cnica|seg[uú]n\s+(?:la\s+)?fuente(?:\s+consultada)?|fuente\s+disponible|evidencia(?:\s+(?:disponible|consultada|recuperada|verificada))?)\b/i;
+  if(roboticMeta.test(answer)||internalControl.test(answer)||qaLanguage.test(answer)||internalSourcing.test(answer))return 'ROBOTIC_META_LANGUAGE';
+  const operational=fold(answer);
+  const unsupportedPromise=/\bte\s+agendo\b[^.!?]{0,45}\b(?:prueba|cita)\b|\bte\s+(?:separo|aparto|reservo)\b|\bte\s+(?:envio|mando|preparo)\b[^.!?]{0,45}\b(?:cotizacion|ficha(?:\s+tecnica)?|accesorios?)\b/.test(operational);
+  const advisorPromise=/\b(?:te\s+contactar[áa]|te\s+llamar[áa]|te\s+paso|te\s+derivo)\b[^.!?]{0,45}\b(?:un\s+)?asesor\b/.test(operational)
+    && input.capabilityAction!=='REQUEST_HUMAN_HANDOFF';
+  const stockPromise=/\b(?:reviso|revisamos|revisar|confirmo|confirmamos|confirmar)\b[^.!?]{0,45}\b(?:stock|disponibilidad)\b/.test(operational)
+    && input.capabilityAction!=='SOFT_CLOSE_TO_STOCK';
+  if(unsupportedPromise||advisorPromise||stockPromise)return 'UNSUPPORTED_OPERATIONAL_PROMISE';
   if((answer.match(/\?/g)??[]).length>1)return 'MULTIPLE_NEXT_STEPS';
 
   if(String(input.decision?.nextBestAction??'').toUpperCase()==='ANSWER_ONLY'&&/[¿?]/.test(answer))return 'NBA_ANSWER_ONLY_QUESTION';
@@ -225,11 +233,11 @@ function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
       ?'Aún no hay una diferencia clara entre esas opciones.'
       :['RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent)
         ?'Aún no hay una opción que destaque con claridad.'
-        :'Ese detalle no está especificado.';
+        :'No tengo confirmado ese dato exacto.';
   }
   cleaned=executeNba(input,cleaned);
   if(String(input.decision?.nextBestAction??'').toUpperCase()!=='ANSWER_ONLY')return cleaned;
-  return stripTrailingQuestion(cleaned)||'Ese detalle no está especificado.';
+  return stripTrailingQuestion(cleaned)||'No tengo confirmado ese dato exacto.';
 }
 
 export async function safeWrite(llm:LlmProvider,input:LlmWriteInput,fallbackAnswer:string):Promise<WriterGuardResult>{

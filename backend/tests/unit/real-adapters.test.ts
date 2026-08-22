@@ -47,6 +47,8 @@ test('OpenAI adapter sends deterministic evidence through Responses API', async 
     intent: 'PRICE',
     state: { queryTarget: 'Armor 22', lastUserMessage:'mensaje duplicado anterior', lastAssistantMessage:'respuesta duplicada anterior' },
     deterministicAnswer: 'Armor 22: S/ 1299.',
+    nextBestAction:'ANSWER_ONLY',capabilityAction:'ANSWER_ONLY',missingFact:null,decisionImpact:false,
+    verifiedFeatures:[],turnCapabilities:{checkPrice:true,scheduleDemo:false},
     decision: {
       primaryIntent:'PRICE', secondaryIntents:[], targetProduct:'Armor 22', mentionedProducts:[], referenceType:'ACTIVE_PRODUCT_FALLBACK',
       explicitSwitch:false, selectedProduct:null, comparisonProducts:[], attributes:[], customerNeed:null, customerProblem:null,
@@ -57,6 +59,8 @@ test('OpenAI adapter sends deterministic evidence through Responses API', async 
   assert.equal(result.text, 'Respuesta final');
   assert.match(body.input, /S\/ 1299/);
   assert.doesNotMatch(body.input, /duplicad[oa] anterior/);
+  assert.match(body.input,/"capabilityAction":"ANSWER_ONLY"/);
+  assert.doesNotMatch(body.input,/DECISION_VALIDADA|turnCapabilities|needsSql|confidence/);
   assert.match(body.instructions, /no inventes/i);
   assert.match(body.instructions, /persona experta, cercana y concreta/i);
   assert.match(body.instructions, /1 a 3 frases/i);

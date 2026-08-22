@@ -1,6 +1,6 @@
 import type { QaScenario } from '../types.ts';
 
-// Compact live suite: 23 turns covering the commercial path without replaying Golden100.
+// Compact live suite: 25 turns covering the commercial path without replaying Golden100.
 export const coreScenarios: QaScenario[] = [
   {id:'TRUTH-PRICE-X13',family:'TRUTH',title:'Precio autoritativo',turns:[
     {message:'¿Cuánto cuesta el Armor X13?',expected:{intent:'PRICE',queryTarget:'Armor X13',activeProduct:'Armor X13',explicitSwitch:false}},
@@ -42,5 +42,9 @@ export const coreScenarios: QaScenario[] = [
     {message:'estoy entre Armor X13 y Armor 22, comparalos',expected:{intent:'COMPARE'},oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA']}},
     {message:'cual tiene mejor bateria?',expected:{intent:'COMPARE'},oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['BATERIA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
     {message:'y en camara?',expected:{intent:'COMPARE'},oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['CAMARA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
+  ]},
+  {id:'CORE-SAFE-ACTIONABILITY',family:'COMMERCIAL',title:'Respuesta segura y acción no soportada',turns:[
+    {message:'¿Cuánto pesa el Armor 22?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},
+    {message:'¿Pueden agendarme una prueba del equipo?'},
   ]},
 ];

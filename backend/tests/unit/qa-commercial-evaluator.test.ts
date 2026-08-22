@@ -76,3 +76,10 @@ test('ASK_MISSING_FACT must not ask again for context already known', () => {
   ));
   assert.ok(findings.some(x=>x.code==='NBA_REPEATS_KNOWN'));
 });
+
+test('customer-facing sourcing language is flagged without breaking a real technical phrase',()=>{
+  const internal=evaluateCommercial(observation('Según la ficha técnica y la fuente consultada, tiene buena autonomía.'));
+  const technical=evaluateCommercial(observation('Necesitas una fuente de alimentación compatible con el cargador.'));
+  assert.ok(internal.some(x=>x.code==='ROBOTIC_META_LANGUAGE'));
+  assert.equal(technical.some(x=>x.code==='ROBOTIC_META_LANGUAGE'),false);
+});

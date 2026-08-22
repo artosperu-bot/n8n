@@ -68,4 +68,6 @@ test('CORE live remains a compact commercial pass of at most 25 turns',()=>{
   for(const expected of [/construcci[oó]n/i,/uso|redes|whatsapp/i,/ram/i,/bater[ií]a/i,/compar/i,/m[aá]ximo|presupuesto/i,/caro/i,/si est[aá] disponible me interesa/i,/como compro|quiero comprar/i]){
     assert.match(text,expected);
   }
+  assert.match(text,/cu[aá]nto pesa/i);
+  assert.match(text,/agendarme una prueba/i);
 });

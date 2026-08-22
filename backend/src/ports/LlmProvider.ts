@@ -24,6 +24,7 @@ export type LlmWriteInput = {
   knownFacts?: Record<string, unknown>;
   missingFacts?: string[];
   missingFact?: string | null;
+  decisionImpact?: boolean;
   interestSignal?: boolean;
   purchaseSignal?: boolean;
   objection?: string | null;
@@ -37,6 +38,9 @@ export type LlmWriteInput = {
   verifiedFeatures?: VerifiedFact[];
   customerContext?: Record<string, unknown>;
   commercialGoal?: string | null;
+  capabilityAction?: string | null;
+  turnCapabilities?: Record<string, boolean>;
+  imageUrls?: string[];
   /** Internal boundary marker: the engine prepared and validated the commercial contract. */
   commercialContractPrepared?: boolean;
 };

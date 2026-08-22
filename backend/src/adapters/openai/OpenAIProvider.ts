@@ -178,6 +178,7 @@ export class OpenAIProvider implements LlmProvider {
       'Cuando recomiendes, da una postura clara y 1 o 2 razones verificables. Menciona un trade-off solo si también está presente en evidencia comparada.',
       'No inventes. Solo afirma hechos presentes en los datos suministrados. Si falta un dato, dilo brevemente y no completes el hueco.',
       'No digas catálogo verificado, evidencia verificada, según mi sistema, RAG, INTENT, queryTarget, UNKNOWN ni expliques cómo funciona el backend.',
+      'No menciones ficha técnica, fuente consultada, oracle, confidence, score ni datos recuperados. Responde directamente con el dato o di “No tengo confirmado ese dato exacto”.',
       'Nunca muestres códigos internos de N+1 como ANSWER_ONLY, SOFT_CLOSE, ASK_MISSING_FACT, OFFER_ALTERNATIVE, RECOMMEND o ASSISTED_HANDOFF.',
       'Si los datos incluyen RAM física y RAM virtual, menciona siempre ambas por separado: “X GB de RAM física + hasta Y GB de RAM virtual”. Nunca presentes la suma como “RAM” física o total sin esa distinción.',
       'No uses superlativos como “el más resistente” o “la mejor opción” si no se compararon candidatos con evidencia suficiente para ese criterio.',
@@ -191,7 +192,7 @@ export class OpenAIProvider implements LlmProvider {
       model: this.#model,
       ...(/^gpt-5(?:$|[-.])/i.test(this.#model) ? { text: { verbosity: 'low' } } : {}),
       instructions,
-      input: `CLIENTE:\n${input.message}\n\nACCION_COMERCIAL:\n${JSON.stringify({nextBestAction:input.nextBestAction,commercialStage:input.commercialStage,knownFacts:input.knownFacts,missingFacts:input.missingFacts,missingFact:input.missingFact,interestSignal:input.interestSignal,purchaseSignal:input.purchaseSignal,objection:input.objection,activeProduct:input.activeProduct,selectedProduct:input.selectedProduct,recommendedProduct:input.recommendedProduct,alternatives:input.alternatives,useCase:input.useCase,problem:input.problem,priorities:input.priorities,budget:input.budget,verifiedFeatures:input.verifiedFeatures,customerContext:input.customerContext,commercialGoal:input.commercialGoal})}\n\nDECISION_VALIDADA:\n${JSON.stringify(input.decision ?? null)}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_DE_RESPUESTA:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nVERIFICADOS:\n${evidence || 'SIN_DATO'}`,
+      input: `CLIENTE:\n${input.message}\n\nACCION_COMERCIAL:\n${JSON.stringify({nextBestAction:input.nextBestAction,capabilityAction:input.capabilityAction,commercialStage:input.commercialStage,knownFacts:input.knownFacts,missingFact:input.missingFact,decisionImpact:input.decisionImpact,interestSignal:input.interestSignal,purchaseSignal:input.purchaseSignal,objection:input.objection,activeProduct:input.activeProduct,selectedProduct:input.selectedProduct,recommendedProduct:input.recommendedProduct,alternatives:input.alternatives,useCase:input.useCase,problem:input.problem,priorities:input.priorities,budget:input.budget,verifiedFeatures:input.verifiedFeatures,customerContext:input.customerContext,commercialGoal:input.commercialGoal})}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_DE_RESPUESTA:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nVERIFICADOS:\n${evidence || 'SIN_DATO'}`,
     });
     return {
       text: this.#extractText(json),
