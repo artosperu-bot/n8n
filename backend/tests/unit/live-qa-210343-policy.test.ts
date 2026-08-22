@@ -45,14 +45,15 @@ test('ANSWER_ONLY also removes a question from a safety fallback',async()=>{
   assert.doesNotMatch(result.answer,/\?/);
 });
 
-test('duplicate factual restatement falls back to one concise fact',async()=>{
+test('duplicate factual restatement remains grounded instead of triggering destructive fallback',async()=>{
   const duplicate='Conclusión: el Armor 22 pesa 324 g.\n* **Peso:** 324 g.';
   const result=await safeWrite(writer(duplicate),{
     message:'cuanto pesa el Armor 22?',intent:'CAPABILITY',state:{activeProduct:'Armor 22'},decision:decision({primaryIntent:'CAPABILITY'}),allowedProducts:['Armor 22'],
     rag:[{text:'Peso: 324 g.',source:'TEST:FISICO',domain:'PRODUCT',productId:'P-ARMOR-22',section:'FISICO'}],
   },'El **Armor 22 pesa 324 g**.');
-  assert.equal(result.answer,'El **Armor 22 pesa 324 g**.');
-  assert.equal(result.fallback.error,'DUPLICATE_FACT');
+  assert.match(result.answer,/324 g/);
+  assert.equal(result.fallback.delivered,true);
+  assert.equal(result.fallback.error,undefined);
 });
 
 test('selected product makes price and stock eligible for contextual soft close while cold factual stays answer-only',()=>{
