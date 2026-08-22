@@ -57,3 +57,38 @@ test('rejects speculative tradeoffs that are not present in verified evidence',a
   assert.equal(r.answer,'Armor 22 tiene mayor resolución nocturna en los datos comparados.');
   assert.equal(r.fallback.error,'UNSUPPORTED_SPECULATION');
 });
+
+test('duplicate grounded fact is a style issue and must not destroy an otherwise valid answer',async()=>{
+  const text='El Armor 22 tiene batería de 6600 mAh. * **Batería:** 6600 mAh y carga de 33 W.';
+  const r=await safeWrite(llm(text),{
+    ...base,
+    allowedProducts:['Armor 22'],
+    rag:[{text:'bateria_capacidad = 6600 mAh; carga = 33 W',source:'TEST',productId:'P-ARMOR-22-256G',section:'BATERIA',domain:'PRODUCT'}],
+  } as any,'fallback destructivo');
+  assert.notEqual(r.answer,'fallback destructivo');
+  assert.notEqual(r.fallback.error,'DUPLICATE_FACT');
+});
+
+test('mentioning WhatsApp as the customer use does not require app compatibility evidence unless compatibility is claimed',async()=>{
+  const r=await safeWrite(llm('Para llamadas y WhatsApp, el Armor X12 Pro encaja por la resistencia que pediste.'),{
+    ...base,
+    message:'solo llamadas whatsapp y que sea resistente',
+    allowedProducts:['Armor X12 Pro'],
+    rag:[{text:'IP68: Sí; IP69K: Sí',source:'TEST',productId:'P-X12',section:'RESISTENCIA',domain:'PRODUCT'}],
+  } as any,'fallback');
+  assert.equal(r.fallback.delivered,true);
+  assert.notEqual(r.fallback.error,'UNSUPPORTED_APP_COMPATIBILITY');
+});
+
+test('verified price is allowed inside budget recommendation instead of forcing an unsolicited-price fallback',async()=>{
+  const r=await safeWrite(llm('El Armor X13 encaja en tu tope: cuesta S/ 899.'),{
+    ...base,
+    intent:'RECOMMEND_WITHIN_BUDGET',
+    state:{budget:1000},
+    allowedProducts:['Armor X13'],
+    quote:{product:'Armor X13',shortName:'Armor X13',price:899,stock:4,currency:'PEN',source:'TEST'},
+    rag:[{text:'IP68: Sí',source:'TEST',productId:'P-X13',section:'RESISTENCIA',domain:'PRODUCT'}],
+  } as any,'fallback');
+  assert.equal(r.fallback.delivered,true);
+  assert.notEqual(r.fallback.error,'UNSOLICITED_PRICE');
+});
