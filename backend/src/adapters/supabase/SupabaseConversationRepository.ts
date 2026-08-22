@@ -13,6 +13,7 @@ type Options = {
 type ActiveLease = { owner:string; messageId:string; requestId:string };
 
 const PRODUCT_ORIGINS = new Set(['MENSAJE_ACTUAL','REFERENCIA_CONTEXTO','PRODUCTO_ACTIVO','SELECCION_USUARIO','SIN_RESOLVER']);
+const SPIN_CONTRIBUTIONS = new Set(['SITUACION','PROBLEMA','IMPLICACION','NECESIDAD_SOLUCION']);
 
 function spinPhase(state: ConversationState): string | null {
   if (state.purchaseSignal) return 'NECESIDAD_SOLUCION';
@@ -34,8 +35,15 @@ function cleanStrings(values:string[]|undefined):string[] {
   return (values ?? []).filter(v=>typeof v==='string' && v.trim() && v !== '[object Object]').map(v=>v.trim());
 }
 function compactSpinContribution(state:ConversationState):string|null {
-  const raw=String(state.lastSpinContribution ?? cleanStrings(state.spinFacts).at(-1) ?? '').trim();
-  return raw ? raw.slice(0,30) : null;
+  const direct=String(state.lastSpinContribution ?? '').trim().toUpperCase();
+  if(SPIN_CONTRIBUTIONS.has(direct)) return direct;
+
+  const latest=String(cleanStrings(state.spinFacts).at(-1) ?? '').toLocaleLowerCase('es');
+  if(/^(?:necesidad|prioridad):/.test(latest)) return 'NECESIDAD_SOLUCION';
+  if(/^implicacion:/.test(latest)) return 'IMPLICACION';
+  if(/^problema:/.test(latest)) return 'PROBLEMA';
+  if(/^(?:situacion|uso|sector|cliente):/.test(latest)) return 'SITUACION';
+  return null;
 }
 function recommendationCandidates(state:ConversationState):string[]{
   const traced=state.lastDecisionTrace?.recommendation?.eligibleCandidates?.map(x=>x.product)??[];

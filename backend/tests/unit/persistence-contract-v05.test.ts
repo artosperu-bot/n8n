@@ -60,7 +60,7 @@ test('Supabase repository exposes atomic turn persistence instead of split conte
   assert.equal(typeof (repo as any).completeTurn, 'function');
 });
 
-test('atomic persistence never overflows ia_conversaciones.spin_aporte varchar(30)', async () => {
+test('atomic persistence maps long SPIN facts to the canonical spin_aporte enum', async () => {
   let persistBody: any = null;
   const fetcher: typeof fetch = async (input, init) => {
     const url = String(input);
@@ -82,7 +82,8 @@ test('atomic persistence never overflows ia_conversaciones.spin_aporte varchar(3
     priorities:['resistencia','bateria'], comparisonProducts:[],
   } as any,{ model:'gpt-5-mini-2025-08-07' });
   const value = String(persistBody?.p_conversacion?.spin_aporte ?? '');
-  assert.ok(value.length <= 30, `spin_aporte overflow: ${value.length} chars: ${value}`);
+  assert.equal(value,'NECESIDAD_SOLUCION');
+  assert.ok(value.length <= 30);
 });
 
 test('atomic persistence includes compact decision trace inside commercial snapshot without schema changes', async () => {
