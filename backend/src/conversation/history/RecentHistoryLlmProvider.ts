@@ -6,7 +6,7 @@ export class RecentHistoryLlmProvider implements LlmProvider {
   readonly #conversations: ConversationRepository;
   readonly #maxMessages: number;
 
-  constructor(inner: LlmProvider, conversations: ConversationRepository, maxMessages = 6) {
+  constructor(inner: LlmProvider, conversations: ConversationRepository, maxMessages = 4) {
     this.#inner = inner;
     this.#conversations = conversations;
     this.#maxMessages = Math.max(2, maxMessages);

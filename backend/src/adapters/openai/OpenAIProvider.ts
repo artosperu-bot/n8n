@@ -82,8 +82,6 @@ export class OpenAIProvider implements LlmProvider {
       commercialStage: state.commercialStage ?? null,
       lastIntent: state.lastIntent ?? null,
       lastNba: state.lastNba ?? null,
-      lastUserMessage: state.lastUserMessage ?? null,
-      lastAssistantMessage: state.lastAssistantMessage ?? null,
     };
   }
 
@@ -137,7 +135,7 @@ export class OpenAIProvider implements LlmProvider {
       'Devuelve SOLO JSON válido con estas claves: primaryIntent, secondaryIntents, targetProduct, mentionedProducts, referenceType, explicitSwitch, selectedProduct, comparisonProducts, attributes, customerNeed, customerProblem, priorities, objection, commercialStage, spinContribution, nextBestAction, confidence.',
       'Texto: string o null. Arrays: solo strings. No devuelvas objetos dentro de campos de texto o arrays.'
     ].join(' ');
-    const history = (input.history ?? []).slice(-6).map(x => ({ role:x.role, content:x.content }));
+    const history = (input.history ?? []).slice(-4).map(x => ({ role:x.role, content:x.content }));
     const json = await this.#responses({
       model: this.#model,
       instructions,

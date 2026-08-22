@@ -45,7 +45,7 @@ test('OpenAI adapter sends deterministic evidence through Responses API', async 
   const result = await llm.write({
     message: 'precio?',
     intent: 'PRICE',
-    state: { queryTarget: 'Armor 22' },
+    state: { queryTarget: 'Armor 22', lastUserMessage:'mensaje duplicado anterior', lastAssistantMessage:'respuesta duplicada anterior' },
     deterministicAnswer: 'Armor 22: S/ 1299.',
     decision: {
       primaryIntent:'PRICE', secondaryIntents:[], targetProduct:'Armor 22', mentionedProducts:[], referenceType:'ACTIVE_PRODUCT_FALLBACK',
@@ -56,6 +56,7 @@ test('OpenAI adapter sends deterministic evidence through Responses API', async 
   });
   assert.equal(result.text, 'Respuesta final');
   assert.match(body.input, /S\/ 1299/);
+  assert.doesNotMatch(body.input, /duplicad[oa] anterior/);
   assert.match(body.instructions, /no inventes/i);
   assert.match(body.instructions, /persona experta, cercana y concreta/i);
   assert.match(body.instructions, /1 a 3 frases/i);

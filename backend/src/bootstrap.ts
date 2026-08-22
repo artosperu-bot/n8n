@@ -81,7 +81,7 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
     ? new OpenAIProvider({ apiKey: need(config.openAiApiKey,'OPENAI_API_KEY'), model: need(config.openAiModel,'OPENAI_MODEL') })
     : new FakeLlmProvider();
   const llm = config.llmMode === 'openai'
-    ? new RecentHistoryLlmProvider(baseLlm, conversations, 6)
+    ? new RecentHistoryLlmProvider(baseLlm, conversations, 4)
     : baseLlm;
 
   const automation = config.automationMode === 'n8n'
