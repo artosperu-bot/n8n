@@ -49,7 +49,9 @@ test('comparison pair survives a non-switch mention and resolves los dos without
   const b=await engine.processTurn({sessionId:'pair',message:'También estoy viendo el Armor 22'});
   assert.deepEqual(b.state.comparisonProducts,['Armor X13','Armor 22']);
   assert.equal(b.state.activeProduct,'Armor X13');
+  assert.equal(b.state.queryTarget,'Armor 22');
   assert.equal(b.state.salientProduct,'Armor 22');
+  assert.equal(b.state.explicitSwitch,false);
   const c=await engine.processTurn({sessionId:'pair',message:'¿Qué diferencia hay entre los dos?'});
   assert.equal(c.debug.intent,'COMPARE');
   assert.deepEqual(c.state.comparisonProducts,['Armor X13','Armor 22']);

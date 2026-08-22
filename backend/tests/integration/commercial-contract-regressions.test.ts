@@ -57,6 +57,7 @@ test('mere mention of a second product does not force comparison or switch activ
   assert.notEqual(r.debug.intent,'COMPARE');
   assert.doesNotMatch(r.answer,/qué dos modelos quieres comparar/i);
   assert.equal(r.state.activeProduct,'Armor X13');
+  assert.equal(r.state.queryTarget,'Armor 22');
   assert.equal(r.state.salientProduct,'Armor 22');
   assert.deepEqual(r.state.comparisonProducts,['Armor X13','Armor 22']);
   assert.equal(r.state.explicitSwitch,false);
