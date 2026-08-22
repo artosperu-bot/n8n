@@ -5,11 +5,22 @@ export type RecentDialogueMessage = {
   content: string;
 };
 
-export type RelatedNextValue = {
-  kind:'VERIFIED_AVAILABILITY'|'SAFE_FEATURE_VALUE';
-  sourceDomain:'SQL'|'PRODUCT_RAG';
-  basisKeys:string[];
-  customerSafeText:string;
+export type CommercialMove = {
+  action:'RELATED_VALUE';
+  kind:'STOCK_STATUS'|'CONTEXTUAL_BENEFIT'|'RELATED_VERIFIED_FACT';
+  targetProduct:string;
+  intensity:'LIGHT'|'MEDIUM'|'HIGH';
+  reason:string;
+  basis:Array<'SQL'|'VERIFIED_PRODUCT_FEATURE'|'CUSTOMER_CONTEXT'>;
+  attribute:string|null;
+  verifiedFacts:VerifiedFact[];
+  relevantCustomerContext:{
+    useCase:string|null;
+    problem:string|null;
+    priorities:string[];
+    budget:number|null;
+    objection:string|null;
+  };
 };
 
 export type LlmWriteInput = {
@@ -60,7 +71,7 @@ export type LlmWriteInput = {
   implications?: string[];
   pendingQuestion?: string | null;
   pendingAction?: string | null;
-  relatedNextValue?: RelatedNextValue | null;
+  commercialMove?: CommercialMove | null;
   imageUrls?: string[];
   /** Internal boundary marker: the engine prepared and validated the commercial contract. */
   commercialContractPrepared?: boolean;

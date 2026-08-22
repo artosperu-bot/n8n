@@ -758,4 +758,27 @@ El nivel de interés cambia la intensidad, no elimina normalmente el `+1`:
 
 `ANSWER_ONLY` es excepcional: se usa cuando no existe continuación segura, esta exigiría fabricar datos o capacidades, existe una denegación de capability, hay un estado terminal o avanzar resultaría engañoso. No es el default de una primera pregunta ni de precio, stock o atributo con interés bajo.
 
-`RELATED_VALUE` representa una continuación declarativa no operativa. Solo es ejecutable cuando el contrato pre-writer deriva `relatedNextValue` desde SQL o `verifiedFeatures`; el writer no decide su existencia y la guarda post-writer asegura que aparezca una sola vez sin añadir otra pregunta o CTA.
+`RELATED_VALUE` representa una continuación declarativa no operativa, pero no es suficiente como etiqueta. Antes del writer, la capa de decisión debe producir un `CommercialMove` semántico equivalente a:
+
+```text
+action
+kind
+targetProduct
+intensity
+reason
+basis
+attribute
+verifiedFacts
+relevantCustomerContext
+```
+
+Ejemplos de `kind` soportados por el contrato actual:
+
+- `STOCK_STATUS`: continuación factual SQL relacionada con una consulta de precio;
+- `CONTEXTUAL_BENEFIT`: atributo Product RAG verificado conectado con un problema, prioridad o use case real.
+
+N+1 no es una etiqueta de acción. La capa de decisión determina el valor semántico exacto antes de ejecutar el writer. El writer solo verbaliza el movimiento seleccionado; no decide qué significa `RELATED_VALUE`, no crea otro beneficio y no agrega un segundo `+1`.
+
+Si faltan facts o contexto suficientes para el `CommercialMove`, `CAN_EXECUTE` debe degradar antes del writer a otro movimiento válido o a `ANSWER_ONLY`. La guarda post-writer rechaza una continuación genérica que no exprese el payload seleccionado.
+
+Propósitos internos de consulta como `precio`, `conocer_precio`, `stock_availability` o `saber_disponibilidad` no son use cases del cliente y no pueden alimentar `CONTEXTUAL_BENEFIT`.

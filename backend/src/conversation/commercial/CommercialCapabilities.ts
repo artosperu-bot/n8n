@@ -105,8 +105,8 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
     askPriority:base.askPriority&&decisionImpact&&!(input.priorities??[]).length,
     askBudget:base.askBudget&&decisionImpact&&input.budget==null,
     askProduct:base.askProduct&&decisionImpact&&!product,
-    addRelatedValue:base.addRelatedValue&&Boolean(product&&input.relatedNextValue&&(
-      input.relatedNextValue.sourceDomain==='SQL'?sqlResolved(input):featureEvidence
+    addRelatedValue:base.addRelatedValue&&Boolean(product&&input.commercialMove&&(
+      input.commercialMove.basis.includes('SQL')?sqlResolved(input):featureEvidence
     )),
     checkPrice:base.checkPrice&&sqlResolved(input)&&input.quote?.price!=null,
     checkStock:base.checkStock&&sqlResolved(input)&&input.quote?.stock!=null,

@@ -412,4 +412,10 @@ Regla autoritativa:
 
 > STECH N+1 significa que una pregunta normal elegible recibe la respuesta grounded a la solicitud actual más exactamente una continuación relacionada, útil y ejecutable. `LOW` cambia la intensidad del `+1`; no lo elimina normalmente. `ANSWER_ONLY` es un fallback seguro excepcional, no el default del primer turno ni de una pregunta comercial con interés bajo.
 
-El selector reusable puede producir `RELATED_VALUE` cuando existe `relatedNextValue` estructurado. Ese valor debe derivarse antes del writer exclusivamente desde SQL o `verifiedFeatures`, pasar `CAN_EXECUTE` y ser entregado una sola vez por la guarda post-writer. No puede contener promesas operativas, cifras nuevas, cambios de producto ni una pregunta adicional.
+El selector reusable puede producir `RELATED_VALUE` únicamente acompañado por un `CommercialMove` estructurado. Como mínimo debe transportar `kind`, producto objetivo, intensidad, motivo, base de autoridad, atributo, facts verificados y contexto real relevante.
+
+N+1 no es una etiqueta de acción. La capa de decisión determina el valor semántico exacto antes del writer; el writer solo lo verbaliza. No puede decidir qué significa `RELATED_VALUE`, sustituir el movimiento, inventar otro beneficio o agregar un segundo `+1`.
+
+El `CommercialMove` debe derivarse exclusivamente desde SQL, `verifiedFeatures` y contexto comercial real, y debe pasar `CAN_EXECUTE`. Si el payload es insuficiente, se degrada antes del writer. La guarda post-writer debe rechazar filler genérico que no entregue los facts/contexto seleccionados.
+
+No tratar propósitos internos de consulta (`precio`, `conocer_precio`, `stock_availability`, `saber_disponibilidad`) como use cases del cliente para FAB o beneficios contextuales.

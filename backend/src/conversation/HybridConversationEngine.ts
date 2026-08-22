@@ -454,12 +454,12 @@ export class HybridConversationEngine {
         sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_PRICE';
         progressionTrace=evaluatePostAnswerCommercialProgression({intent,currentNba:nba,state:commercialState,resolvedProduct:productName(quote)??target,verifiedCurrentAnswer:quote?.price!=null,relatedValueAvailable:quote?.stock!=null});
         const prepared=prepareCommercialWriteInput({message:input.message,intent,state:commercialState,quote,decision:{...decision,nextBestAction:progressionTrace.candidateNba},allowedProducts:writerProducts()});
-        nba=prepared.nextBestAction??'ANSWER_ONLY';answer=target?priceResponse(quote,nba==='SOFT_CLOSE',nba==='RELATED_VALUE'?prepared.relatedNextValue?.customerSafeText??null:null):'¿Qué modelo quieres consultar?';
+        nba=prepared.nextBestAction??'ANSWER_ONLY';answer=target?priceResponse(quote,nba==='SOFT_CLOSE',nba==='RELATED_VALUE'?prepared.commercialMove??null:null):'¿Qué modelo quieres consultar?';
       }else if(intent==='STOCK'){
         sqlTools.push('dbo.sp_BuscarProductosVenta');route='SQL_STOCK';
         progressionTrace=evaluatePostAnswerCommercialProgression({intent,currentNba:nba,state:commercialState,resolvedProduct:productName(quote)??target,verifiedCurrentAnswer:quote?.stock!=null,relatedValueAvailable:Boolean(quote?.stock!=null&&quote.stock>0)});
         const prepared=prepareCommercialWriteInput({message:input.message,intent,state:commercialState,quote,decision:{...decision,nextBestAction:progressionTrace.candidateNba},allowedProducts:writerProducts()});
-        nba=prepared.nextBestAction??'ANSWER_ONLY';answer=target?stockResponse(quote,facts.quantity,nba==='SOFT_CLOSE',nba==='RELATED_VALUE'?prepared.relatedNextValue?.customerSafeText??null:null):'¿Qué modelo quieres consultar?';
+        nba=prepared.nextBestAction??'ANSWER_ONLY';answer=target?stockResponse(quote,facts.quantity,nba==='SOFT_CLOSE',nba==='RELATED_VALUE'?prepared.commercialMove??null:null):'¿Qué modelo quieres consultar?';
       }else if(intent==='IMAGE'){sqlTools.push('dbo.sp_BuscarImagenesProductoVenta');route='SQL_IMAGES';images=target&&this.#deps.erp.getProductImages?await this.#deps.erp.getProductImages(target,10).catch(()=>[]):[];answer=imageResponse(images)||noEvidenceResponse();
       }else if(intent==='POLICY'||intent==='WARRANTY'){
         route='RAG_INSTITUTIONAL';try{rag=this.#deps.rag.searchInstitutional?await this.#deps.rag.searchInstitutional(input.message,4):await this.#deps.rag.search(input.message,null);}catch{rag=[];}

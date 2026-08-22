@@ -1,17 +1,25 @@
 import type { ConversationState, ProductImage, ProductQuote, RagEvidence } from '../../domain/types.ts';
+import type { CommercialMove } from '../../ports/LlmProvider.ts';
 
 function shortProduct(value: string | null | undefined): string {
   const raw = String(value ?? '').trim();
   return raw || 'el producto';
 }
 
-export function priceResponse(quote: ProductQuote | null, softClose = false, relatedValue:string|null=null): string {
-  if (!quote || quote.price == null) return 'El precio no está disponible en este momento.';
-  const fact=`${shortProduct(quote.shortName ?? quote.product)} está a S/ ${quote.price}.`;
-  return softClose?`${fact} Si te cuadra, puedo revisar stock para avanzar.`:relatedValue?`${fact} ${relatedValue}`:fact;
+function renderCommercialMove(move:CommercialMove|null):string|null{
+  if(move?.kind!=='STOCK_STATUS')return null;
+  const status=move.verifiedFacts.find(fact=>fact.key==='DISPONIBILIDAD')?.value;
+  return status==='DISPONIBLE'?'También está disponible.':status==='NO_DISPONIBLE'?'Por ahora no está disponible.':null;
 }
 
-export function stockResponse(quote: ProductQuote | null, requestedQuantity?: number | null, softClose = false, relatedValue:string|null=null): string {
+export function priceResponse(quote: ProductQuote | null, softClose = false, commercialMove:CommercialMove|null=null): string {
+  if (!quote || quote.price == null) return 'El precio no está disponible en este momento.';
+  const fact=`${shortProduct(quote.shortName ?? quote.product)} está a S/ ${quote.price}.`;
+  const continuation=renderCommercialMove(commercialMove);
+  return softClose?`${fact} Si te cuadra, puedo revisar stock para avanzar.`:continuation?`${fact} ${continuation}`:fact;
+}
+
+export function stockResponse(quote: ProductQuote | null, requestedQuantity?: number | null, softClose = false, commercialMove:CommercialMove|null=null): string {
   if (!quote || quote.stock == null) return 'La disponibilidad está pendiente de actualización.';
   if (requestedQuantity != null && requestedQuantity > 1) {
     return quote.stock >= requestedQuantity
@@ -19,7 +27,8 @@ export function stockResponse(quote: ProductQuote | null, requestedQuantity?: nu
       : 'Para esa cantidad necesito validar disponibilidad.';
   }
   if(quote.stock<=0)return 'Ahora no está disponible.';
-  return softClose?'Sí, está disponible. ¿Quieres avanzar con ese modelo?':relatedValue?`Sí, está disponible. ${relatedValue}`:'Sí, está disponible.';
+  const continuation=renderCommercialMove(commercialMove);
+  return softClose?'Sí, está disponible. ¿Quieres avanzar con ese modelo?':continuation?`Sí, está disponible. ${continuation}`:'Sí, está disponible.';
 }
 
 export function imageResponse(images: ProductImage[]): string {

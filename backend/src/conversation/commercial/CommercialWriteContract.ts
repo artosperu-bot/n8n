@@ -1,4 +1,4 @@
-import type { LlmWriteInput, RelatedNextValue } from '../../ports/LlmProvider.ts';
+import type { CommercialMove, LlmWriteInput } from '../../ports/LlmProvider.ts';
 import { fold } from '../../shared/text.ts';
 import { normalizeEvidence } from '../evidence/EvidenceNormalizer.ts';
 import { canExecuteCapability, evaluateTurnCapabilities, missingFactCapability, requestedUnsupportedCapability, type CommercialCapabilityAction } from './CommercialCapabilities.ts';
@@ -8,34 +8,27 @@ function unique(values:Array<string|null|undefined>):string[]{
   return [...new Set(values.map(value=>String(value??'').trim()).filter(Boolean))];
 }
 
-function relatedNextValue(input:LlmWriteInput,verifiedFeatures:LlmWriteInput['verifiedFeatures'],attribute:string|null):RelatedNextValue|null{
+function genuineUseCase(value:string|null):string|null{
+  const raw=String(value??'').trim();
+  const normalized=fold(raw).replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  if(!normalized||/^(?:(?:conocer|consultar|saber|ver|revisar)\s+(?:(?:el|la)\s+)?)?(?:precio|stock|disponibilidad|precio y stock|stock availability|saber disponibilidad)$/.test(normalized))return null;
+  return raw;
+}
+
+function selectCommercialMove(input:LlmWriteInput,verifiedFacts:LlmWriteInput['verifiedFacts'],verifiedFeatures:LlmWriteInput['verifiedFeatures'],attribute:string|null,resolvedProduct:string|null,context:{useCase:string|null;problem:string|null;priorities:string[];budget:number|null;objection:string|null},levelOfInterest:number):CommercialMove|null{
+  if(!resolvedProduct)return null;
   const intent=String(input.intent??'').toUpperCase();
-  const quote=input.quote??null;
-  if(['PRICE','PRICE_AVAILABILITY'].includes(intent)&&quote?.stock!=null){
-    return{
-      kind:'VERIFIED_AVAILABILITY',sourceDomain:'SQL',basisKeys:['DISPONIBILIDAD'],
-      customerSafeText:quote.stock>0?'También está disponible.':'Por ahora no está disponible.',
-    };
+  const intensity=levelOfInterest>=60?'HIGH':levelOfInterest>=20?'MEDIUM':'LIGHT';
+  if(['PRICE','PRICE_AVAILABILITY'].includes(intent)){
+    const stockFact=(verifiedFacts??[]).find(fact=>fact.domain==='SQL'&&fact.key==='DISPONIBILIDAD');
+    if(stockFact)return{action:'RELATED_VALUE',kind:'STOCK_STATUS',targetProduct:resolvedProduct,intensity,reason:'VERIFIED_STOCK_RELATED_TO_PRICE',basis:['SQL'],attribute:null,verifiedFacts:[stockFact],relevantCustomerContext:context};
   }
-  if(intent==='STOCK'&&quote?.stock!=null&&quote.stock>0){
-    return{
-      kind:'VERIFIED_AVAILABILITY',sourceDomain:'SQL',basisKeys:['DISPONIBILIDAD'],
-      customerSafeText:'Esa disponibilidad permite mantenerlo como una opción mientras decides.',
-    };
+  const realContext={...context,useCase:genuineUseCase(context.useCase)};
+  const hasCustomerContext=Boolean(realContext.useCase||realContext.problem||realContext.priorities.length||realContext.objection);
+  if(verifiedFeatures?.length&&hasCustomerContext){
+    return{action:'RELATED_VALUE',kind:'CONTEXTUAL_BENEFIT',targetProduct:resolvedProduct,intensity,reason:'VERIFIED_FEATURE_WITH_CUSTOMER_CONTEXT',basis:['VERIFIED_PRODUCT_FEATURE','CUSTOMER_CONTEXT'],attribute,verifiedFacts:verifiedFeatures,relevantCustomerContext:realContext};
   }
-  if(!verifiedFeatures?.length)return null;
-  const basisKeys=unique(verifiedFeatures.map(fact=>fact.key));
-  const topic=fold([attribute,...basisKeys].filter(Boolean).join(' '));
-  const customerSafeText=/ram|memoria/.test(topic)
-    ?'Esa configuración te da más margen para la multitarea.'
-    :/bateria|carga/.test(topic)
-      ?'Ese dato te da un criterio concreto para valorar batería y carga según tu rutina.'
-      :/resisten|caida|ip68|ip69|fisico|peso|dimension/.test(topic)
-        ?'Ese atributo te da un criterio concreto para valorar el uso diario y comparar opciones.'
-        :/camara|foto|video/.test(topic)
-          ?'Ese dato te da un criterio concreto para comparar cámaras.'
-          :'Ese atributo te da un criterio concreto para comparar opciones.';
-  return{kind:'SAFE_FEATURE_VALUE',sourceDomain:'PRODUCT_RAG',basisKeys,customerSafeText};
+  return null;
 }
 
 function supportedCapabilityNames(capabilities:Record<string,boolean>):string[]{
@@ -131,7 +124,8 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const previousPendingAction=input.pendingAction??state.pendingCommercialAction??state.lastNba??null;
   const verifiedFacts=input.verifiedFacts??normalizeEvidence({intent:input.intent,quote:input.quote,rag:input.rag});
   const verifiedFeatures=input.verifiedFeatures??verifiedFacts.filter(fact=>fact.domain==='PRODUCT_RAG');
-  const relatedValue=relatedNextValue(input,verifiedFeatures,attribute);
+  const moveContext={useCase:genuineUseCase(useCase),problem,priorities,budget,objection};
+  const commercialMove=selectCommercialMove(input,verifiedFacts,verifiedFeatures,attribute,resolvedTurnProduct,moveContext,levelOfInterest);
   const allowedProducts=unique(input.allowedProducts??[]);
   const alternatives=unique(input.alternatives??[]).filter(product=>includesProduct(allowedProducts,product));
   const knownFacts=input.knownFacts??{
@@ -146,7 +140,7 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
     ?proposedMissing
     :nextMissingFact({useCase,problem,priorities,budget},String(input.intent??'').toUpperCase());
   let decisionImpact=input.decisionImpact??Boolean(missingFact&&missingFactCapability(missingFact));
-  const capabilityInput={...input,allowedProducts,alternatives,verifiedFacts,verifiedFeatures,relatedNextValue:relatedValue,resolvedProduct:resolvedTurnProduct,interestSignal,purchaseSignal,activeProduct,selectedProduct,recommendedProduct,useCase,problem,priorities,budget,decisionImpact};
+  const capabilityInput={...input,allowedProducts,alternatives,verifiedFacts,verifiedFeatures,commercialMove,resolvedProduct:resolvedTurnProduct,interestSignal,purchaseSignal,activeProduct,selectedProduct,recommendedProduct,useCase,problem,priorities,budget,decisionImpact};
   const turnCapabilities=evaluateTurnCapabilities(capabilityInput);
   const unsupportedRequest=requestedUnsupportedCapability(input.message);
   const actionFor=(nba:string):CommercialCapabilityAction|null=>{
@@ -187,7 +181,7 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   return {
     ...input,
     decision:input.decision?{...input.decision,nextBestAction}:input.decision,
-    allowedProducts,alternatives,verifiedFacts,verifiedFeatures,relatedNextValue:relatedValue,
+    allowedProducts,alternatives,verifiedFacts,verifiedFeatures,commercialMove,
     nextBestAction,commercialStage:input.commercialStage??state.commercialStage??input.decision?.commercialStage??null,
     knownFacts,missingFacts,missingFact,decisionImpact,interestSignal,purchaseSignal,objection,activeProduct,selectedProduct,recommendedProduct,
     useCase,problem,priorities,budget,
