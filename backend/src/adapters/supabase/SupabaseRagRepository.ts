@@ -153,7 +153,7 @@ export class SupabaseRagRepository implements RagRepository {
     const vector=await this.#embeddingProvider.embed(query);
     let rows=await this.#rpc(this.#institutionalRpc,{
       p_query_embedding:vector,
-      p_match_count:boundedLimit(limit,20),
+      p_match_count:topic?.subcategory?20:boundedLimit(limit,20),
       p_match_threshold:0.45,
       p_dominio:null,
       p_categoria:topic?.category??null,
@@ -161,7 +161,8 @@ export class SupabaseRagRepository implements RagRepository {
     });
     if(topic?.subcategory){
       const exact=rows.filter(row=>fold(row.subcategoria)===fold(topic.subcategory!));
-      if(exact.length)rows=exact;
+      if(!exact.length)return[];
+      rows=exact;
     }
     return rows.slice(0,boundedLimit(limit,8)).map(row=>{
       const base=institutionalAuthority(row);
