@@ -25,7 +25,7 @@ const ATTRS: Array<[RegExp, string]> = [
   [/\b(procesador|rendimiento|cpu|gpu|rapido|velocidad)\b/, 'RENDIMIENTO'],
   [/\b(pantalla|display|hz|resolucion|pulgadas)\b/, 'PANTALLA'],
   [/\b(huella|biometria|biometrico|desbloqueo facial|reconocimiento facial)\b/, 'SEGURIDAD'],
-  [/\b(peso|grosor|dimensiones|dimension|tamano|medidas|color)\b/, 'FISICO'],
+  [/\b(peso|pesa|pesan|grosor|grueso|dimensiones|dimension|tamano|medidas|altura|ancho|anchura|espesor|color)\b/, 'FISICO'],
   [/\b(sensor|sensores|giroscopio|barometro|proximidad|brujula)\b/, 'SENSORES'],
   [/\b(gps|galileo|glonass|beidou|posicionamiento)\b/, 'POSICIONAMIENTO'],
 ];

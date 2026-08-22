@@ -184,6 +184,8 @@ export class OpenAIProvider implements LlmProvider {
       'No uses superlativos como “el más resistente” o “la mejor opción” si no se compararon candidatos con evidencia suficiente para ese criterio.',
       'No listes todas las características del producto salvo que el cliente pida una ficha completa.',
       'Ejecuta exactamente ACCION_COMERCIAL.nextBestAction: ANSWER_ONLY significa responder y terminar sin pregunta; RECOMMEND exige nombrar claramente la opción recomendada; ASK_MISSING_FACT exige preguntar solo ACCION_COMERCIAL.missingFact; OFFER_ALTERNATIVE exige ofrecer una alternativa; SOFT_CLOSE permite un único siguiente paso contextual, sin presión ni volver a discovery.',
+      'EXECUTABLE_NBA es autoridad: responde la consulta y ejecuta únicamente esa acción. No agregues otro CTA, promesa, pregunta o acción independiente. SUPPORTED_CAPABILITIES solo informa operaciones disponibles; no autoriza una acción distinta de EXECUTABLE_NBA.',
+      'Si la intención es HANDLE_PRICE_OBJECTION, reconoce brevemente la objeción antes de ejecutar EXECUTABLE_NBA.',
       'ASSISTED_HANDOFF no significa que una transferencia, reserva o pedido ya se realizó. Nunca inventes acciones completadas.',
       'SPIN, FAB, LAER, empatía y neuroventas son criterios internos de conversación: aplícalos naturalmente y nunca nombres esas técnicas.',
       'Nunca reveles cantidad cruda de stock ni menciones precio si no fue solicitado o autorizado por la intención.'
@@ -192,7 +194,7 @@ export class OpenAIProvider implements LlmProvider {
       model: this.#model,
       ...(/^gpt-5(?:$|[-.])/i.test(this.#model) ? { text: { verbosity: 'low' } } : {}),
       instructions,
-      input: `CLIENTE:\n${input.message}\n\nACCION_COMERCIAL:\n${JSON.stringify({nextBestAction:input.nextBestAction,capabilityAction:input.capabilityAction,commercialStage:input.commercialStage,knownFacts:input.knownFacts,missingFact:input.missingFact,decisionImpact:input.decisionImpact,interestSignal:input.interestSignal,purchaseSignal:input.purchaseSignal,objection:input.objection,activeProduct:input.activeProduct,selectedProduct:input.selectedProduct,recommendedProduct:input.recommendedProduct,alternatives:input.alternatives,useCase:input.useCase,problem:input.problem,priorities:input.priorities,budget:input.budget,verifiedFeatures:input.verifiedFeatures,customerContext:input.customerContext,commercialGoal:input.commercialGoal})}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_DE_RESPUESTA:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nVERIFICADOS:\n${evidence || 'SIN_DATO'}`,
+      input: `CLIENTE:\n${input.message}\n\nCONTRATO_COMERCIAL:\n${JSON.stringify({resolvedCurrentIntent:input.resolvedCurrentIntent,commercialStage:input.commercialStage,commercialSignals:input.commercialSignals,knownFacts:input.knownFacts,missingFacts:input.missingFacts,missingFact:input.missingFact,decisionImpact:input.decisionImpact,verifiedFeatures:input.verifiedFeatures,resolvedProduct:input.resolvedProduct,recommendedProduct:input.recommendedProduct,supportedCapabilities:input.supportedCapabilities,EXECUTABLE_NBA:input.executableNba,capabilityAction:input.capabilityAction,alternatives:input.alternatives,customerContext:input.customerContext})}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_DE_RESPUESTA:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nVERIFICADOS:\n${evidence || 'SIN_DATO'}`,
     });
     return {
       text: this.#extractText(json),

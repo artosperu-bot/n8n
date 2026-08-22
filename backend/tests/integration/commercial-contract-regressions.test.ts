@@ -119,7 +119,7 @@ test('current valid product mention overrides a stale unknown-recovery recommend
   assert.equal(r.debug.intent,'PRODUCT_INFO');
   assert.equal(r.debug.queryTarget,'Armor X13');
   assert.equal(r.state.activeProduct,'Armor X13');
-  assert.equal(r.state.recommendedProduct,'Armor 22');
+  assert.equal(r.state.recommendedProduct,null);
   assert.equal(r.state.selectedProduct,null);
   assert.equal(r.debug.route,'RAG_PRODUCT');
 
@@ -166,4 +166,14 @@ test('el otro inherits the previous factual intent while resolving the compariso
   assert.equal(r.debug.intent,'PRICE');
   assert.equal(r.debug.queryTarget,'Armor 22');
   assert.match(r.answer,/S\/\s*1199/);
+});
+
+test('natural weight question routes to FISICO product evidence',async()=>{
+  const r=await new HybridConversationEngine(deps(new FakeLlmProvider())).processTurn({
+    sessionId:'s-weight',message:'¿Cuánto pesa el Armor 22?',messageId:'m-weight',
+  });
+  assert.equal(r.debug.intent,'CAPABILITY');
+  assert.equal(r.debug.route,'RAG_PRODUCT');
+  assert.equal(r.debug.queryTarget,'Armor 22');
+  assert.ok(r.debug.ragSources?.some(source=>/FISICO/.test(source)));
 });

@@ -27,3 +27,9 @@ test('RAG evidence is compacted and keeps product/domain provenance', () => {
   assert.equal(facts[0]?.productId,'P-ARMOR-22-256G');
   assert.ok((facts[0]?.value.length??0)<=320);
 });
+
+test('RAM projection accepts physical and maximum virtual values from authority wording',()=>{
+  const facts=normalizeEvidence({intent:'CAPABILITY',rag:[{text:'RAM física: 8 GB. RAM virtual máxima: 8 GB.',source:'TEST:MEMORIA',section:'MEMORIA',productId:'P-22',domain:'PRODUCT'}]});
+  assert.equal(facts.find(x=>x.key==='RAM_FISICA')?.value,'8 GB');
+  assert.equal(facts.find(x=>x.key==='RAM_VIRTUAL')?.value,'hasta 8 GB');
+});

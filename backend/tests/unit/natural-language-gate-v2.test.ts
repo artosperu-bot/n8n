@@ -34,6 +34,10 @@ test('maps security, SIM and physical language to canonical attribute families',
   const physical = resolveIntentPlan('q peso tiene?');
   assert.equal(physical.primary, 'ATTRIBUTE');
   assert.ok(physical.attributes.includes('FISICO'));
+
+  const naturalWeight = resolveIntentPlan('¿Cuánto pesa el Armor 22?');
+  assert.equal(naturalWeight.primary,'ATTRIBUTE');
+  assert.ok(naturalWeight.attributes.includes('FISICO'));
 });
 
 test('camera-use wording is not confused with a request to show product images', () => {

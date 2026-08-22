@@ -13,7 +13,7 @@ export function resolveIntent(message:string,_context:{staleIntent?:string|null}
   if(/\b(compara|comparar|comparalo|comparalos|comparacion|versus|vs)\b|\bdiferencia\b[^.!?]{0,40}\b(?:entre|de)\b/.test(t))return'COMPARE';
   if(/\b(recomienda|recomiendas|recomendar|recomendacion|cual\s+me\s+conviene|que\s+modelo\s+me\s+conviene|que\s+modelo\s+entra|otra\s+opcion|alguna\s+opcion)\b/.test(t))return'RECOMMEND';
   if(/\b(busco|necesito|necesitamos|quiero\s+un|quiero\s+una)\b[^.!?]{0,100}\b(resistente|resistencia|bateria|camara|nfc|5g|trabajo|campo|economico|rendimiento)\b/.test(t))return'RECOMMEND';
-  if(/\b(nfc|5g|termic|vision\s+nocturna|bateria|ram|camara|resistente|resistencia|ip68|ip69k|procesador|pantalla|memoria|almacenamiento|gps|bluetooth|wifi|carga|caidas)\b/.test(t))return'CAPABILITY';
+  if(/\b(nfc|5g|termic|vision\s+nocturna|bateria|ram|camara|resistente|resistencia|ip68|ip69k|procesador|pantalla|memoria|almacenamiento|gps|bluetooth|wifi|carga|caidas|peso|pesa|pesan|grosor|dimensiones|medidas|espesor)\b/.test(t))return'CAPABILITY';
   if(/\b(tienda\s+fisica|direccion|ubicacion|horario|recojo|recoger|envio|envios|provincia|lima|contraentrega|contra\s+entrega|forma(?:s)?\s+de\s+pago|medio(?:s)?\s+de\s+pago|yape|plin|transferencia|tarjeta|boleta|factura|cambio|devolucion|reembolso)\b/.test(t))return'POLICY';
   if(/^(hola|buenas|buenos\s+dias|buenas\s+tardes|buenas\s+noches)[\s!.,¿?]*$/.test(t))return'GREETING';
   return'OTHER';

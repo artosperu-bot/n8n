@@ -7,6 +7,11 @@ function unique(values:Array<string|null|undefined>):string[]{
   return [...new Set(values.map(value=>String(value??'').trim()).filter(Boolean))];
 }
 
+function supportedCapabilityNames(capabilities:Record<string,boolean>):string[]{
+  const names:Record<string,string>={askUseCase:'ASK_USE_CASE',askProblem:'ASK_PROBLEM',askPriority:'ASK_PRIORITY',askBudget:'ASK_BUDGET',askProduct:'ASK_PRODUCT',checkPrice:'CHECK_PRICE',checkStock:'CHECK_STOCK',answerProductFeature:'ANSWER_PRODUCT_FEATURE',answerWarranty:'ANSWER_WARRANTY',answerDelivery:'ANSWER_DELIVERY',answerPayment:'ANSWER_PAYMENT',answerLocation:'ANSWER_LOCATION',compareProducts:'COMPARE_PRODUCTS',recommendProduct:'RECOMMEND_PRODUCT',showImages:'SHOW_IMAGES',offerAlternative:'OFFER_ALTERNATIVE',softClose:'SOFT_CLOSE',collectReservationData:'COLLECT_RESERVATION_DATA',requestHumanHandoff:'REQUEST_HUMAN_HANDOFF',executeReservation:'EXECUTE_RESERVATION',scheduleDemo:'SCHEDULE_DEMO',sendQuote:'SEND_QUOTE',sendProductSheet:'SEND_PRODUCT_SHEET',prepareAccessories:'PREPARE_ACCESSORIES'};
+  return Object.entries(capabilities).filter(([,enabled])=>enabled).map(([key])=>names[key]).filter(Boolean);
+}
+
 function includesProduct(products:string[],candidate:string|null):boolean{
   return Boolean(candidate&&products.some(product=>fold(product)===fold(candidate)));
 }
@@ -103,7 +108,7 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
     ?proposedMissing
     :nextMissingFact({useCase,problem,priorities,budget},String(input.intent??'').toUpperCase());
   let decisionImpact=input.decisionImpact??Boolean(missingFact&&missingFactCapability(missingFact));
-  const capabilityInput={...input,allowedProducts,alternatives,verifiedFacts,verifiedFeatures,interestSignal,purchaseSignal,activeProduct,selectedProduct,recommendedProduct,useCase,problem,priorities,budget};
+  const capabilityInput={...input,allowedProducts,alternatives,verifiedFacts,verifiedFeatures,interestSignal,purchaseSignal,activeProduct,selectedProduct,recommendedProduct,useCase,problem,priorities,budget,decisionImpact};
   const turnCapabilities=evaluateTurnCapabilities(capabilityInput);
   const unsupportedRequest=requestedUnsupportedCapability(input.message);
   const actionFor=(nba:string):CommercialCapabilityAction|null=>{
@@ -131,6 +136,8 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   if(unsupportedRequest){nextBestAction='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';executable=true;decisionImpact=false;missingFact=null;}
   if(!executable){nextBestAction='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';decisionImpact=false;missingFact=null;}
   if(nextBestAction!=='ASK_MISSING_FACT')missingFact=null;
+  const resolvedProduct=selectedProduct??recommendedProduct??activeProduct;
+  const commercialSignals={purchaseSignal,interestSignal,objection,selectedProduct,recommendedProduct,activeProduct,commercialStage:input.commercialStage??state.commercialStage??input.decision?.commercialStage??null,budget,problem,priorities,useCase,pendingCommercialAction:state.pendingCommercialAction??null};
 
   return {
     ...input,
@@ -141,6 +148,8 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
     useCase,problem,priorities,budget,
     customerContext:input.customerContext??{useCase,problem,priorities,budget,objection},
     commercialGoal:input.commercialGoal??commercialGoal(nextBestAction),capabilityAction,turnCapabilities,
+    resolvedCurrentIntent:String(input.intent??'OTHER').toUpperCase(),commercialSignals,resolvedProduct,
+    supportedCapabilities:supportedCapabilityNames(turnCapabilities),executableNba:nextBestAction,
     commercialContractPrepared:true,
   };
 }

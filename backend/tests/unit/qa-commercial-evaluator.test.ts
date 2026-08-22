@@ -83,3 +83,18 @@ test('customer-facing sourcing language is flagged without breaking a real techn
   assert.ok(internal.some(x=>x.code==='ROBOTIC_META_LANGUAGE'));
   assert.equal(technical.some(x=>x.code==='ROBOTIC_META_LANGUAGE'),false);
 });
+
+test('ANSWER_ONLY with an invented demo promise is a RED actionability failure',()=>{
+  const findings=evaluateCommercial(observation(
+    'Perfecto: puedo agendar la prueba; yo coordino y te confirmo luego.',
+    {intent:'OTHER'},
+    {lastNba:'ANSWER_ONLY',activeProduct:'Armor 22'},
+    '¿Pueden agendarme una prueba?',
+  ));
+  assert.ok(findings.some(x=>x.code==='UNSUPPORTED_COMMERCIAL_ACTION'&&x.level==='RED'));
+});
+
+test('ANSWER_ONLY with a recommendation is a RED actionability failure',()=>{
+  const findings=evaluateCommercial(observation('Te recomiendo el Armor 22.',{intent:'CAPABILITY'},{lastNba:'ANSWER_ONLY',activeProduct:'Armor 22'},'¿Tiene NFC?'));
+  assert.ok(findings.some(x=>x.code==='UNSUPPORTED_COMMERCIAL_ACTION'&&x.level==='RED'));
+});

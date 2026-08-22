@@ -25,11 +25,15 @@ export type CommercialCapabilities = {
   checkPrice:boolean;
   checkStock:boolean;
   answerProductFeature:boolean;
-  answerPolicy:boolean;
+  answerWarranty:boolean;
+  answerDelivery:boolean;
+  answerPayment:boolean;
+  answerLocation:boolean;
   compareProducts:boolean;
   recommendProduct:boolean;
   showImages:boolean;
   offerAlternative:boolean;
+  softClose:boolean;
   collectReservationData:boolean;
   requestHumanHandoff:boolean;
   executeReservation:boolean;
@@ -43,8 +47,8 @@ export type CommercialCapabilities = {
 // intentional: they prevent the writer from promising aspirational workflows.
 export const IMPLEMENTED_COMMERCIAL_CAPABILITIES:Readonly<CommercialCapabilities>=Object.freeze({
   askUseCase:true,askProblem:true,askPriority:true,askBudget:true,askProduct:true,
-  checkPrice:true,checkStock:true,answerProductFeature:true,answerPolicy:true,
-  compareProducts:true,recommendProduct:true,showImages:true,offerAlternative:true,
+  checkPrice:true,checkStock:true,answerProductFeature:true,answerWarranty:true,answerDelivery:true,answerPayment:true,answerLocation:true,
+  compareProducts:true,recommendProduct:true,showImages:true,offerAlternative:true,softClose:true,
   collectReservationData:true,requestHumanHandoff:true,
   executeReservation:false,scheduleDemo:false,sendQuote:false,sendProductSheet:false,prepareAccessories:false,
 });
@@ -89,16 +93,27 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
   const base=IMPLEMENTED_COMMERCIAL_CAPABILITIES;
   const allowed=unique(input.allowedProducts??[]);const alternatives=unique(input.alternatives??[]).filter(option=>allowed.some(product=>same(product,option)));
   const product=resolvedProduct(input);const recommended=input.recommendedProduct??input.state?.recommendedProduct??null;const featureEvidence=(input.verifiedFeatures??[]).length>0;
+  const institutional=hasInstitutionalEvidence(input);const message=fold(input.message??'');const decisionImpact=input.decisionImpact===true;
+  const interestContext=Boolean(input.interestSignal||input.purchaseSignal||input.selectedProduct||input.recommendedProduct||input.state?.selectedProduct||input.state?.recommendedProduct);
   return {
     ...base,
-    checkPrice:base.checkPrice&&sqlResolved(input),
-    checkStock:base.checkStock&&sqlResolved(input),
-    answerProductFeature:base.answerProductFeature&&featureEvidence,
-    answerPolicy:base.answerPolicy&&hasInstitutionalEvidence(input),
+    askUseCase:base.askUseCase&&decisionImpact&&!input.useCase,
+    askProblem:base.askProblem&&decisionImpact&&!input.problem,
+    askPriority:base.askPriority&&decisionImpact&&!(input.priorities??[]).length,
+    askBudget:base.askBudget&&decisionImpact&&input.budget==null,
+    askProduct:base.askProduct&&decisionImpact&&!product,
+    checkPrice:base.checkPrice&&sqlResolved(input)&&input.quote?.price!=null,
+    checkStock:base.checkStock&&sqlResolved(input)&&input.quote?.stock!=null,
+    answerProductFeature:base.answerProductFeature&&Boolean(product&&featureEvidence),
+    answerWarranty:base.answerWarranty&&institutional&&(/garantia/.test(message)||String(input.intent).toUpperCase()==='WARRANTY'),
+    answerDelivery:base.answerDelivery&&institutional&&/envio|entrega|delivery|recojo/.test(message),
+    answerPayment:base.answerPayment&&institutional&&/pago|yape|plin|transferencia|tarjeta|cuota/.test(message),
+    answerLocation:base.answerLocation&&institutional&&/tienda|direccion|ubicacion|horario/.test(message),
     compareProducts:base.compareProducts&&alternatives.length>=2&&productEvidenceCount(input)>=2,
     recommendProduct:base.recommendProduct&&Boolean(recommended&&allowed.some(item=>same(item,recommended))&&featureEvidence),
     showImages:base.showImages&&hasRealImages(input),
     offerAlternative:base.offerAlternative&&alternatives.length>0,
+    softClose:base.softClose&&Boolean(product&&interestContext&&sqlResolved(input)&&input.quote?.stock!=null),
     collectReservationData:base.collectReservationData&&Boolean(product&&input.purchaseSignal&&String(input.intent).toUpperCase()==='PURCHASE'),
     requestHumanHandoff:base.requestHumanHandoff&&String(input.intent).toUpperCase()==='HUMAN',
   };
@@ -115,7 +130,7 @@ export function canExecuteCapability(action:CommercialCapabilityAction,capabilit
     case 'RECOMMEND_PRODUCT':return capabilities.recommendProduct;
     case 'COMPARE_PRODUCTS':return capabilities.compareProducts;
     case 'OFFER_ALTERNATIVE':return capabilities.offerAlternative;
-    case 'SOFT_CLOSE_TO_STOCK':return capabilities.checkStock;
+    case 'SOFT_CLOSE_TO_STOCK':return capabilities.softClose;
     case 'RESERVATION_DATA_COLLECTION':return capabilities.collectReservationData;
     case 'REQUEST_HUMAN_HANDOFF':return capabilities.requestHumanHandoff;
     case 'EXECUTE_RESERVATION':return capabilities.executeReservation;

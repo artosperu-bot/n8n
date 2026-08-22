@@ -60,7 +60,7 @@ function inferRootCause(f:QaFinding):QaRootCause|null{
 }
 function dimension(pass:boolean,metric:{pass:number;total:number}){metric.total+=1;if(pass)metric.pass+=1;}
 function buildDimensions(results:QaScenarioResult[]):{dimensions:QaDimensionMetrics;rootCauses:Partial<Record<QaRootCause,number>>}{
-  const dimensions:QaDimensionMetrics={productIdentity:{pass:0,total:0},referenceAccuracy:{pass:0,total:0},factualAccuracy:{pass:0,total:0},noFabrication:{pass:0,total:0},memoryConsistency:{pass:0,total:0},questionResolved:{pass:0,total:0},nbaQuality:{pass:0,total:0},nbaDecisionQuality:{pass:0,total:0},nbaDeliveryQuality:{pass:0,total:0},commercialProgression:{pass:0,total:0},purchaseProgression:{pass:0,total:0},persistence:{pass:0,total:0}};
+  const dimensions:QaDimensionMetrics={productIdentity:{pass:0,total:0},referenceAccuracy:{pass:0,total:0},factualAccuracy:{pass:0,total:0},noFabrication:{pass:0,total:0},memoryConsistency:{pass:0,total:0},questionResolved:{pass:0,total:0},nbaQuality:{pass:0,total:0},nbaDecisionQuality:{pass:0,total:0},nbaDeliveryQuality:{pass:0,total:0},nbaActionabilityQuality:{pass:0,total:0},commercialProgression:{pass:0,total:0},purchaseProgression:{pass:0,total:0},persistence:{pass:0,total:0}};
   const rootCauses:Partial<Record<QaRootCause,number>>={};
   for(const turn of results.flatMap(s=>s.turns)){
     const red=turn.findings.filter(f=>f.level==='RED');
@@ -74,9 +74,10 @@ function buildDimensions(results:QaScenarioResult[]):{dimensions:QaDimensionMetr
     dimension(!roots.has('STATE')&&!roots.has('PERSISTENCE'),dimensions.memoryConsistency);
     dimension(Boolean(String(turn.observation.response?.answer??'').trim())&&!turn.findings.some(f=>f.code==='HTTP_ERROR'),dimensions.questionResolved);
     const nba=turn.nbaEvaluation??assessNba(turn.observation);
-    dimension(nba.decisionPass&&nba.deliveryPass,dimensions.nbaQuality);
+    dimension(nba.decisionPass&&nba.deliveryPass&&nba.actionabilityPass,dimensions.nbaQuality);
     dimension(nba.decisionPass,dimensions.nbaDecisionQuality);
     dimension(nba.deliveryPass,dimensions.nbaDeliveryQuality);
+    dimension(nba.actionabilityPass,dimensions.nbaActionabilityQuality);
     dimension(nba.progressionPass,dimensions.commercialProgression);
     if(card?.requiresHandoff)dimension(turn.observation.response?.state?.handoffActive===true&&!roots.has('HANDOFF'),dimensions.purchaseProgression);
     if(card)dimension(!roots.has('PERSISTENCE'),dimensions.persistence);

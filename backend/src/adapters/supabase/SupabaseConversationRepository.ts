@@ -45,6 +45,14 @@ function compactSpinContribution(state:ConversationState):string|null {
   if(/^(?:situacion|uso|sector|cliente):/.test(latest)) return 'SITUACION';
   return null;
 }
+function commercialImplications(state:ConversationState):string[]{
+  const value=`${state.problem??''} ${state.objection??''}`.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const implications:string[]=[];
+  if(/caida|golpe|agua|polvo|rotur|romp/.test(value))implications.push('PRIORIZAR_RESISTENCIA');
+  if(/bateria|autonomia|carga|se apaga/.test(value))implications.push('PRIORIZAR_BATERIA');
+  if(/precio|caro|presupuesto/.test(value))implications.push('AJUSTAR_PRESUPUESTO');
+  return implications;
+}
 function recommendationCandidates(state:ConversationState):string[]{
   const traced=state.lastDecisionTrace?.recommendation?.eligibleCandidates?.map(x=>x.product)??[];
   return cleanStrings(traced.length?traced:state.comparisonProducts);
@@ -279,7 +287,10 @@ export class SupabaseConversationRepository implements ConversationRepository {
       actividad_detectada:state.useCase ?? state.sector ?? null,
       problemas_detectados:state.problem ? [state.problem] : [],
       prioridades_detectadas:cleanStrings(state.priorities),
-      accion_pendiente_turno:state.lastNba ? {accion:state.lastNba} : null,
+      atributo_detectado:cleanStrings(state.currentAttributes)?.[0]??null,
+      implicaciones_detectadas:commercialImplications(state),
+      pregunta_pendiente_turno:state.lastNba==='ASK_MISSING_FACT'&&state.pendingMissingFact?{missingFact:state.pendingMissingFact}:null,
+      accion_pendiente_turno:(state.pendingCommercialAction??state.lastNba) ? {accion:state.pendingCommercialAction??state.lastNba} : null,
       contexto_comercial_snapshot:context,
       objecion_detectada:state.objection ? {tipo:state.objection} : null,
       tipo_conversacion:meta.conversationType ?? (sessionId.startsWith('qa-') ? 'QA_LIVE' : null),
@@ -307,7 +318,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       producto_activo_origen:origin,
       productos_candidatos:candidateNames,
       alcance_consulta:state.lastRoute ?? null,
-      atributo_activo:null,
+      atributo_activo:cleanStrings(state.currentAttributes)?.[0]??null,
       requiere_aclaracion:requiresClarification,
       actividad_activa:state.useCase ?? state.sector ?? null,
       problema_activo:state.problem ?? null,

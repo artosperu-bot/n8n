@@ -23,6 +23,12 @@ test('writer boundary receives explicit commercial context and visibly executes 
   },'Te recomiendo Armor 22 por su resistencia confirmada.');
 
   assert.equal(captured.nextBestAction,'RECOMMEND');
+  assert.equal(captured.executableNba,'RECOMMEND');
+  assert.equal(captured.resolvedCurrentIntent,'RECOMMEND');
+  assert.equal(captured.resolvedProduct,'Armor 22');
+  assert.ok(captured.supportedCapabilities.includes('RECOMMEND_PRODUCT'));
+  assert.equal(captured.supportedCapabilities.includes('SCHEDULE_DEMO'),false);
+  assert.equal(captured.commercialSignals.purchaseSignal,false);
   assert.equal(captured.commercialStage,'EVALUACION');
   assert.deepEqual(captured.knownFacts.useCase,'trabajo en construcción');
   assert.equal(captured.interestSignal,true);
@@ -69,7 +75,7 @@ test('writer rejects RAM total presented as physical memory and preserves labell
     rag:[{text:'RAM física: 8 GB. RAM virtual: hasta 8 GB.',source:'TEST:MEMORIA',score:1,section:'MEMORIA',domain:'PRODUCT',productId:'P-22'}],
   };
   const result=await safeWrite(capturingWriter('Tiene 16 GB de RAM.'),input,'Tiene 8 GB de RAM física y hasta 8 GB de RAM virtual.');
-  assert.equal(result.answer,'Tiene 8 GB de RAM física y hasta 8 GB de RAM virtual.');
+  assert.equal(result.answer,'Tiene 8 GB de RAM física + hasta 8 GB de RAM virtual.');
   assert.equal(result.fallback.error,'RAM_VIRTUAL_CONFLATION');
 });
 
@@ -83,6 +89,15 @@ test('writer allows a combined RAM total only when physical and virtual memory s
   const result=await safeWrite(capturingWriter(answer),prepared,'Tiene 8 GB de RAM física y hasta 8 GB de RAM virtual.');
   assert.equal(result.answer,answer);
   assert.equal(result.fallback.error,undefined);
+});
+
+test('writer restores virtual RAM when authority contains both components',async()=>{
+  const result=await safeWrite(capturingWriter('Tiene 8 GB de RAM física.'),{
+    message:'¿Cuánta RAM tiene el Armor 22?',intent:'CAPABILITY',state:{activeProduct:'Armor 22'},decision:{nextBestAction:'ANSWER_ONLY'} as any,
+    rag:[{text:'RAM física: 8 GB. RAM virtual máxima: 8 GB.',source:'TEST:MEMORIA',section:'MEMORIA',productId:'P-22',domain:'PRODUCT'}],allowedProducts:['Armor 22'],
+  },'No tengo confirmado ese dato exacto.');
+  assert.equal(result.answer,'Tiene 8 GB de RAM física + hasta 8 GB de RAM virtual.');
+  assert.equal(result.fallback.error,'RAM_COMPONENT_OMISSION');
 });
 
 test('grounded FAB may connect a verified feature to customer context without adding a feature',async()=>{
@@ -269,6 +284,54 @@ test('writer cannot invent an unsupported operational action',async()=>{
   assert.equal(result.fallback.error,'UNSUPPORTED_OPERATIONAL_PROMISE');
 });
 
+test('writer blocks the real demo promise even when phrased as coordination',async()=>{
+  const result=await safeWrite(capturingWriter('Perfecto: puedo agendar la prueba del equipo; yo coordino y te confirmo luego.'),{
+    message:'¿Pueden agendarme una prueba del equipo?',intent:'OTHER',state:{activeProduct:'Armor 22'},
+    decision:{nextBestAction:'ANSWER_ONLY'} as any,allowedProducts:['Armor 22'],
+  },'No tengo habilitada una agenda de pruebas desde aquí.');
+  assert.equal(result.answer,'No tengo habilitada una agenda de pruebas desde aquí.');
+  assert.equal(result.fallback.error,'UNSUPPORTED_OPERATIONAL_PROMISE');
+});
+
+test('writer cannot replace ANSWER_ONLY with a recommendation CTA',async()=>{
+  const result=await safeWrite(capturingWriter('Te recomiendo el Armor 22.'),{
+    message:'¿Tiene NFC?',intent:'CAPABILITY',state:{activeProduct:'Armor 22'},decision:{nextBestAction:'ANSWER_ONLY'} as any,
+    allowedProducts:['Armor 22'],rag:[{text:'NFC: Sí.',source:'TEST:CONECTIVIDAD',section:'CONECTIVIDAD',domain:'PRODUCT',productId:'P-22'}],
+  },'Sí, tiene NFC.');
+  assert.equal(result.answer,'Sí, tiene NFC.');
+  assert.equal(result.fallback.error,'UNAUTHORIZED_COMMERCIAL_ACTION');
+});
+
+test('ASK_MISSING_FACT rejects a question the backend cannot consume',async()=>{
+  const result=await safeWrite(capturingWriter('¿En qué ciudad y a qué hora quieres la demo?'),{
+    message:'busco un equipo',intent:'OTHER',state:{},decision:{nextBestAction:'ASK_MISSING_FACT'} as any,
+    missingFact:'presupuesto máximo',decisionImpact:true,
+  } as any,'¿Cuál es tu presupuesto máximo?');
+  assert.equal(result.answer,'¿Cuál es tu presupuesto máximo?');
+  assert.equal(result.fallback.error,'UNPROCESSABLE_QUESTION');
+});
+
+test('price objection is acknowledged before asking the missing budget',async()=>{
+  const result=await safeWrite(capturingWriter('¿Hasta cuánto quieres llegar?'),{
+    message:'Está muy caro, ¿qué alternativa tienes?',intent:'HANDLE_PRICE_OBJECTION',state:{activeProduct:'Armor X13',objection:'precio'},
+    decision:{nextBestAction:'ASK_MISSING_FACT'} as any,missingFact:'presupuesto máximo',decisionImpact:true,
+  } as any,'Entiendo; busquemos una opción que se ajuste mejor. ¿Hasta cuánto quieres llegar?');
+  assert.match(result.answer,/entiendo|claro|se sale|ajuste|c[oó]modo/i);
+  assert.match(result.answer,/\?/);
+});
+
 test('unknown fact uses a natural no-action fallback',()=>{
   assert.equal(noEvidenceResponse(),'No tengo confirmado ese dato exacto.');
+});
+
+test('supportedCapabilities contains only operations whose turn preconditions pass',()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'¿Tiene NFC?',intent:'CAPABILITY',state:{activeProduct:'Armor 22',useCase:'trabajo'},
+    decision:{nextBestAction:'ANSWER_ONLY'} as any,allowedProducts:['Armor 22'],
+    rag:[{text:'NFC: Sí.',source:'TEST:CONECTIVIDAD',domain:'PRODUCT',section:'CONECTIVIDAD',productId:'P-22'}],
+  });
+  assert.ok(prepared.supportedCapabilities?.includes('ANSWER_PRODUCT_FEATURE'));
+  assert.equal(prepared.supportedCapabilities?.includes('ASK_USE_CASE'),false);
+  assert.equal(prepared.supportedCapabilities?.includes('CHECK_PRICE'),false);
+  assert.equal(prepared.supportedCapabilities?.includes('SCHEDULE_DEMO'),false);
 });

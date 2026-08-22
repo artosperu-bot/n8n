@@ -27,6 +27,16 @@ function actionDelivered(nba:string,answer:string):boolean{
   return false;
 }
 
+function unsupportedCommercialAction(answer:string,nba:string):boolean{
+  const operational=answer.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const unsupported=/\b(?:(?:puedo|podemos|voy a|vamos a|te\s+)?\s*)?(?:agend(?:ar|o|amos|a)|program(?:ar|o|amos|a))\w*\b[^.!?;]{0,45}\b(?:prueba|demo|demostracion|cita)\b|\b(?:yo\s+)?coordino\b|\bte confirmo (?:luego|despues|mas tarde)\b|\bte (?:separo|aparto|reservo)\b|\b(?:(?:puedo|podemos)\s+)?(?:te\s+)?(?:envio|mando|preparo|enviare|mandare)\b[^.!?]{0,45}\b(?:cotizacion|ficha(?: tecnica)?|accesorios?)\b/.test(operational);
+  const advisor=/\b(?:te contactara|te llamara|te paso|te derivo)\b[^.!?]{0,45}\b(?:un\s+)?asesor\b/.test(operational)&&nba!=='ASSISTED_HANDOFF';
+  const stock=/\b(?:reviso|revisamos|confirmo|confirmamos|revisar|confirmar)\b[^.!?]{0,45}\b(?:stock|disponibilidad)\b/.test(operational)&&nba!=='SOFT_CLOSE';
+  const recommendation=/(?:\bte recomiendo\b|\bmi recomendacion es\b)/.test(operational)&&nba!=='RECOMMEND';
+  const alternative=/\b(?:otra|una)\s+(?:alternativa|opcion)\s+(?:es|seria)\b|\bpuedo ofrecerte\b/.test(operational)&&nba!=='OFFER_ALTERNATIVE';
+  return unsupported||advisor||stock||recommendation||alternative;
+}
+
 export function assessNba(observation:QaTurnObservation):QaNbaEvaluation{
   const response=observation.response??{};const state=response.state??{};const debug=response.debug??{};const answer=String(response.answer??'');
   const nba=String(state.lastNba??'').toUpperCase();const intent=String(debug.intent??state.lastIntent??'').toUpperCase();const stage=String(state.commercialStage??'').toUpperCase();
@@ -40,7 +50,8 @@ export function assessNba(observation:QaTurnObservation):QaNbaEvaluation{
   const repeatsKnown=nba==='ASK_MISSING_FACT'&&repeatsKnownQuestion(answer,state);
   const n1Delivered=actionDelivered(nba,answer)&&!repeatsKnown;
   const deliveryPass=n1Required?n1Delivered:Boolean(answer.trim());
-  return{n1Required,n1Delivered,n1Reason,decisionPass,deliveryPass,progressionPass:decisionPass&&deliveryPass};
+  const actionabilityPass=!unsupportedCommercialAction(answer,nba);
+  return{n1Required,n1Delivered,n1Reason,decisionPass,deliveryPass,actionabilityPass,progressionPass:decisionPass&&deliveryPass&&actionabilityPass};
 }
 
 export function evaluateCommercial(observation:QaTurnObservation):QaFinding[]{
@@ -59,6 +70,7 @@ export function evaluateCommercial(observation:QaTurnObservation):QaFinding[]{
   else if(!nba.decisionPass)findings.push({level:state.purchaseSignal===true?'RED':'YELLOW',code:action==='ANSWER_ONLY'&&nba.n1Required?'NBA_PROGRESSION_MISSING':'NBA_STAGE_MISMATCH',message:`La acción ${action} no progresa de forma compatible con ${nba.n1Reason}.`,rootCause:'NBA'});
   if(nba.n1Required&&!nba.n1Delivered&&action!=='ANSWER_ONLY')findings.push({level:'YELLOW',code:'NBA_NOT_DELIVERED',message:`La respuesta no ejecuta de forma visible ${action}.`,rootCause:'NBA'});
   if(action==='ASK_MISSING_FACT'&&repeatsKnownQuestion(answer,state))findings.push({level:'YELLOW',code:'NBA_REPEATS_KNOWN',message:'La siguiente pregunta solicita contexto que ya estaba disponible.',rootCause:'NBA'});
+  if(!nba.actionabilityPass)findings.push({level:'RED',code:'UNSUPPORTED_COMMERCIAL_ACTION',message:'La respuesta ofrece una acción que no está autorizada por el N+1 ejecutable.',rootCause:'NBA'});
   const message=observation.request.message.toLocaleLowerCase('es');
   if(/construcci[oó]n|se me caen|se me cae|trabajo en campo|bater[ií]a se me acaba/.test(message)&&!/entiendo|construcci[oó]n|ca[ií]da|resistente|trabajo|bater[ií]a|campo/i.test(answer))findings.push({level:'YELLOW',code:'CONTEXT_NOT_ACKNOWLEDGED',message:'No refleja el contexto/problema explícito del cliente.'});
   const llm=debug.llm;

@@ -40,6 +40,11 @@ export type LlmWriteInput = {
   commercialGoal?: string | null;
   capabilityAction?: string | null;
   turnCapabilities?: Record<string, boolean>;
+  resolvedCurrentIntent?: string;
+  commercialSignals?: Record<string, unknown>;
+  resolvedProduct?: string | null;
+  supportedCapabilities?: string[];
+  executableNba?: string;
   imageUrls?: string[];
   /** Internal boundary marker: the engine prepared and validated the commercial contract. */
   commercialContractPrepared?: boolean;

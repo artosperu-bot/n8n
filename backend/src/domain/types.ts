@@ -58,6 +58,8 @@ export type ConversationState = {
   lastSpinContribution?: string|null;
   lastNba?: string|null;
   pendingCommercialAction?: string|null;
+  pendingMissingFact?: string|null;
+  currentAttributes?: string[];
   customerType?: CustomerType|null;
   sector?: string|null;
   useCase?: string|null;

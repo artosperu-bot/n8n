@@ -12,7 +12,7 @@ function memoryFacts(text:string,row:RagEvidence):VerifiedFact[] {
   const facts:VerifiedFact[]=[];
   const combined=text.match(/\b(\d+(?:[.,]\d+)?)\s*GB\s*\+\s*(\d+(?:[.,]\d+)?)\s*GB\s*(?:de\s*)?(?:RAM\s*)?virtual\b/i);
   const physical=combined?.[1]??text.match(/\b(?:memoria\s+)?RAM\s*(?:f[ií]sica)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];
-  const virtual=combined?.[2]??text.match(/\b(?:ampliaci[oó]n\s+de\s+)?RAM\s+virtual\s*[:=]?\s*(?:de\s+)?(?:hasta\s+)?(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];
+  const virtual=combined?.[2]??text.match(/\b(?:ampliaci[oó]n\s+de\s+)?RAM\s+virtual(?:\s+m[aá]xima)?\s*[:=]?\s*(?:de\s+)?(?:hasta\s+)?(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];
   const base={domain:'PRODUCT_RAG' as const,productId:row.productId??null,source:row.source};
   if(physical)facts.push({...base,key:'RAM_FISICA',value:`${physical.replace(',','.')} GB`});
   if(virtual)facts.push({...base,key:'RAM_VIRTUAL',value:`hasta ${virtual.replace(',','.')} GB`});

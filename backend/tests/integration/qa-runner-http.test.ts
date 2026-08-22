@@ -111,8 +111,22 @@ test('QA report separates NBA decision, delivery and commercial progression',asy
   });
   assert.deepEqual(report.dimensions?.nbaDecisionQuality,{pass:1,total:1});
   assert.deepEqual(report.dimensions?.nbaDeliveryQuality,{pass:0,total:1});
+  assert.deepEqual(report.dimensions?.nbaActionabilityQuality,{pass:1,total:1});
   assert.deepEqual(report.dimensions?.commercialProgression,{pass:0,total:1});
   assert.deepEqual((report.scenarios[0].turns[0] as any).nbaEvaluation,{
-    n1Required:true,n1Delivered:false,n1Reason:'INTEREST_REQUIRES_PROGRESSION',decisionPass:true,deliveryPass:false,progressionPass:false,
+    n1Required:true,n1Delivered:false,n1Reason:'INTEREST_REQUIRES_PROGRESSION',decisionPass:true,deliveryPass:false,actionabilityPass:true,progressionPass:false,
   });
+});
+
+test('QA actionability is RED when ANSWER_ONLY invents a demo operation',async()=>{
+  const {report}=await runLiveQa({
+    baseUrl:'http://test',writeArtifacts:false,logger:{log(){},table(){},error(){}} as any,
+    fetcher:async(url)=>String(url).endsWith('/health')
+      ?Response.json({status:'ok',modes:{}})
+      :Response.json({answer:'Puedo agendar la prueba; yo coordino y te confirmo luego.',state:{lastNba:'ANSWER_ONLY'},debug:{intent:'OTHER'}}),
+    scenarios:[{id:'ACTION',family:'COMMERCIAL',title:'actionability',turns:[{message:'¿Pueden agendarme una prueba?'}]}],
+  });
+  assert.deepEqual(report.dimensions?.nbaActionabilityQuality,{pass:0,total:1});
+  assert.equal(report.scenarios[0].turns[0].status,'RED');
+  assert.ok(report.scenarios[0].turns[0].findings.some(x=>x.code==='UNSUPPORTED_COMMERCIAL_ACTION'));
 });
