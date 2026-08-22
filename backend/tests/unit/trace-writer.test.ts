@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { installTraceConsoleSink, writeTrace } from '../../src/shared/trace.ts';
 
 function withTraceFile(run:(file:string)=>void){
@@ -47,6 +49,34 @@ test('redacts PII and full-message fields before writing JSONL',()=>{
     assert.equal(row.nested.lastUserMessage,'[REDACTED]');
     assert.equal(row.nested.reservationDocument,'[REDACTED]');
     assert.doesNotMatch(text,/persona@example\.com|12345678|Siempre Viva|texto completo/);
+  });
+});
+
+test('sanitizes STECH events before console and writes each event once while preserving non-STECH console',()=>{
+  withTraceFile(file=>{
+    const moduleUrl=pathToFileURL(join(process.cwd(),'src/shared/trace.ts')).href;
+    const script=`
+      import { installTraceConsoleSink, writeTrace } from ${JSON.stringify(moduleUrl)};
+      installTraceConsoleSink();
+      const raw={
+        event:'STECH_TURN_ERROR',sessionId:'qa-console',message:'mensaje completo',dni:'12345678',
+        authorization:'Bearer trace-secret',cookie:'session=trace-cookie',password:'trace-password',
+        apiKey:'trace-api-key',token:'trace-token',error:'DNI 12345678; Authorization: Bearer trace-secret; cookie=session=trace-cookie'
+      };
+      console.error(JSON.stringify(raw));
+      writeTrace({...raw,sessionId:'qa-write'},'error');
+      console.log('NON_STECH unchanged');
+    `;
+    const child=spawnSync(process.execPath,['--experimental-strip-types','--input-type=module','--eval',script],{
+      cwd:process.cwd(),env:{...process.env,STECH_TRACE_FILE:file},encoding:'utf8',
+    });
+    assert.equal(child.status,0,child.stderr);
+    assert.equal(child.stdout.trim(),'NON_STECH unchanged');
+    assert.doesNotMatch(child.stderr,/mensaje completo|12345678|trace-secret|trace-cookie|trace-password|trace-api-key|trace-token/);
+    const rows=readFileSync(file,'utf8').trim().split('\n').map(line=>JSON.parse(line));
+    assert.equal(rows.length,2,'two emitted STECH events must produce exactly two JSONL rows');
+    assert.deepEqual(rows.map(row=>row.sessionId),['qa-console','qa-write']);
+    assert.doesNotMatch(JSON.stringify(rows),/mensaje completo|12345678|trace-secret|trace-cookie|trace-password|trace-api-key|trace-token/);
   });
 });
 
