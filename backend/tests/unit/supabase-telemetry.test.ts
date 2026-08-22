@@ -43,3 +43,15 @@ test('persists non-secret LLM metrics in ia_metricas_tokens', async () => {
     message_id: 'qa-run:CASE:t02',
   }]);
 });
+
+test('planner and writer metrics use distinct idempotency nodes for one message',async()=>{
+  const bodies:any[]=[];
+  const repo=new SupabaseTelemetryRepository({url:'https://example.supabase.co',key:'service-key',fetcher:async(_url,init)=>{
+    bodies.push(JSON.parse(String(init?.body))[0]);
+    return new Response(null,{status:201});
+  }});
+  const common={sessionId:'qa-run-case',turn:2,model:'gpt-test',inputTokens:10,outputTokens:5,cachedTokens:0,durationMs:100,messageId:'qa-run:CASE:t02'};
+  await repo.recordLlmUsage({...common,route:'SEMANTIC_PLAN'});
+  await repo.recordLlmUsage({...common,route:'COMMERCIAL_WRITE'});
+  assert.deepEqual(bodies.map(x=>x.nodo),['SemanticPlanner','CommercialWriter']);
+});

@@ -7,6 +7,12 @@ type Options = {
   fetcher?: typeof fetch;
 };
 
+function metricNode(route:string):string{
+  if(route==='SEMANTIC_PLAN')return'SemanticPlanner';
+  if(route==='COMMERCIAL_WRITE')return'CommercialWriter';
+  return'OpenAIProvider';
+}
+
 export class SupabaseTelemetryRepository implements TelemetryRepository {
   readonly #url: string;
   readonly #key: string;
@@ -24,7 +30,7 @@ export class SupabaseTelemetryRepository implements TelemetryRepository {
     const body = [{
       session_id: metric.sessionId,
       turno: metric.turn,
-      nodo: 'OpenAIProvider',
+      nodo: metricNode(metric.route),
       ruta: metric.route,
       modelo: metric.model,
       tokens_entrada: metric.inputTokens,
