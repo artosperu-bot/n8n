@@ -7,7 +7,9 @@ export type RecommendationContext={
   useCase?:string|null;
   problem?:string|null;
   maxBudget?:number|null;
+  priceIsCriterion?:boolean;
 };
+export type RecommendationWinnerStatus='WINNER'|'NO_COMPARABLE_EVIDENCE'|'TOP_TIE'|'NOT_TOP';
 export type RankedRecommendation=RecommendationCandidate&{
   score:number;
   criteria:string[];
@@ -15,6 +17,7 @@ export type RankedRecommendation=RecommendationCandidate&{
   reasons:string[];
   tradeoffs:string[];
   confidence:number;
+  winnerStatus:RecommendationWinnerStatus;
 };
 
 type Metrics=Record<string,number>;
@@ -167,7 +170,7 @@ export function rankRecommendations(candidates:RecommendationCandidate[],context
     return [criterion,{min:values.length?Math.min(...values):0,max:values.length?Math.max(...values):0}];
   })) as Record<string,{min:number;max:number}>;
 
-  const ranked:(RankedRecommendation&{__index:number})[]=rows.map(row=>{
+  const ranked:Array<Omit<RankedRecommendation,'winnerStatus'>&{__index:number}>=rows.map(row=>{
     const criterionScores:Record<string,number>={};
     const reasons:string[]=[];
     let total=0,covered=0;
@@ -196,7 +199,7 @@ export function rankRecommendations(candidates:RecommendationCandidate[],context
     };
   });
 
-  const priceIsCriterion=(context.priorities??[]).some(p=>criterionForPriority(p)==='PRECIO');
+  const priceIsCriterion=context.priceIsCriterion===true||(context.priorities??[]).some(p=>criterionForPriority(p)==='PRECIO');
   ranked.sort((a,b)=>b.score-a.score||b.confidence-a.confidence||(priceIsCriterion?Number(a.quote.price??Infinity)-Number(b.quote.price??Infinity):a.__index-b.__index));
   if(ranked.length>1){
     for(const item of ranked){
@@ -204,5 +207,15 @@ export function rankRecommendations(candidates:RecommendationCandidate[],context
       if(missing.length)item.tradeoffs.push(`sin evidencia comparable suficiente en ${missing.join(', ')}`);
     }
   }
-  return ranked.map(({__index,...item})=>item);
+  const top=ranked[0];const second=ranked[1];
+  let topStatus:RecommendationWinnerStatus='NO_COMPARABLE_EVIDENCE';
+  if(top){
+    const priceDifferentiates=Boolean(priceIsCriterion&&top.quote.price!=null&&(!second||second.quote.price!=null&&top.quote.price<second.quote.price));
+    const technicalTie=Boolean(second&&Math.abs(top.score-second.score)<1e-9&&Math.abs(top.confidence-second.confidence)<1e-9);
+    if(priceDifferentiates)topStatus='WINNER';
+    else if(top.score<=0||top.confidence<=0)topStatus='NO_COMPARABLE_EVIDENCE';
+    else if(technicalTie)topStatus='TOP_TIE';
+    else topStatus='WINNER';
+  }
+  return ranked.map(({__index,...item},index)=>({...item,winnerStatus:index===0?topStatus:'NOT_TOP'}));
 }

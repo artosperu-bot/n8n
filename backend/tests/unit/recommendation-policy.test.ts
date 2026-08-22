@@ -62,6 +62,18 @@ test('technical tie does not silently become cheapest-product preference when pr
     {quote:quote('CheaperCandidate',700),evidence:[ev('CheaperCandidate','CAMARA','Cámara principal: 50 MP. Cámara nocturna: 24 MP.',0.5)]},
   ],{priorities:['camara']});
   assert.deepEqual(rows.map(x=>x.quote.shortName),['FirstCandidate','CheaperCandidate']);
+  assert.equal((rows[0] as any).winnerStatus,'TOP_TIE');
+});
+
+test('zero comparable evidence has no winner regardless of catalog order',()=>{
+  const candidates=[
+    {quote:quote('CatalogFirst',800),evidence:[]},
+    {quote:quote('CatalogSecond',900),evidence:[]},
+  ];
+  const first=rankRecommendations(candidates,{priorities:['resistencia']});
+  const reversed=rankRecommendations([...candidates].reverse(),{priorities:['resistencia']});
+  assert.equal((first[0] as any).winnerStatus,'NO_COMPARABLE_EVIDENCE');
+  assert.equal((reversed[0] as any).winnerStatus,'NO_COMPARABLE_EVIDENCE');
 });
 
 test('candidate with evidence for only one of four criteria cannot outrank broad evidence coverage',()=>{

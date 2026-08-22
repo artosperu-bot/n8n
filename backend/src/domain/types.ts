@@ -21,6 +21,7 @@ export type RecommendationDecisionTrace = {
   sectionsRecovered:string[];
   rankedCandidates:RecommendationCandidateTrace[];
   winner:string|null;
+  winnerReason?:'WINNER'|'NO_CANDIDATES'|'NO_COMPARABLE_EVIDENCE'|'TOP_TIE';
 };
 export type TurnDecisionTrace = {
   deterministicIntent:string;

@@ -74,3 +74,47 @@ test('recommendation winner becomes active followup focus without becoming selec
   assert.equal(flow?.after?.activeProduct,'Armor 22');
   assert.equal(flow?.reason,'RECOMMENDATION_WINNER_FOCUS');
 });
+
+test('explicit winner reason outranks equal technical scores when price was an authorized criterion',()=>{
+  const s=reduceState({
+    sessionId:'qa-price-winner',
+    activeProduct:'Armor X13',
+    queryTarget:'Armor X13',
+    salientProduct:'Armor X13',
+    selectedProduct:null,
+    recommendedProduct:null,
+  },{
+    lastIntent:'RECOMMEND_WITHIN_BUDGET',
+    lastRoute:'RAG_RECOMMENDATION',
+    activeProduct:'Armor X13',
+    queryTarget:'Armor X13',
+    salientProduct:'Armor 22',
+    selectedProduct:null,
+    recommendedProduct:'Armor 22',
+    lastDecisionTrace:{
+      deterministicIntent:'RECOMMEND_WITHIN_BUDGET',
+      plannerIntent:'RECOMMEND_WITHIN_BUDGET',
+      finalIntent:'RECOMMEND_WITHIN_BUDGET',
+      route:'RAG_RECOMMENDATION',
+      nextBestAction:'RECOMMEND',
+      targetProduct:'Armor X13',
+      recommendation:{
+        catalogCandidates:['Armor X13','Armor 22'],
+        eligibleCandidates:['Armor X13','Armor 22'],
+        discardedCandidates:[],
+        sectionsRequested:['BATERIA'],
+        sectionsRecovered:[],
+        rankedCandidates:[
+          {product:'Armor 22',productId:null,score:0,confidence:0,criteria:['BATERIA'],criterionScores:{},reasons:[],tradeoffs:[]},
+          {product:'Armor X13',productId:null,score:0,confidence:0,criteria:['BATERIA'],criterionScores:{},reasons:[],tradeoffs:[]},
+        ],
+        winner:'Armor 22',
+        winnerReason:'WINNER',
+      },
+    },
+  });
+  assert.equal(s.activeProduct,'Armor 22');
+  const flow=(s.lastDecisionTrace as any)?.productFlow;
+  assert.equal(flow?.recommendationTopTie,false);
+  assert.equal(flow?.reason,'RECOMMENDATION_WINNER_FOCUS');
+});

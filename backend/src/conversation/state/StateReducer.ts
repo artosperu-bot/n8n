@@ -33,6 +33,9 @@ function sameProduct(a:string|null|undefined,b:string|null|undefined):boolean{
 }
 
 function topRecommendationTie(trace:any):boolean{
+  const winnerReason=String(trace?.recommendation?.winnerReason??'').toUpperCase();
+  if(winnerReason==='WINNER')return false;
+  if(winnerReason==='TOP_TIE')return true;
   const ranked=Array.isArray(trace?.recommendation?.rankedCandidates)?trace.recommendation.rankedCandidates:[];
   if(ranked.length<2)return false;
   const a=ranked[0],b=ranked[1];

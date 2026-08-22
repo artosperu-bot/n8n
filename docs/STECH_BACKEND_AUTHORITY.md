@@ -44,15 +44,15 @@ Leave the STECH conversational sales backend correct, useful, observable, regres
 - Trace privacy/uniqueness root closed in code by `207c014`; targeted tests 6/6 PASS.
 - Reservation turn ownership closed in code: only compatible field data or explicit reservation operations own the turn; interruptions preserve pending state and abandonment clears local capture without claiming external cancellation.
 - Deterministic budget authority closed in code: explicit parsed budget remains primary over incompatible semantic planner intents while compatible capability criteria remain available.
+- Recommendation evidence sufficiency closed in code: zero comparable evidence and unresolved top ties expose an explicit no-winner reason, preserve product focus, and offer neutral alternatives or request a useful criterion; price differentiates only when expressed by the customer.
 
 Do not reopen a closed dimension without fresh contradictory evidence.
 
 ## Open issues, ordered
 
-1. P1 recommendation sufficiency: zero-evidence/tied candidates can become an arbitrary first-row winner.
-2. P1 conditional stock interest: current behavior must be reproduced before any implementation.
-3. External gate: exact signature and result contract for `dbo.sp_IA_RegistrarReserva24h_Idempotente` are not confirmed; execution remains blocked.
-4. Live conversational certification remains pending after code fixes.
+1. P1 conditional stock interest: current behavior must be reproduced before any implementation.
+2. External gate: exact signature and result contract for `dbo.sp_IA_RegistrarReserva24h_Idempotente` are not confirmed; execution remains blocked.
+3. Live conversational certification remains pending after code fixes.
 
 ## Latest verified evidence
 
@@ -65,6 +65,7 @@ Do not reopen a closed dimension without fresh contradictory evidence.
 - Reservation RED reproduced warranty/human/switch/abandonment capture before intent.
 - Reservation GREEN: ownership, switch, abandonment, document, name and address plus adjacent suites 22/22 PASS.
 - Budget RED reproduced active-product `CAPABILITY` override; GREEN plus adjacent authority suites 33/33 PASS.
+- Recommendation RED reproduced catalog-order winner selection with zero evidence; GREEN plus adjacent recommendation/reference/state suites 42/42 PASS.
 - Production/Supabase mutations: none.
 - Preexisting untracked `backend/package-lock.json`: preserved and excluded.
 
@@ -92,4 +93,4 @@ Do not reopen a closed dimension without fresh contradictory evidence.
 
 ## NEXT ACTION
 
-Write and run no-winner RED regressions for zero-evidence/tied recommendation candidates.
+Write and run the conditional-interest regression against current behavior before changing production logic.

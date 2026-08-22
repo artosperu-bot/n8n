@@ -71,6 +71,24 @@ test('unknown requested product recovers with verified catalog alternatives inst
   assert.equal(r.state.lastNba,'OFFER_ALTERNATIVE');
 });
 
+test('recommendation tie without differentiating evidence preserves focus and exposes no winner',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-recommendation-no-winner',{
+    activeProduct:'Armor X13',queryTarget:'Armor X13',salientProduct:'Armor X13',
+    useCase:'delivery',priorities:['bateria','resistencia'],turnCount:3,
+  });
+  const result=await new HybridConversationEngine(deps(new FakeLlmProvider(),conversations)).processTurn({
+    sessionId:'s-recommendation-no-winner',message:'¿Cuál me recomiendas para delivery?',
+  });
+  assert.equal(result.state.activeProduct,'Armor X13');
+  assert.equal(result.state.recommendedProduct,null);
+  assert.equal(result.debug.decisionTrace.recommendation?.winner,null);
+  assert.equal((result.debug.decisionTrace.recommendation as any)?.winnerReason,'NO_COMPARABLE_EVIDENCE');
+  assert.equal(result.debug.route,'RAG_RECOMMENDATION_NO_WINNER');
+  assert.equal(result.debug.nextBestAction,'ASK_MISSING_FACT');
+  assert.doesNotMatch(result.answer,/\b(?:te recomiendo|la mejor opci[oó]n es)\b/i);
+});
+
 test('direct image request remains a deterministic URL-only fast path', async () => {
   const engine = new HybridConversationEngine(deps(new FakeLlmProvider()));
   const r = await engine.processTurn({sessionId:'s-images',message:'Mándame imágenes del Armor 22'});
