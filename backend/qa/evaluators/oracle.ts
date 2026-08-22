@@ -14,8 +14,11 @@ function assertedNumbers(text:string):string[]{
   for(const match of text.matchAll(/\b\d+(?:[.,]\d+)?\b/g)){
     const index=match.index??0;
     const prefix=text.slice(Math.max(0,index-48),index).toLocaleLowerCase('es');
+    const suffix=text.slice(index+match[0].length,index+match[0].length+24).toLocaleLowerCase('es');
     const negated=/(?:\bno\s+(?:tiene|es|soporta|incluye|trae|cuenta\s+con)|\bsin)\s+[^\d]{0,16}$/.test(prefix);
-    if(!negated)out.push(match[0].replace(',','.'));
+    const hasFactualUnit=/^\s*(?:mah|w(?:atts?)?|mp|ghz|mhz|hz|gb|tb|mb|mes(?:es)?|months?|años?|years?|unidades?|units?|soles?|%|g\b|p\b)/i.test(suffix);
+    const hasFactualPrefix=/(?:s\/|\bpen\s*|\bip)\s*$/.test(prefix);
+    if(!negated&&(hasFactualUnit||hasFactualPrefix))out.push(match[0].replace(',','.'));
   }
   return [...new Set(out)];
 }
@@ -89,7 +92,7 @@ export function evaluateOracle(card:OracleCard,observation:QaTurnObservation):Qa
 
   if(['PRODUCT_RAG','INSTITUTIONAL_RAG'].includes(card.authoritativeDomain)&&facts){
     const productNums=new Set(numbers([card.expectedProductName??'',...(card.expectedProducts??[]).map(x=>x.name)].join(' ')));
-    const allowedNums=new Set(numbers(facts));
+    const allowedNums=new Set(assertedNumbers(facts));
     const unsupported=assertedNumbers(answer).filter(n=>!productNums.has(n)&&!allowedNums.has(n));
     if(unsupported.length)findings.push({level:'RED',code:'ORACLE_UNSUPPORTED_NUMERIC_FACT',message:`Afirmaciones numéricas no respaldadas por Oracle: ${unsupported.join(', ')}`,rootCause:card.authoritativeDomain==='PRODUCT_RAG'?'PRODUCT_RAG':'INSTITUTIONAL_RAG'});
   }

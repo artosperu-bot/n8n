@@ -10,3 +10,7 @@ test('hard evaluator rejects unsupported numeric price',()=>{const f=evaluateHar
 test('stock quantity is a hard leak even when ERP knows it',()=>{const f=evaluateHard({message:'x'},observation({answer:'Hay 7 unidades disponibles',state:{},debug:{intent:'STOCK',erp:{stock:7}}}));assert.ok(f.some(x=>x.code==='STOCK_COUNT_LEAK'));});
 test('simple availability passes stock disclosure gate',()=>{const f=evaluateHard({message:'x'},observation({answer:'Sí, está disponible.',state:{},debug:{intent:'STOCK',erp:{stock:7}}}));assert.equal(f.some(x=>x.code==='STOCK_COUNT_LEAK'),false);});
 test('image response must contain only URLs',()=>{const f=evaluateHard({message:'x'},observation({answer:'Aquí tienes:\nhttps://x.test/1.jpg',state:{},debug:{intent:'IMAGE'}}));assert.ok(f.some(x=>x.code==='IMAGE_RESPONSE_NOT_URL_ONLY'));});
+test('verified institutional threshold is not classified as unsolicited product price',()=>{
+  const f=evaluateHard({message:'el envio es gratis?'},observation({answer:'El envío es gratis desde S/250.',state:{},debug:{intent:'POLICY',route:'RAG_INSTITUTIONAL',ragSources:['SUPABASE_INSTITUCIONAL:envios:envio_gratuito']}}));
+  assert.equal(f.some(x=>x.code==='UNSOLICITED_PRICE'),false);
+});

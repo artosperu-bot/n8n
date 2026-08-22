@@ -41,7 +41,8 @@ export function evaluateHard(turn: QaTurn, observation: QaTurnObservation): QaFi
     if (erp?.stock != null && !/disponible/i.test(answer)) findings.push({level:'RED',code:'STOCK_AVAILABILITY_MISSING',message:'No expresó la disponibilidad de forma simple.'});
   }
 
-  if (!['PRICE','BUDGET_CONSTRAINT','HANDLE_PRICE_OBJECTION','QUOTE'].includes(String(debug.intent)) && /S\/\s*[\d.,]+/i.test(answer)) {
+  const verifiedInstitutionalAmount=debug.route==='RAG_INSTITUTIONAL'&&Array.isArray(debug.ragSources)&&debug.ragSources.length>0;
+  if (!verifiedInstitutionalAmount&&!['PRICE','BUDGET_CONSTRAINT','HANDLE_PRICE_OBJECTION','QUOTE'].includes(String(debug.intent)) && /S\/\s*[\d.,]+/i.test(answer)) {
     findings.push({ level:'RED', code:'UNSOLICITED_PRICE', message:'Mencionó precio sin una solicitud explícita de precio/cotización.' });
   }
 

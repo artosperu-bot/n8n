@@ -51,3 +51,23 @@ test('comparison oracle rejects an incomplete observed product set',()=>{
   const findings=evaluateOracle(card,observation('Comparación.',{comparisonProducts:['Armor X13']},{}));
   assert.equal(findings.some(x=>x.code==='ORACLE_COMPARISON_SET_MISMATCH'),true);
 });
+
+test('model and SKU fragments are not treated as unsupported factual numbers',()=>{
+  const card:any={
+    intentClass:'CAPABILITY',authoritativeDomain:'PRODUCT_RAG',expectedProductId:'P-ARMOR-22-256G',expectedProductName:'Armor 22',expectedProducts:[],
+    allowedFacts:['GENERAL=Equipo identificado por catálogo.'],forbiddenFacts:[],expectedReferenceBehavior:null,
+    expectedStateDelta:{},expectedNbaClass:null,requiresHandoff:false,sourceRefs:['SUPABASE_DOCUMENTS:GENERAL'],
+  };
+  const findings=evaluateOracle(card,observation('El Armor 22 corresponde al SKU 000049.',{lastResolvedProductId:'P-ARMOR-22-256G'},{erp:{productRagId:'P-ARMOR-22-256G',shortName:'Armor 22'},ragSources:['SUPABASE_DOCUMENTS:GENERAL']}));
+  assert.equal(findings.some(x=>x.code==='ORACLE_UNSUPPORTED_NUMERIC_FACT'),false);
+});
+
+test('unit-bearing factual numbers still require authoritative evidence',()=>{
+  const card:any={
+    intentClass:'CAPABILITY',authoritativeDomain:'PRODUCT_RAG',expectedProductId:'P-ARMOR-22-256G',expectedProductName:'Armor 22',expectedProducts:[],
+    allowedFacts:['BATERIA=Autonomía prolongada.'],forbiddenFacts:[],expectedReferenceBehavior:null,
+    expectedStateDelta:{},expectedNbaClass:null,requiresHandoff:false,sourceRefs:['SUPABASE_DOCUMENTS:BATERIA'],
+  };
+  const findings=evaluateOracle(card,observation('Tiene batería de 6600 mAh.',{lastResolvedProductId:'P-ARMOR-22-256G'},{erp:{productRagId:'P-ARMOR-22-256G',shortName:'Armor 22'},ragSources:['SUPABASE_DOCUMENTS:BATERIA']}));
+  assert.equal(findings.some(x=>x.code==='ORACLE_UNSUPPORTED_NUMERIC_FACT'),true);
+});
