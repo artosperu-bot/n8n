@@ -49,6 +49,42 @@ function recommendationCandidates(state:ConversationState):string[]{
   const traced=state.lastDecisionTrace?.recommendation?.eligibleCandidates?.map(x=>x.product)??[];
   return cleanStrings(traced.length?traced:state.comparisonProducts);
 }
+function storedCanonicalState(value:unknown):ConversationState {
+  const raw=value&&typeof value==='object'?value as Record<string,any>:{};
+  const {
+    producto_activo:legacyActive,
+    producto_objetivo_turno:legacyTarget,
+    producto_recomendado:legacyRecommended,
+    cliente:legacyCustomer,
+    venta:legacySale,
+    conversacion:legacyConversation,
+    debug_trace:legacyTrace,
+    ...canonical
+  }=raw;
+  const text=(primary:unknown,fallback:unknown)=>typeof primary==='string'&&primary.trim()?primary:typeof fallback==='string'&&fallback.trim()?fallback:undefined;
+  const valueOr=<T>(primary:T|undefined,fallback:T|undefined)=>primary!==undefined?primary:fallback;
+  return {
+    ...canonical,
+    activeProduct:text(canonical.activeProduct,legacyActive?.nombre??legacyActive?.nombre_corto),
+    queryTarget:text(canonical.queryTarget,legacyTarget?.nombre),
+    recommendedProduct:text(canonical.recommendedProduct,legacyRecommended?.nombre??legacyRecommended?.nombre_corto),
+    customerType:text(canonical.customerType,legacyCustomer?.tipo),
+    sector:text(canonical.sector,legacyCustomer?.sector),
+    useCase:text(canonical.useCase,legacyCustomer?.actividad),
+    problem:text(canonical.problem,legacyCustomer?.problema),
+    priorities:valueOr(canonical.priorities,Array.isArray(legacyCustomer?.prioridades)?legacyCustomer.prioridades:undefined),
+    budget:valueOr(canonical.budget,legacyCustomer?.presupuesto),
+    quantity:valueOr(canonical.quantity,legacyCustomer?.cantidad),
+    invoiceRequired:valueOr(canonical.invoiceRequired,legacyCustomer?.requiere_factura),
+    purchaseSignal:valueOr(canonical.purchaseSignal,legacySale?.senal_compra),
+    objection:text(canonical.objection,legacySale?.objecion),
+    commercialStage:text(canonical.commercialStage,legacySale?.etapa),
+    lastNba:text(canonical.lastNba,legacyConversation?.accion_pendiente),
+    lastIntent:text(canonical.lastIntent,legacyConversation?.ultima_intencion),
+    lastRoute:text(canonical.lastRoute,legacyConversation?.ultima_ruta),
+    lastDecisionTrace:canonical.lastDecisionTrace??legacyTrace,
+  } as ConversationState;
+}
 function canonicalContext(state:ConversationState) {
   const flat={
     ...state,
@@ -175,7 +211,9 @@ export class SupabaseConversationRepository implements ConversationRepository {
     if (!r.ok) throw new Error(`Supabase state read HTTP ${r.status}`);
     const rows: any[] = await r.json();
     const row=rows[0];
-    const base:ConversationState=row?.contexto ?? { sessionId, turnCount:0, comparisonProducts:[], spinFacts:[], priorities:[] };
+    const base=row?.contexto
+      ?storedCanonicalState(row.contexto)
+      :{sessionId,turnCount:0,comparisonProducts:[],spinFacts:[],priorities:[]};
     return { ...base, sessionId, contextVersion:Number(row?.context_version ?? base.contextVersion ?? 0) };
   }
 

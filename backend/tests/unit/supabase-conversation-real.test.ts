@@ -49,6 +49,27 @@ test('reads canonical context and expands stored turn into user and assistant me
   assert.deepEqual(messages.map(x=>[x.role,x.content]),[['user','Hola'],['assistant','Hola, ¿qué producto buscas?']]);
 });
 
+test('canonical context fields win over stale legacy mirrors and mirrors only backfill missing values', async()=>{
+  const fetcher:any=async()=>({ok:true,json:async()=>[{
+    context_version:9,
+    contexto:{
+      sessionId:'stale-session',contextVersion:3,activeProduct:'Armor X13',lastIntent:'PRICE',
+      producto_activo:{nombre:'Armor 22'},
+      producto_objetivo_turno:{nombre:'Armor 25T Pro'},
+      conversacion:{ultima_intencion:'STOCK',accion_pendiente:'ANSWER_ONLY'},
+      comparisonProducts:[],spinFacts:[],
+    },
+  }]});
+  const repo=new SupabaseConversationRepository({url:'https://example.supabase.co',key:'service',fetcher});
+  const state=await repo.getState('qa-canonical');
+  assert.equal(state.sessionId,'qa-canonical');
+  assert.equal(state.contextVersion,9);
+  assert.equal(state.activeProduct,'Armor X13');
+  assert.equal(state.lastIntent,'PRICE');
+  assert.equal(state.queryTarget,'Armor 25T Pro');
+  assert.equal(state.lastNba,'ANSWER_ONLY');
+});
+
 test('keeps user message persisted even if assistant reply never arrives', async()=>{
   const calls:any[]=[];
   const fetcher:any=async (url:any, init:any={})=>{
