@@ -28,6 +28,23 @@ test('RAG evidence is compacted and keeps product/domain provenance', () => {
   assert.ok((facts[0]?.value.length??0)<=320);
 });
 
+test('structured RAG envelope metadata is not promoted into display fact value',()=>{
+  const raw=[
+    'Producto: Armor X13',
+    'Producto ID: P-ARMOR-X13',
+    'Código: P000048',
+    'SKU: ARMOR-X13',
+    'Sección: BATERIA',
+    'Grupo técnico: bateria',
+    'Título: Batería',
+    'Contenido: Batería de 6320 mAh con carga de 10 W.',
+  ].join('\n');
+  const facts=normalizeEvidence({intent:'PRODUCT_INFO',rag:[{text:raw,source:'SUPABASE_DOCUMENTS:BATERIA',section:'BATERIA',productId:'P-ARMOR-X13',domain:'PRODUCT'}]});
+  const battery=facts.find(x=>x.domain==='PRODUCT_RAG'&&x.key==='BATERIA');
+  assert.equal(battery?.value,'Batería de 6320 mAh con carga de 10 W.');
+  assert.doesNotMatch(battery?.value??'',/Producto ID|Código|SKU|Sección|Grupo técnico|Título|Contenido:/i);
+});
+
 test('RAM projection accepts physical and maximum virtual values from authority wording',()=>{
   const facts=normalizeEvidence({intent:'CAPABILITY',rag:[{text:'RAM física: 8 GB. RAM virtual máxima: 8 GB.',source:'TEST:MEMORIA',section:'MEMORIA',productId:'P-22',domain:'PRODUCT'}]});
   assert.equal(facts.find(x=>x.key==='RAM_FISICA')?.value,'8 GB');
