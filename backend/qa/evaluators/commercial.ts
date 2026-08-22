@@ -73,17 +73,21 @@ export function assessSpinUtility(observation:QaTurnObservation):boolean{
 export function assessFabGrounding(observation:QaTurnObservation):boolean{
   const response=observation.response??{};const state=response.state??{};const debug=response.debug??{};const answer=String(response.answer??'');
   const attributes=Array.isArray(state.currentAttributes)?state.currentAttributes.map((x:unknown)=>String(x).toUpperCase()):[];
-  if(!attributes.length||Number(debug.ragCount??0)<=0||!/^RAG_(?:PRODUCT|COMPARISON|RECOMMENDATION)/.test(String(debug.route??'')))return true;
+  const attributeText=attributes.join(' ');
+  const technicalAttribute=/RAM|MEMORIA|BATERIA|RESISTENCIA|CAIDA|DURABILIDAD|CAMARA|PANTALLA|NFC|CONECTIVIDAD|FISICO|PESO|DIMENSION|GROSOR/.test(attributeText);
+  const decisionContext=['COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(String(debug.intent??'').toUpperCase())||/^RAG_(?:COMPARISON|RECOMMENDATION)/.test(String(debug.route??''));
+  const commercialContext=Boolean(state.useCase||state.problem||(state.implications?.length??0)>0||(state.priorities?.length??0)>0||decisionContext);
+  if(!technicalAttribute||!commercialContext||Number(debug.ragCount??0)<=0||!/^RAG_(?:PRODUCT|COMPARISON|RECOMMENDATION)/.test(String(debug.route??'')))return true;
   const feature=attributes.some((attribute:string)=>{
-    if(attribute==='RAM')return /\bram\b|\bmemoria\b|\bgb\b/i.test(answer);
-    if(attribute==='BATERIA')return /bater[ií]a|carga|mah|\bw\b/i.test(answer);
-    if(attribute==='RESISTENCIA')return /resisten|ip6[89]|ca[ií]da|golpe/i.test(answer);
-    if(attribute==='CAMARA')return /c[aá]mara|sensor|\bmp\b|visi[oó]n nocturna/i.test(answer);
-    if(attribute==='PANTALLA')return /pantalla|pulgad|\bhz\b|resoluci[oó]n/i.test(answer);
-    if(attribute==='FISICO')return /peso|pesa|gramos|\bg\b|dimensi|grosor/i.test(answer);
+    if(/RAM|MEMORIA/.test(attribute))return /\bram\b|\bmemoria\b|\bgb\b/i.test(answer);
+    if(/BATERIA/.test(attribute))return /bater[ií]a|carga|mah|\bw\b/i.test(answer);
+    if(/RESISTENCIA|CAIDA|DURABILIDAD|PROTECCION/.test(attribute))return /resisten|ip6[89]|ca[ií]da|golpe|impacto/i.test(answer);
+    if(/CAMARA/.test(attribute))return /c[aá]mara|sensor|\bmp\b|visi[oó]n nocturna/i.test(answer);
+    if(/PANTALLA/.test(attribute))return /pantalla|pulgad|\bhz\b|resoluci[oó]n/i.test(answer);
+    if(/FISICO|PESO|DIMENSION|GROSOR/.test(attribute))return /peso|pesa|gramos|\bg\b|dimensi|grosor/i.test(answer);
     return new RegExp(`\\b${attribute.replace(/[^A-Z0-9]/g,'')}\\b`,'i').test(answer);
   });
-  const benefit=/\b(?:para|te ayuda|te da|m[aá]s margen|mejor encaje|[uú]til|permite|facilita|reduce|conviene|ideal)\b/i.test(answer);
+  const benefit=/\b(?:te ayuda|te da|m[aá]s margen|mejor encaje|[uú]til|permite|facilita|reduce|conviene|ideal|encaja|protecci[oó]n ante|mayor|superior|m[aá]s r[aá]pid[ao]|para (?:tu|ese|esa|trabajo|obra|construcci[oó]n|uso|jornada))\b/i.test(answer);
   return feature&&benefit;
 }
 

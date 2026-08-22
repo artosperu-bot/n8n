@@ -98,3 +98,18 @@ test('ANSWER_ONLY with a recommendation is a RED actionability failure',()=>{
   const findings=evaluateCommercial(observation('Te recomiendo el Armor 22.',{intent:'CAPABILITY'},{lastNba:'ANSWER_ONLY',activeProduct:'Armor 22'},'¿Tiene NFC?'));
   assert.ok(findings.some(x=>x.code==='UNSUPPORTED_COMMERCIAL_ACTION'&&x.level==='RED'));
 });
+
+test('isolated verified weight does not require FAB',()=>{
+  const findings=evaluateCommercial(observation('El Armor 22 pesa 324 g.',{intent:'CAPABILITY',route:'RAG_PRODUCT',ragCount:1},{lastNba:'ANSWER_ONLY',currentAttributes:['FISICO']},'¿Cuánto pesa el Armor 22?'));
+  assert.equal(findings.some(x=>x.code==='FAB_GROUNDING_MISSING'),false);
+});
+
+test('verified resistance with construction context requires safe FAB',()=>{
+  const findings=evaluateCommercial(observation('Tiene certificación IP68.',{intent:'CAPABILITY',route:'RAG_PRODUCT',ragCount:1},{lastNba:'ANSWER_ONLY',currentAttributes:['RESISTENCIA_A_CAIDAS'],useCase:'trabajo',problem:'caidas_frecuentes',priorities:['resistencia']},'Trabajo en construcción y se me cae el celular'));
+  assert.ok(findings.some(x=>x.code==='FAB_GROUNDING_MISSING'));
+});
+
+test('comparison attribute with a safe contextual advantage satisfies FAB',()=>{
+  const findings=evaluateCommercial(observation('Armor 22 tiene 6600 mAh frente a 6320 mAh; esa mayor capacidad da más margen entre cargas.',{intent:'COMPARE',route:'RAG_COMPARISON',ragCount:2},{lastNba:'COMPARE',currentAttributes:['BATERIA'],comparisonProducts:['Armor X13','Armor 22']},'¿Cuál tiene mejor batería?'));
+  assert.equal(findings.some(x=>x.code==='FAB_GROUNDING_MISSING'),false);
+});

@@ -324,6 +324,27 @@ test('price objection is acknowledged before asking the missing budget',async()=
   assert.match(result.answer,/\?/);
 });
 
+test('price objection fallback removes irrelevant fact-unknown prose before asking budget',async()=>{
+  const result=await safeWrite(capturingWriter('Te recomiendo otra alternativa.'),{
+    message:'Está muy caro, ¿qué alternativa tienes?',intent:'HANDLE_PRICE_OBJECTION',state:{activeProduct:'Armor X13',objection:'precio'},
+    decision:{nextBestAction:'ASK_MISSING_FACT'} as any,missingFact:'presupuesto máximo',decisionImpact:true,
+  } as any,'Sobre Armor X12 Pro, ese detalle no está especificado.');
+  assert.doesNotMatch(result.answer,/detalle no est[aá] especificado|no tengo confirmado/i);
+  assert.match(result.answer,/entiendo|claro|ajuste|c[oó]mod|alto|caro/i);
+  assert.match(result.answer,/presupuesto|hasta cu[aá]nto|tope/i);
+});
+
+test('soft close fallback consumes budget without an unrelated fact-unknown disclaimer',async()=>{
+  const result=await safeWrite(capturingWriter('Te recomiendo el Armor 22.'),{
+    message:'máximo 1500',intent:'RECOMMEND_WITHIN_BUDGET',state:{activeProduct:'Armor 22',recommendedProduct:'Armor 22',budget:1500,interestSignal:true},
+    decision:{nextBestAction:'SOFT_CLOSE'} as any,allowedProducts:['Armor 22'],
+    quote:{product:'Armor 22',price:1199,stock:4,currency:'PEN',source:'FAKE_TEST_DATA'},
+  },'Sobre Armor 22, ese detalle no está especificado.');
+  assert.doesNotMatch(result.answer,/detalle no est[aá] especificado|no tengo confirmado/i);
+  assert.match(result.answer,/presupuesto|informaci[oó]n|contexto|listo/i);
+  assert.match(result.answer,/disponibilidad|avanzar/i);
+});
+
 test('unknown fact uses a natural no-action fallback',()=>{
   assert.equal(noEvidenceResponse(),'No tengo confirmado ese dato exacto.');
 });

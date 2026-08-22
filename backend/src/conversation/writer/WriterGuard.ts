@@ -57,15 +57,17 @@ function executeNba(input:LlmWriteInput,answer:string):string {
     const product=String(input.recommendedProduct??input.state?.recommendedProduct??'').trim();
     return product&&!executesRecommendation(answer,product)?`Te recomiendo ${product}. ${answer}`:answer;
   }
-  if(action==='ASK_MISSING_FACT'&&!/[¿?]/.test(answer)){
+  if(action==='ASK_MISSING_FACT'){
+    let response=answer.trim();
+    if(String(input.intent??'').toUpperCase()==='HANDLE_PRICE_OBJECTION'&&!/entiendo|claro|se sale|ajust|c[oó]mod|alto|caro/i.test(response))response=`Entiendo; busquemos una opción que se ajuste mejor. ${response}`.trim();
+    if(/[¿?]/.test(response))return response;
     const missing=fold(input.missingFact??'');
     const question=missing.includes('uso')?'¿Para qué uso principal lo necesitas?'
       :missing.includes('presupuesto')?'¿Cuál es tu presupuesto máximo?'
       :missing.includes('prioridad')?'¿Qué priorizas más: resistencia, batería o cámara?'
       :'¿Qué criterio pesa más para ti: batería, cámara o resistencia?';
-    return `${answer.trim()} ${question}`.trim();
+    return `${response} ${question}`.trim();
   }
-  if(action==='ASK_MISSING_FACT'&&String(input.intent??'').toUpperCase()==='HANDLE_PRICE_OBJECTION'&&!/entiendo|claro|se sale|ajust|c[oó]mod|alto|caro/i.test(answer))return `Entiendo; busquemos una opción que se ajuste mejor. ${answer}`;
   if(action==='OFFER_ALTERNATIVE'){
     const alternatives=unique(input.alternatives??[]).slice(0,2);
     const namesOne=alternatives.some(product=>new RegExp(`\\b${escapes(product)}\\b`,'i').test(answer));
@@ -264,6 +266,11 @@ function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
     return `Tiene ${physical} GB de RAM física + hasta ${virtual} GB de RAM virtual.`;
   }
   let cleaned=cleanPresentation(fallbackAnswer);
+  const action=String(input.nextBestAction??input.decision?.nextBestAction??'').toUpperCase();
+  const factUnknown=/^(?:Sobre\s+[^,.]+,\s*)?(?:ese\s+detalle\s+no\s+est[aá]\s+especificado|no\s+tengo\s+confirmado\s+ese\s+dato\s+exacto)\.?$/i;
+  if(['ASK_MISSING_FACT','SOFT_CLOSE','RECOMMEND','OFFER_ALTERNATIVE','COLLECT_RESERVATION_DATA'].includes(action)&&factUnknown.test(cleaned))cleaned='';
+  if(!cleaned&&action==='SOFT_CLOSE')cleaned='Listo, tomo esa información como referencia.';
+  if(!cleaned&&action==='RECOMMEND')cleaned='Esa opción encaja con los criterios indicados.';
   if(internalFallback(cleaned)){
     const intent=String(input.intent??'').toUpperCase();
     cleaned=intent==='COMPARE'
@@ -272,7 +279,7 @@ function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
         ?'Aún no hay una opción que destaque con claridad.'
         :'No tengo confirmado ese dato exacto.';
   }
-  if(String(input.nextBestAction??input.decision?.nextBestAction??'').toUpperCase()==='ASK_MISSING_FACT'&&/[¿?]/.test(cleaned)&&!questionConsumesMissingFact(input,cleaned))cleaned=stripTrailingQuestion(cleaned);
+  if(action==='ASK_MISSING_FACT'&&/[¿?]/.test(cleaned)&&!questionConsumesMissingFact(input,cleaned))cleaned=stripTrailingQuestion(cleaned);
   cleaned=executeNba(input,cleaned);
   if(String(input.decision?.nextBestAction??'').toUpperCase()!=='ANSWER_ONLY')return cleaned;
   return stripTrailingQuestion(cleaned)||'No tengo confirmado ese dato exacto.';

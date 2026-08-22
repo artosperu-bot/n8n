@@ -140,7 +140,7 @@ test('QA exposes SPIN utility and FAB grounding as independent quality dimension
       turn+=1;
       return turn===1
         ?Response.json({answer:'¿Cuál es tu presupuesto?',state:{lastNba:'ASK_MISSING_FACT',pendingMissingFact:'presupuesto máximo',budget:1200},debug:{intent:'EVALUATE_USE'}})
-        :Response.json({answer:'Tiene RAM.',state:{lastNba:'ANSWER_ONLY',currentAttributes:['RAM']},debug:{intent:'CAPABILITY',ragCount:1,route:'RAG_PRODUCT'}});
+        :Response.json({answer:'Tiene RAM.',state:{lastNba:'ANSWER_ONLY',currentAttributes:['RAM'],useCase:'uso diario',priorities:['rendimiento']},debug:{intent:'CAPABILITY',ragCount:1,route:'RAG_PRODUCT'}});
     },
     scenarios:[{id:'SPIN-FAB',family:'COMMERCIAL',title:'quality dimensions',turns:[{message:'Máximo 1200'},{message:'¿Cuánta RAM tiene?'}]}],
   });

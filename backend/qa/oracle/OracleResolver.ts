@@ -2,6 +2,7 @@ import type { ConversationState, ProductQuote, RagEvidence } from '../../src/dom
 import type { ErpRepository } from '../../src/ports/ErpRepository.ts';
 import type { RagRepository } from '../../src/ports/RagRepository.ts';
 import { resolveIntentPlan } from '../../src/conversation/intent/IntentPlan.ts';
+import { productEvidenceSections } from '../../src/conversation/commercial/ProductEvidencePolicy.ts';
 import { oracleFacts, defaultForbiddenFacts } from './OracleEvidence.ts';
 import type { OracleCard, OracleSpec } from './types.ts';
 
@@ -27,6 +28,9 @@ export class OracleResolver {
     const product=input.spec.product??null;
     const comparisonProducts=[...new Set((input.spec.products??[]).map(x=>x.trim()).filter(Boolean))];
     const comparisonQuotes:ProductQuote[]=[];
+    const evidenceSections=intent==='COMPARE'
+      ?[...new Set([...(input.spec.sections??[]),...productEvidenceSections({primary:'PRODUCT_INFO'},input.state??{})])]
+      :(input.spec.sections??[]);
 
     if(comparisonProducts.length&&['SQL','PRODUCT_RAG'].includes(domain)){
       for(const candidate of comparisonProducts){
@@ -43,13 +47,13 @@ export class OracleResolver {
       for(const candidate of comparisonQuotes){
         if(!candidate.productRagId)continue;
         const evidence=this.#rag.searchProduct
-          ?await this.#rag.searchProduct(input.message,candidate.productRagId,input.spec.sections??[],8).catch(()=>[])
+          ?await this.#rag.searchProduct(input.message,candidate.productRagId,evidenceSections,8).catch(()=>[])
           :await this.#rag.search(input.message,name(candidate)).catch(()=>[]);
         rag.push(...evidence);
       }
     }else if(domain==='PRODUCT_RAG'&&quote?.productRagId){
       rag=this.#rag.searchProduct
-        ?await this.#rag.searchProduct(input.message,quote.productRagId,input.spec.sections??[],8).catch(()=>[])
+        ?await this.#rag.searchProduct(input.message,quote.productRagId,evidenceSections,8).catch(()=>[])
         :await this.#rag.search(input.message,name(quote)).catch(()=>[]);
     }else if(domain==='INSTITUTIONAL_RAG'){
       rag=this.#rag.searchInstitutional
