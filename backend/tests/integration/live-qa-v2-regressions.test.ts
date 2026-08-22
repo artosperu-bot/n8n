@@ -39,15 +39,16 @@ function engine(llm:LlmProvider){return new HybridConversationEngine({
   conversations:new MemoryConversationRepository(),telemetry:new NoopTelemetryRepository(),erp:new FakeErpRepository(),rag,llm,automation:new NoopAutomationBus(),
 });}
 
-test('camera + sharing + resistance need does not repeat generic discovery and enters recommendation',async()=>{
+test('camera and resistance tradeoff remains neutral when top evidence is tied',async()=>{
   const llm=llmFor(decision({
     primaryIntent:'CAPABILITY',attributes:['CAMARA','RESISTENCIA'],customerNeed:'tomar fotos de trabajos y subirlas a redes',
     customerProblem:'necesita un equipo resistente',priorities:['camara','resistencia'],nextBestAction:'ANSWER_ONLY',needsProductRag:true,
   }));
   const r=await engine(llm).processTurn({sessionId:'live-camera-need',message:'necesito tomar fotos de trabajos y subirlas a redes, pero quiero algo resistente'});
-  assert.equal(r.debug.route,'RAG_RECOMMENDATION');
-  assert.ok(r.state.recommendedProduct);
-  assert.doesNotMatch(r.answer,/qué aspecto es más importante/i);
+  assert.equal(r.debug.route,'RAG_RECOMMENDATION_NO_WINNER');
+  assert.equal(r.state.recommendedProduct,null);
+  assert.equal(r.debug.decisionTrace.recommendation?.winner,null);
+  assert.equal(r.debug.decisionTrace.recommendation?.winnerReason,'TOP_TIE');
 });
 
 test('recommendation turn exposes a compact decision trace for Supabase diagnosis',async()=>{

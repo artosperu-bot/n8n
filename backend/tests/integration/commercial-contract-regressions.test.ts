@@ -62,7 +62,7 @@ test('mere mention of a second product does not force comparison or switch activ
   assert.equal(r.state.explicitSwitch,false);
 });
 
-test('after unknown product alternatives, ambiguous price continues with recommended real alternative instead of stale unknown', async () => {
+test('unknown product with neutral alternatives never assigns one before an ambiguous price followup', async () => {
   const conversations=new MemoryConversationRepository();
   const writer=new FakeLlmProvider();
   const llm:LlmProvider={
@@ -83,15 +83,15 @@ test('after unknown product alternatives, ambiguous price continues with recomme
   };
   const engine=new HybridConversationEngine(deps(llm,conversations));
   const first=await engine.processTurn({sessionId:'s-unknown-follow',message:'¿Tienen Armor 30 para trabajo?',messageId:'m-u1'});
-  assert.ok(first.state.recommendedProduct);
-  const recommended=first.state.recommendedProduct!;
-  assert.notEqual(recommended,'Armor 30');
+  assert.equal(first.state.recommendedProduct,null);
+  assert.equal(first.debug.decisionTrace.recommendation?.winner,null);
+  assert.equal(first.debug.decisionTrace.recommendation?.winnerReason,'NO_COMPARABLE_EVIDENCE');
 
   const second=await engine.processTurn({sessionId:'s-unknown-follow',message:'¿Cuánto cuesta?',messageId:'m-u2'});
   assert.equal(second.debug.intent,'PRICE');
-  assert.equal(second.debug.queryTarget,recommended);
-  assert.match(second.answer,/S\/\s*\d+/);
-  assert.doesNotMatch(second.answer,/Armor 30.*no aparece|No encuentro Armor 30/i);
+  assert.equal(second.state.recommendedProduct,null);
+  assert.equal(second.debug.route,'UNKNOWN_TO_ALTERNATIVES');
+  assert.doesNotMatch(second.answer,/S\/\s*\d+/);
 });
 
 test('strong institutional pre-router wins when semantic planner returns OTHER', async () => {

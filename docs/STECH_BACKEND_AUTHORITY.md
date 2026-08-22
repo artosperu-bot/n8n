@@ -67,6 +67,9 @@ Do not reopen a closed dimension without fresh contradictory evidence.
 - Budget RED reproduced active-product `CAPABILITY` override; GREEN plus adjacent authority suites 33/33 PASS.
 - Recommendation RED reproduced catalog-order winner selection with zero evidence; GREEN plus adjacent recommendation/reference/state suites 42/42 PASS.
 - Conditional-interest RED reproduced the missing signal; GREEN plus adjacent extraction/NBA/engine suites 43/43 PASS.
+- Final technical suite after all roots: 246/246 PASS.
+- Final build check: PASS.
+- `npm start` smoke with fake/memory adapters: health PASS; HTTP conditional-interest turn PASS; trace JSONL 3/3 valid rows, zero duplicate rows, no raw message.
 - Production/Supabase mutations: none.
 - Preexisting untracked `backend/package-lock.json`: preserved and excluded.
 
@@ -94,4 +97,4 @@ Do not reopen a closed dimension without fresh contradictory evidence.
 
 ## NEXT ACTION
 
-Run the complete technical suite, build, local start smoke test, and conversational certification.
+Run local isolated Golden100 conversational certification; do not use production persistence or execute the blocked reservation procedure.
