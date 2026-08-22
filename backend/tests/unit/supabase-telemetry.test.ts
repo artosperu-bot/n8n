@@ -5,9 +5,11 @@ import { SupabaseTelemetryRepository } from '../../src/adapters/supabase/Supabas
 test('persists non-secret LLM metrics in ia_metricas_tokens', async () => {
   let target = '';
   let body: any;
+  let headers: Headers;
   const fetcher: typeof fetch = async (url, init) => {
     target = String(url);
     body = JSON.parse(String(init?.body));
+    headers = new Headers(init?.headers);
     return new Response(null, { status: 201 });
   };
   const repo = new SupabaseTelemetryRepository({
@@ -27,6 +29,7 @@ test('persists non-secret LLM metrics in ia_metricas_tokens', async () => {
     messageId: 'qa-run:CASE:t02',
   });
   assert.equal(target, 'https://example.supabase.co/rest/v1/ia_metricas_tokens');
+  assert.equal(headers!.get('prefer'), 'resolution=ignore-duplicates');
   assert.deepEqual(body, [{
     session_id: 'qa-run-case',
     turno: 2,

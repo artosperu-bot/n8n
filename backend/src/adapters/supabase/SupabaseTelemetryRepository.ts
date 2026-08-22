@@ -40,6 +40,7 @@ export class SupabaseTelemetryRepository implements TelemetryRepository {
         apikey: this.#key,
         authorization: `Bearer ${this.#key}`,
         'content-type': 'application/json',
+        Prefer: 'resolution=ignore-duplicates',
       },
       body: JSON.stringify(body),
     });
