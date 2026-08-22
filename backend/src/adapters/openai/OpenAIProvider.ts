@@ -131,7 +131,7 @@ export class OpenAIProvider implements LlmProvider {
       'customerNeed solo puede describir cómo o dónde se usará realmente el producto; precio, stock, comparar, buscar una alternativa o agendar una prueba son intenciones, no casos de uso.',
       'Propón solo un siguiente paso comercial útil y acotado.',
       'nextBestAction DEBE ser exactamente uno de: ANSWER_ONLY, ASK_MISSING_FACT, OFFER_ALTERNATIVE, COMPARE, RECOMMEND, SOFT_CLOSE, ASSISTED_HANDOFF.',
-      'Usa ANSWER_ONLY cuando la pregunta factual ya puede responderse; ASK_MISSING_FACT solo si falta un dato que realmente cambiaría la decisión.',
+      'En el planner, ANSWER_ONLY significa únicamente que no propones una acción pre-respuesta de mayor prioridad; NO significa prohibir la progresión N+1 posterior. En preguntas factuales normales no fuerces discovery: el motor reevaluará después de responder si existe un +1 ligero relacionado. ASK_MISSING_FACT solo si el dato es desconocido, cambia una decisión y el backend sabe consumir la respuesta.',
       'No uses ASSISTED_HANDOFF solo porque el cliente preguntó precio, stock, foto o una característica.',
       'Si el cliente ya eligió, quiere comprar, cotizar o avanzar, no lo regreses a discovery.',
       'Devuelve SOLO JSON válido con estas claves: primaryIntent, secondaryIntents, targetProduct, mentionedProducts, referenceType, explicitSwitch, selectedProduct, comparisonProducts, attributes, customerNeed, customerProblem, priorities, objection, commercialStage, spinContribution, nextBestAction, confidence.',
