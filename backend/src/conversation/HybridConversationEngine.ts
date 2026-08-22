@@ -383,7 +383,12 @@ export class HybridConversationEngine {
       const forceDeterministic=(rawDecision.primaryIntent==='OTHER'&&deterministicOverride)||cameraImageConflict||strongReference||strongRecommendation||budgetAuthority||comparisonAuthority||needTargetConflict;
       const guardedDecision=forceDeterministic?{...rawDecision,primaryIntent:deterministicDecision.primaryIntent,targetProduct:deterministicDecision.targetProduct,referenceType:deterministicDecision.referenceType,selectedProduct:deterministicDecision.selectedProduct,mentionedProducts:deterministicDecision.mentionedProducts,comparisonProducts:deterministicDecision.comparisonProducts,attributes:deterministicDecision.attributes,nextBestAction:deterministicDecision.nextBestAction}:rawDecision;
       const initialCandidates=await this.#searchCandidates(input.message,guardedDecision.targetProduct);
-      let decision=validateTurnDecision(guardedDecision,baseState,unique(initialCandidates.map(productName)),deterministicDecision);
+      const candidateNames=unique(initialCandidates.map(productName));
+      const currentReference=resolveReference(input.message,baseState,{knownProducts:candidateNames});
+      if(currentReference.mentionedProducts.length){
+        deterministicDecision={...deterministicDecision,targetProduct:currentReference.queryTarget,mentionedProducts:currentReference.mentionedProducts,referenceType:currentReference.reason,explicitSwitch:currentReference.explicitSwitch,selectedProduct:currentReference.selectedProduct};
+      }
+      let decision=validateTurnDecision(guardedDecision,baseState,candidateNames,deterministicDecision);
       let intent=normalizeIntent(decision.primaryIntent,baseState.budget??null);
 
       const commercialState:ConversationState={...baseState,useCase:baseState.useCase??decision.customerNeed??null,problem:baseState.problem??decision.customerProblem??null,priorities:unique([...(baseState.priorities??[]),...(decision.priorities??[])]),objection:baseState.objection??decision.objection??null,spinFacts:unique([...(baseState.spinFacts??[]),decision.spinContribution])};

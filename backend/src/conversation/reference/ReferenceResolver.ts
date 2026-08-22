@@ -97,7 +97,7 @@ export function resolveReference(message: string, state: ReferenceState, options
   const universe = productUniverse(state, options);
   const directProducts = directNamedProducts(message, universe);
   const recommendedRef = /\b(el\s+)?recomendad[oa]\b|\bel\s+que\s+me\s+recomendaste\b/.test(t);
-  const selectionRef = /\b(me\s+quedo\s+con\s+ese|quiero\s+ese|elijo\s+ese|me\s+quedo\s+con\s+el\s+que\s+me\s+recomendaste)\b/.test(t);
+  const selectionRef = /\b(me\s+quedo\s+con\s+ese|quiero\s+ese|ya\s+ese\s+quiero|elijo\s+ese|me\s+quedo\s+con\s+el\s+que\s+me\s+recomendaste)\b/.test(t);
   const otherRef = /\bel\s+otro\b/.test(t);
   const recommended = canonicalProductName(state.recommendedProduct, universe);
 

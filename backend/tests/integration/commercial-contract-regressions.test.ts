@@ -95,6 +95,44 @@ test('unknown product with neutral alternatives never assigns one before an ambi
   assert.doesNotMatch(second.answer,/S\/\s*\d+/);
 });
 
+test('current valid product mention overrides a stale unknown-recovery recommendation', async () => {
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-unknown-explicit-recovery',{
+    sessionId:'s-unknown-explicit-recovery',contextVersion:0,turnCount:1,
+    activeProduct:null,queryTarget:'Armor 30',salientProduct:'Armor 30',selectedProduct:null,
+    recommendedProduct:'Armor 22',comparisonProducts:[],spinFacts:[],priorities:[],
+  });
+  const writer=new FakeLlmProvider();
+  const llm:LlmProvider={
+    async decide(input:LlmDecisionInput){
+      if(input.message!=='mejor dime del Armor X13')return writer.decide!(input);
+      return result(baseDecision({
+        primaryIntent:'INQUIRE_PRODUCT' as any,targetProduct:'Armor 22',mentionedProducts:[],
+        referenceType:'RECOMMENDED_FALLBACK',nextBestAction:'ANSWER_ONLY',
+      }));
+    },
+    write(input:LlmWriteInput){return writer.write(input);},
+  };
+  const r=await new HybridConversationEngine(deps(llm,conversations)).processTurn({
+    sessionId:'s-unknown-explicit-recovery',message:'mejor dime del Armor X13',messageId:'m-recover-x13',
+  });
+  assert.equal(r.debug.intent,'PRODUCT_INFO');
+  assert.equal(r.debug.queryTarget,'Armor X13');
+  assert.equal(r.state.activeProduct,'Armor X13');
+  assert.equal(r.state.recommendedProduct,'Armor 22');
+  assert.equal(r.state.selectedProduct,null);
+  assert.equal(r.debug.route,'RAG_PRODUCT');
+
+  const capability=await new HybridConversationEngine(deps(llm,conversations)).processTurn({sessionId:'s-unknown-explicit-recovery',message:'aguanta caidas?',messageId:'m-recover-capability'});
+  assert.equal(capability.debug.queryTarget,'Armor X13');
+  assert.equal(capability.state.activeProduct,'Armor X13');
+
+  const purchase=await new HybridConversationEngine(deps(llm,conversations)).processTurn({sessionId:'s-unknown-explicit-recovery',message:'ya ese quiero',messageId:'m-recover-purchase'});
+  assert.equal(purchase.debug.queryTarget,'Armor X13');
+  assert.equal(purchase.state.selectedProduct,'Armor X13');
+  assert.match(purchase.answer,/reserva de Armor X13/i);
+});
+
 test('strong institutional pre-router wins when semantic planner returns OTHER', async () => {
   const writer=new FakeLlmProvider();
   const llm:LlmProvider={
