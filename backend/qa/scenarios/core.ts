@@ -61,4 +61,16 @@ export const coreScenarios: QaScenario[] = [
     { message: 'Estoy viendo el Armor X13', expected: { activeProduct: 'Armor X13' } },
     { message: 'Ya entendí', expected: { activeProduct: 'Armor X13' } },
   ] },
+  {id:'CORE-UNKNOWN-RECOVERY',family:'TRUTH',title:'Producto desconocido recupera la mención canónica actual',turns:[
+    {message:'tienen el Armor 30?',oracleSpec:{domain:'SQL',intentClass:'PRODUCT_INFO',product:'Armor 30',expectedNba:'OFFER_ALTERNATIVES'}},
+    {message:'mejor dime del Armor X13',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X13',activeProduct:'Armor X13'},oracleSpec:{domain:'MEMORY',intentClass:'PRODUCT_INFO',expectedState:{activeProduct:'Armor X13'}}},
+    {message:'aguanta caidas?',expected:{intent:'CAPABILITY',queryTarget:'Armor X13',activeProduct:'Armor X13'},oracleSpec:{domain:'PRODUCT_RAG',intentClass:'CAPABILITY',product:'Armor X13',sections:['RESISTENCIA']}},
+    {message:'cuanto cuesta ese?',expected:{intent:'PRICE',queryTarget:'Armor X13',activeProduct:'Armor X13'},oracleSpec:{domain:'SQL',intentClass:'PRICE',product:'Armor X13'}},
+    {message:'ya ese quiero',expected:{intent:'PURCHASE',queryTarget:'Armor X13',activeProduct:'Armor X13'},oracleSpec:{domain:'MEMORY',intentClass:'PURCHASE',expectedState:{purchaseSignal:true,reservationStage:'NEED_DOCUMENT'}}},
+  ]},
+  {id:'CORE-COMPARISON-PAIR',family:'COMPARISON',title:'Comparación conserva ambos productos y sus hechos',turns:[
+    {message:'estoy entre Armor X13 y Armor 22, comparalos',expected:{intent:'COMPARE'},oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA']}},
+    {message:'cual tiene mejor bateria?',expected:{intent:'COMPARE'},oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['BATERIA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
+    {message:'y en camara?',expected:{intent:'COMPARE'},oracleSpec:{domain:'PRODUCT_RAG',intentClass:'COMPARE',products:['Armor X13','Armor 22'],sections:['CAMARA'],expectedReferenceBehavior:'COMPARISON_PAIR'}},
+  ]},
 ];

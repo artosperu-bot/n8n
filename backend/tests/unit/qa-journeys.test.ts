@@ -53,3 +53,10 @@ test('CORE includes the compact B2C N+1 funnel without a rigid budget intent enu
   assert.equal(funnel.turns[2].expected?.intent,undefined);
   assert.ok(coreScenarios.some(s=>s.id==='N1-B2C-INTERESTED-PRICE'&&s.turns.some(t=>t.message==='cuánto cuesta?')));
 });
+
+test('CORE includes unknown recovery and sustained comparison regressions',()=>{
+  const unknown=coreScenarios.find(s=>s.id==='CORE-UNKNOWN-RECOVERY');
+  assert.deepEqual(unknown?.turns.map(t=>t.message),['tienen el Armor 30?','mejor dime del Armor X13','aguanta caidas?','cuanto cuesta ese?','ya ese quiero']);
+  const comparison=coreScenarios.find(s=>s.id==='CORE-COMPARISON-PAIR');
+  assert.deepEqual(comparison?.turns.map(t=>t.message),['estoy entre Armor X13 y Armor 22, comparalos','cual tiene mejor bateria?','y en camara?']);
+});
