@@ -68,9 +68,17 @@ function moneySupported(input:LlmWriteInput,answer:string,domain?:'INSTITUTIONAL
   return values.every(v=>supported.has(v));
 }
 function cleanPresentation(answer:string):string {
+  let bulletCount=0;
   return answer
     .split('\n')
-    .map(line=>line.replace(/^\s*(?:[-*]\s*)?\*{0,2}(?:Conclusi[oó]n|Datos clave|Consecuencia pr[aá]ctica|Recomendaci[oó]n|Postura|Trade-?off)\*{0,2}\s*:\s*/i,''))
+    .map(line=>{
+      const cleaned=line.replace(/^\s*(?:[-*]\s*)?\*{0,2}(?:Conclusi[oó]n|Datos clave|Consecuencia pr[aá]ctica|Recomendaci[oó]n|Postura|Trade-?off)\*{0,2}\s*:\s*/i,'');
+      const bullet=cleaned.match(/^\s*[-*•]\s+(.+)$/);
+      if(!bullet)return cleaned.replace(/\*\*/g,'');
+      bulletCount+=1;
+      return bulletCount<=3?`- ${bullet[1].replace(/\*\*/g,'')}`:'';
+    })
+    .filter(Boolean)
     .join('\n')
     .replace(/\n{3,}/g,'\n\n')
     .trim();

@@ -103,3 +103,14 @@ test('rejects rounded technical values that change authoritative RAG facts',asyn
   assert.equal(r.answer,'Puedo confirmar la frecuencia exacta en la ficha técnica.');
   assert.equal(r.fallback.error,'UNSUPPORTED_NUMERIC_FACT');
 });
+
+test('normalizes chat lists to three plain useful bullets',async()=>{
+  const answer='Armor X13 — ficha rápida:\n* **Pantalla:** HD+.\n* **Resistencia:** IP68.\n* **Batería:** autonomía amplia.\n* **Cámara:** principal.\n* **Memoria:** ampliable.\n* **Procesador:** Helio.';
+  const r=await safeWrite(llm(answer),{
+    ...base,intent:'PRODUCT_INFO',allowedProducts:['Armor X13'],
+    rag:[{text:'Pantalla HD+. Resistencia IP68. Batería de autonomía amplia. Cámara principal. Memoria ampliable. Procesador Helio.',source:'TEST',productId:'P-X13',section:'GENERAL',domain:'PRODUCT'}],
+  } as any,'fallback');
+  assert.equal((r.answer.match(/^\s*-\s+/gm)??[]).length,3);
+  assert.doesNotMatch(r.answer,/\*\*/);
+  assert.doesNotMatch(r.answer,/Memoria|Procesador/);
+});
