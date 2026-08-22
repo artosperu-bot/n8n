@@ -395,15 +395,21 @@ respuesta actual resuelta
 → writer
 ```
 
-La oportunidad debe considerar señales explícitas antes que scores, el historial no repetido de interés, la etapa y todos los hechos comerciales vigentes. Una consulta aislada puede terminar en `ANSWER_ONLY`; precio, stock o un FAB verificado después de interacciones significativas pueden avanzar solo si las precondiciones reales del turno permiten ejecutar el NBA.
+La oportunidad debe considerar señales explícitas antes que scores, el historial no repetido de interés, la etapa y todos los hechos comerciales vigentes. El interés bajo cambia la intensidad del N+1, pero no lo elimina normalmente. Precio, stock o un atributo verificado deben añadir exactamente una continuación ligera relacionada cuando SQL/Product RAG permiten hacerlo con seguridad.
 
 Regresiones compactas obligatorias:
 
 - precio después de interacciones significativas progresa cuando está soportado;
 - atributo verificado con problema/prioridad maduros puede progresar;
-- hecho técnico aislado permanece `ANSWER_ONLY`;
+- hecho técnico aislado y verificado recibe un `RELATED_VALUE` ligero, declarativo y grounded;
 - no se formula una pregunta inútil;
 - SPIN no desplaza una acción superior;
 - se entrega exactamente un NBA;
 - capability no ejecutable degrada de forma segura;
 - producto y etapa conservan continuidad.
+
+Regla autoritativa:
+
+> STECH N+1 significa que una pregunta normal elegible recibe la respuesta grounded a la solicitud actual más exactamente una continuación relacionada, útil y ejecutable. `LOW` cambia la intensidad del `+1`; no lo elimina normalmente. `ANSWER_ONLY` es un fallback seguro excepcional, no el default del primer turno ni de una pregunta comercial con interés bajo.
+
+El selector reusable puede producir `RELATED_VALUE` cuando existe `relatedNextValue` estructurado. Ese valor debe derivarse antes del writer exclusivamente desde SQL o `verifiedFeatures`, pasar `CAN_EXECUTE` y ser entregado una sola vez por la guarda post-writer. No puede contener promesas operativas, cifras nuevas, cambios de producto ni una pregunta adicional.

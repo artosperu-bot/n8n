@@ -9,6 +9,7 @@ type ProgressionInput={
   resolvedProduct:string|null;
   verifiedCurrentAnswer:boolean;
   verifiedAlternatives?:number;
+  relatedValueAvailable?:boolean;
 };
 
 type ProgressionResult={
@@ -67,6 +68,10 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
       return{level:'MEDIUM',candidateNba:'COMPARE',reason:'VERIFIED_ALTERNATIVES'};
     }
     return{level:'MEDIUM',candidateNba:'SOFT_CLOSE',reason:'MATURE_VERIFIED_CONTEXT'};
+  }
+
+  if(input.verifiedCurrentAnswer&&input.resolvedProduct&&input.relatedValueAvailable&&PROGRESSABLE_ANSWERS.has(intent)){
+    return{level:'LOW',candidateNba:'RELATED_VALUE',reason:'LIGHT_VERIFIED_CONTINUATION'};
   }
 
   return{level:'LOW',candidateNba:current==='ASK_MISSING_FACT'?current:'ANSWER_ONLY',reason:'NO_USEFUL_EXECUTABLE_PROGRESSION'};

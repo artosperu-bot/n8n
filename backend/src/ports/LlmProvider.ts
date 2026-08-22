@@ -5,6 +5,13 @@ export type RecentDialogueMessage = {
   content: string;
 };
 
+export type RelatedNextValue = {
+  kind:'VERIFIED_AVAILABILITY'|'SAFE_FEATURE_VALUE';
+  sourceDomain:'SQL'|'PRODUCT_RAG';
+  basisKeys:string[];
+  customerSafeText:string;
+};
+
 export type LlmWriteInput = {
   message: string;
   intent: string;
@@ -53,6 +60,7 @@ export type LlmWriteInput = {
   implications?: string[];
   pendingQuestion?: string | null;
   pendingAction?: string | null;
+  relatedNextValue?: RelatedNextValue | null;
   imageUrls?: string[];
   /** Internal boundary marker: the engine prepared and validated the commercial contract. */
   commercialContractPrepared?: boolean;

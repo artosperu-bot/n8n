@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluatePostAnswerCommercialProgression } from '../../src/conversation/nba/PostAnswerCommercialProgression.ts';
 import { prepareCommercialWriteInput } from '../../src/conversation/commercial/CommercialWriteContract.ts';
+import { safeWrite } from '../../src/conversation/writer/WriterGuard.ts';
+import { priceResponse, stockResponse } from '../../src/conversation/commercial/ResponsePolicy.ts';
+import type { LlmProvider } from '../../src/ports/LlmProvider.ts';
 
 test('A: a price lookup after meaningful interactions proposes executable progression',()=>{
   const result=evaluatePostAnswerCommercialProgression({
@@ -20,13 +23,58 @@ test('B: verified capability plus mature problem context may advance to a bounde
   assert.equal(result.candidateNba,'SOFT_CLOSE');
 });
 
-test('C: an isolated technical fact remains ANSWER_ONLY',()=>{
+test('C: an isolated verified technical fact receives a light related value, not a forced question',()=>{
   const result=evaluatePostAnswerCommercialProgression({
-    intent:'CAPABILITY',currentNba:'ANSWER_ONLY',resolvedProduct:'Armor 22',verifiedCurrentAnswer:true,
+    intent:'CAPABILITY',currentNba:'ANSWER_ONLY',resolvedProduct:'Armor 22',verifiedCurrentAnswer:true,relatedValueAvailable:true,
     state:{activeProduct:'Armor 22',levelOfInterest:4,interestEvents:['ATTRIBUTE:ARMOR_22:RAM']},
   });
   assert.equal(result.level,'LOW');
-  assert.equal(result.candidateNba,'ANSWER_ONLY');
+  assert.equal(result.candidateNba,'RELATED_VALUE');
+  const prepared=prepareCommercialWriteInput({
+    message:'¿cuánta RAM tiene?',intent:'CAPABILITY',state:{activeProduct:'Armor 22',currentAttributes:['RAM']},
+    decision:{nextBestAction:result.candidateNba} as any,allowedProducts:['Armor 22'],
+    rag:[{text:'RAM física: 8 GB. RAM virtual máxima: hasta 8 GB.',source:'TEST:MEMORIA',section:'MEMORIA',domain:'PRODUCT',productId:'P-22'}],
+  });
+  assert.equal(prepared.nextBestAction,'RELATED_VALUE');
+  assert.equal(prepared.capabilityAction,'ADD_RELATED_VALUE');
+  assert.match(prepared.relatedNextValue?.customerSafeText??'',/multitarea|tareas/i);
+});
+
+test('LOW price with verified availability selects one light SQL-grounded related value',()=>{
+  const result=evaluatePostAnswerCommercialProgression({
+    intent:'PRICE',currentNba:'ANSWER_ONLY',resolvedProduct:'Armor 22',verifiedCurrentAnswer:true,relatedValueAvailable:true,
+    state:{activeProduct:'Armor 22',levelOfInterest:8,interestEvents:['PRICE:ARMOR_22']},
+  });
+  assert.equal(result.level,'LOW');
+  assert.equal(result.candidateNba,'RELATED_VALUE');
+  const prepared=prepareCommercialWriteInput({
+    message:'¿cuánto cuesta?',intent:'PRICE',state:{},decision:{nextBestAction:result.candidateNba} as any,
+    allowedProducts:['Producto Prueba'],quote:{product:'Producto Prueba',shortName:'Producto Prueba',price:899,stock:3,currency:'PEN',source:'FAKE_TEST_DATA'},
+  });
+  assert.equal(prepared.resolvedProduct,'Producto Prueba');
+  assert.equal(prepared.nextBestAction,'RELATED_VALUE');
+  assert.equal(prepared.capabilityAction,'ADD_RELATED_VALUE');
+  const answer=priceResponse(prepared.quote??null,false,prepared.relatedNextValue?.customerSafeText??null);
+  assert.match(answer,/899/);
+  assert.match(answer,/disponible/i);
+  assert.equal((answer.match(/disponible/gi)??[]).length,1);
+});
+
+test('unavailable stock does not invent an alternative continuation',()=>{
+  const answer=stockResponse({product:'Producto Prueba',price:899,stock:0,currency:'PEN',source:'FAKE_TEST_DATA'});
+  assert.equal(answer,'Ahora no está disponible.');
+});
+
+test('writer guard deterministically delivers exactly one declarative related value',async()=>{
+  const llm:LlmProvider={async write(){return{text:'Tiene 8 GB de RAM física + hasta 8 GB de RAM virtual.',model:'test',usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},durationMs:0};}};
+  const result=await safeWrite(llm,{
+    message:'¿cuánta RAM tiene?',intent:'CAPABILITY',state:{activeProduct:'Armor 22',currentAttributes:['RAM']},
+    decision:{nextBestAction:'RELATED_VALUE'} as any,allowedProducts:['Armor 22'],
+    rag:[{text:'RAM física: 8 GB. RAM virtual máxima: hasta 8 GB.',source:'TEST:MEMORIA',section:'MEMORIA',domain:'PRODUCT',productId:'P-22'}],
+  },'Tiene 8 GB de RAM física + hasta 8 GB de RAM virtual.');
+  assert.equal(result.nextBestAction,'RELATED_VALUE');
+  assert.equal((result.answer.match(/multitarea/gi)??[]).length,1);
+  assert.doesNotMatch(result.answer,/[¿?]/);
 });
 
 test('D: progression does not force a useless question when the decision context is complete',()=>{

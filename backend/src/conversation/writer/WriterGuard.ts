@@ -83,6 +83,10 @@ function acknowledgeKnownContext(input:LlmWriteInput,answer:string):string{
 function executeNba(input:LlmWriteInput,answer:string):string {
   const action=String(input.nextBestAction??input.decision?.nextBestAction??'').toUpperCase();
   if(action==='ANSWER_ONLY')return answer;
+  if(action==='RELATED_VALUE'){
+    const related=String(input.relatedNextValue?.customerSafeText??'').trim();
+    return related&&!fold(answer).includes(fold(related))?`${answer.trim()} ${related}`.trim():answer;
+  }
   if(action==='RECOMMEND'){
     const product=String(input.recommendedProduct??input.state?.recommendedProduct??'').trim();
     return product&&!executesRecommendation(answer,product)?`Te recomiendo ${product}. ${answer}`:answer;
@@ -242,7 +246,7 @@ function guardGeneratedAnswer(input:LlmWriteInput,answer:string):string|null {
   if(stockLeak.test(answer))return 'RAW_STOCK_QUANTITY';
 
   const roboticMeta=/\b(?:cat[aá]logo\s+verificado|evidencia\s+verificada|datos\s+(?:disponibles|suministrados)|seg[uú]n\s+(?:mi|el)\s+sistema(?:\s+interno)?|seg[uú]n\s+el\s+rag|querytarget|\bintent\b)\b/i;
-  const internalControl=/\b(?:SOFT_CLOSE|ANSWER_ONLY|ASK_MISSING_FACT|OFFER_ALTERNATIVE|COLLECT_RESERVATION_DATA|EXECUTE_RESERVATION|ASSISTED_HANDOFF|RECOMMEND_WITHIN_BUDGET|N\+1)\b/;
+  const internalControl=/\b(?:SOFT_CLOSE|ANSWER_ONLY|RELATED_VALUE|ASK_MISSING_FACT|OFFER_ALTERNATIVE|COLLECT_RESERVATION_DATA|EXECUTE_RESERVATION|ASSISTED_HANDOFF|RECOMMEND_WITHIN_BUDGET|N\+1)\b/;
   const qaLanguage=/\b(?:no\s+hay\s+evidencia(?:\s+comparativa)?|las\s+fuentes\s+no\s+indican|trade-?off|criterio\s+diferenciador|confidence|score|RAG|oracle|datos\s+recuperados)\b/i;
   const internalSourcing=/\b(?:seg[uú]n\s+(?:la|su|una)\s+ficha\s+t[eé]cnica|ficha\s+t[eé]cnica|seg[uú]n\s+(?:la\s+)?fuente(?:\s+consultada)?|fuente\s+disponible|evidencia(?:\s+(?:disponible|consultada|recuperada|verificada))?)\b/i;
   if(roboticMeta.test(answer)||internalControl.test(answer)||qaLanguage.test(answer)||internalSourcing.test(answer))return 'ROBOTIC_META_LANGUAGE';
@@ -308,7 +312,7 @@ function stripTrailingQuestion(answer:string):string {
   return boundary>=0?before.slice(0,boundary+1).trim():'';
 }
 function internalFallback(answer:string):boolean{
-  return /\b(?:SOFT_CLOSE|ANSWER_ONLY|ASK_MISSING_FACT|OFFER_ALTERNATIVE|COLLECT_RESERVATION_DATA|EXECUTE_RESERVATION|ASSISTED_HANDOFF|RECOMMEND_WITHIN_BUDGET|N\+1)\b|\bcompara\b[^.]{0,90}\bde forma sim[eé]trica\b/i.test(answer);
+  return /\b(?:SOFT_CLOSE|ANSWER_ONLY|RELATED_VALUE|ASK_MISSING_FACT|OFFER_ALTERNATIVE|COLLECT_RESERVATION_DATA|EXECUTE_RESERVATION|ASSISTED_HANDOFF|RECOMMEND_WITHIN_BUDGET|N\+1)\b|\bcompara\b[^.]{0,90}\bde forma sim[eé]trica\b/i.test(answer);
 }
 function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
   if(requestedUnsupportedCapability(input.message))return /\b(?:prueba|demo|demostraci[oó]n|cita)\b/i.test(input.message)

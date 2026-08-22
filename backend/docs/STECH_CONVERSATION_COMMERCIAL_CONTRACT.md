@@ -735,6 +735,27 @@ La evaluación usa `purchaseSignal`, `interestSignal`, etapa, `levelOfInterest`,
 
 - `HIGH`: compra, selección o interés explícito con una acción soportada.
 - `MEDIUM`: contexto maduro y respuesta verificada que habilitan una progresión útil.
-- `LOW`: dato aislado, contexto insuficiente o ausencia de una acción soportada; termina en `ANSWER_ONLY`.
+- `LOW`: continuación ligera relacionada. Puede ser un valor declarativo derivado de una característica verificada o un dato SQL relacionado; no implica intención de compra ni obliga a preguntar.
 
 No se fuerza una pregunta para aparentar progresión. SPIN solo puede aportar un `missingFact` desconocido, decisivo y consumible, y nunca desplaza una acción de mayor valor. El turno entrega exactamente un NBA y `CAN_EXECUTE` puede degradarlo únicamente a una pregunta válida o a `ANSWER_ONLY`, sin inventar otra promesa.
+
+### N+1 normal elegible
+
+Una pregunta comercial o de producto normal debe recibir:
+
+```text
+RESPUESTA DIRECTA Y GROUNDED
++
+EXACTAMENTE UNA CONTINUACIÓN RELACIONADA, ÚTIL Y EJECUTABLE
+```
+
+El nivel de interés cambia la intensidad, no elimina normalmente el `+1`:
+
+- `LOW` → N+1 ligero;
+- `MEDIUM` → N+1 consultivo;
+- `HIGH` → progresión comercial fuerte;
+- compra explícita → siguiente paso real de compra/reserva.
+
+`ANSWER_ONLY` es excepcional: se usa cuando no existe continuación segura, esta exigiría fabricar datos o capacidades, existe una denegación de capability, hay un estado terminal o avanzar resultaría engañoso. No es el default de una primera pregunta ni de precio, stock o atributo con interés bajo.
+
+`RELATED_VALUE` representa una continuación declarativa no operativa. Solo es ejecutable cuando el contrato pre-writer deriva `relatedNextValue` desde SQL o `verifiedFeatures`; el writer no decide su existencia y la guarda post-writer asegura que aparezca una sola vez sin añadir otra pregunta o CTA.

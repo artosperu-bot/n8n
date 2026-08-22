@@ -3,6 +3,7 @@ import { fold } from '../../shared/text.ts';
 
 export type CommercialCapabilityAction =
   | 'ANSWER_ONLY'
+  | 'ADD_RELATED_VALUE'
   | 'ASK_USE_CASE'
   | 'ASK_PROBLEM'
   | 'ASK_PRIORITY'
@@ -22,6 +23,7 @@ export type CommercialCapabilities = {
   askPriority:boolean;
   askBudget:boolean;
   askProduct:boolean;
+  addRelatedValue:boolean;
   checkPrice:boolean;
   checkStock:boolean;
   answerProductFeature:boolean;
@@ -46,7 +48,7 @@ export type CommercialCapabilities = {
 // Only operations implemented by the current backend. False entries are
 // intentional: they prevent the writer from promising aspirational workflows.
 export const IMPLEMENTED_COMMERCIAL_CAPABILITIES:Readonly<CommercialCapabilities>=Object.freeze({
-  askUseCase:true,askProblem:true,askPriority:true,askBudget:true,askProduct:true,
+  askUseCase:true,askProblem:true,askPriority:true,askBudget:true,askProduct:true,addRelatedValue:true,
   checkPrice:true,checkStock:true,answerProductFeature:true,answerWarranty:true,answerDelivery:true,answerPayment:true,answerLocation:true,
   compareProducts:true,recommendProduct:true,showImages:true,offerAlternative:true,softClose:true,
   collectReservationData:true,requestHumanHandoff:true,
@@ -56,7 +58,7 @@ export const IMPLEMENTED_COMMERCIAL_CAPABILITIES:Readonly<CommercialCapabilities
 function unique(values:Array<string|null|undefined>):string[]{return[...new Set(values.map(value=>String(value??'').trim()).filter(Boolean))];}
 function same(a:string|null|undefined,b:string|null|undefined):boolean{return Boolean(a&&b&&fold(a)===fold(b));}
 function resolvedProduct(input:LlmWriteInput):string|null{
-  return input.selectedProduct??input.recommendedProduct??input.activeProduct??input.state?.selectedProduct??input.state?.recommendedProduct??input.state?.activeProduct??null;
+  return input.resolvedProduct??input.selectedProduct??input.recommendedProduct??input.activeProduct??input.state?.selectedProduct??input.state?.recommendedProduct??input.state?.activeProduct??input.quote?.shortName??input.quote?.product??null;
 }
 function productEvidenceCount(input:LlmWriteInput):number{
   return new Set((input.verifiedFeatures??[]).map(fact=>String(fact.productId??'').trim()).filter(Boolean)).size;
@@ -103,6 +105,9 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
     askPriority:base.askPriority&&decisionImpact&&!(input.priorities??[]).length,
     askBudget:base.askBudget&&decisionImpact&&input.budget==null,
     askProduct:base.askProduct&&decisionImpact&&!product,
+    addRelatedValue:base.addRelatedValue&&Boolean(product&&input.relatedNextValue&&(
+      input.relatedNextValue.sourceDomain==='SQL'?sqlResolved(input):featureEvidence
+    )),
     checkPrice:base.checkPrice&&sqlResolved(input)&&input.quote?.price!=null,
     checkStock:base.checkStock&&sqlResolved(input)&&input.quote?.stock!=null,
     answerProductFeature:base.answerProductFeature&&Boolean(product&&featureEvidence),
@@ -123,6 +128,7 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
 export function canExecuteCapability(action:CommercialCapabilityAction,capabilities:CommercialCapabilities,decisionImpact:boolean):boolean{
   switch(action){
     case 'ANSWER_ONLY':return true;
+    case 'ADD_RELATED_VALUE':return capabilities.addRelatedValue;
     case 'ASK_USE_CASE':return decisionImpact&&capabilities.askUseCase;
     case 'ASK_PROBLEM':return decisionImpact&&capabilities.askProblem;
     case 'ASK_PRIORITY':return decisionImpact&&capabilities.askPriority;
