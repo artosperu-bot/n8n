@@ -62,13 +62,20 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
   const currentIntent=String(canonicalPatch.lastIntent??'').toUpperCase();
   const currentRoute=String(canonicalPatch.lastRoute??'').toUpperCase();
   const trace=canonicalPatch.lastDecisionTrace as any;
-  const recommendationWinner=String(trace?.recommendation?.winner??'').trim()||null;
+  const tracedWinner=String(trace?.recommendation?.winner??'').trim()||null;
   const recommendationTopTie=topRecommendationTie(trace);
+  const patchRecommendation=String(canonicalPatch.recommendedProduct??'').trim()||null;
+  const recommendationWinner=tracedWinner??(
+    patchRecommendation&&sameProduct(patchRecommendation,canonicalPatch.salientProduct)
+      ?patchRecommendation
+      :null
+  );
   const recommendationFocus=Boolean(
     currentRoute==='RAG_RECOMMENDATION'
     && ['RECOMMEND','RECOMMEND_WITHIN_BUDGET','EVALUATE_USE','HANDLE_PRICE_OBJECTION'].includes(currentIntent)
     && recommendationWinner
     && sameProduct(recommendationWinner,canonicalPatch.recommendedProduct)
+    && !recommendationTopTie
   );
 
   let productFlowReason='STATE_PATCH';
@@ -81,7 +88,14 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
     if(canonicalPatch.lastResolvedProductCode)next.activeProductCode=canonicalPatch.lastResolvedProductCode;
   }else if(canonicalPatch.explicitSwitch&&canonicalPatch.selectedProduct){
     productFlowReason='EXPLICIT_SELECTION_SWITCH';
+  }else if(recommendationTopTie&&currentRoute==='RAG_RECOMMENDATION'){
+    productFlowReason='RECOMMENDATION_TIE_PRESERVE_FOCUS';
   }
+
+  // Closing stage is deterministic authority. A stale semantic stage such as
+  // DESCUBRIMIENTO/CONSIDERACION cannot move a purchase or human handoff backwards.
+  if(currentIntent==='PURCHASE')next.commercialStage='CIERRE';
+  if(['HUMAN','QUOTE'].includes(currentIntent)||canonicalPatch.handoffActive===true)next.commercialStage='CIERRE_ASISTIDO';
 
   const preserveAssistedJourney=previous.handoffActive===true
     && canonicalPatch.handoffActive===false
@@ -113,7 +127,7 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
     consistency:{
       staleActiveDetected,
       activeMatchesRecommendation:recommendationWinner?sameProduct(next.activeProduct,recommendationWinner):null,
-      selectedPreserved:next.selectedProduct===previous.selectedProduct||Boolean(canonicalPatch.explicitSwitch),
+      selectedPreserved:(next.selectedProduct??null)===(previous.selectedProduct??null)||Boolean(canonicalPatch.explicitSwitch),
       arbitraryWinnerRisk:recommendationTopTie,
     },
   };
