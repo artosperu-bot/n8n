@@ -6,6 +6,21 @@ Actualizado: 2026-08-22
 
 Este documento describe el contrato operativo actual del backend. No sustituye migraciones, contratos SQL ni configuración segura del entorno.
 
+## Jerarquía documental
+
+1. `STECH_CONVERSATION_COMMERCIAL_CONTRACT.md` — autoridad funcional comercial aprobada.
+2. `STECH_BACKEND_AUTHORITY.md` — autoridad factual, integración y seguridad.
+3. `CONVERSATION-CODE-AUTHORITY-MAP.md` — implementación real, ownership y conflictos.
+4. `SPIN-FAB-N1-POLITICA-COMERCIAL.md` — complemento únicamente donde no contradiga el contrato comercial principal.
+5. Planes, auditorías y reportes LIVE-QA — evidencia histórica; no redefinen por sí solos el contrato vigente.
+
+Cuando dos documentos se contradigan, prevalece el de mayor nivel en esta jerarquía.
+
+## Runtime
+
+- `/api/chat` usa `HybridConversationEngine` construido por `bootstrap.ts`.
+- `ConversationEngine.ts` es código legacy/compatibilidad y no es autoridad de comportamiento del runtime actual.
+
 ## Autoridades
 
 - Precio, stock, catálogo e imágenes: SQL Server mediante procedimientos permitidos.
@@ -13,7 +28,7 @@ Este documento describe el contrato operativo actual del backend. No sustituye m
 - Hechos técnicos: RAG de producto, aislado por `productRagId` y sección.
 - Políticas, garantía, envío, pagos y tienda: RAG institucional.
 - Estado conversacional: repositorio configurado (`memory` o Supabase).
-- Planner y writer: orientan intención y redacción; no crean hechos ni cambian autoridades.
+- Planner y writer: orientan interpretación/redacción; no crean hechos ni cambian autoridades.
 - n8n: automatización posterior, fail-soft; no decide la respuesta comercial.
 
 ## Identidad y referencias
@@ -34,6 +49,7 @@ Este documento describe el contrato operativo actual del backend. No sustituye m
 - Sin ganador pueden presentarse alternativas neutrales y pedirse un criterio útil.
 - El orden de catálogo no desempata ni cambia silenciosamente `activeProduct`.
 - `winner`, `winnerReason`, candidatos y criterios quedan en el trace de decisión.
+- Catálogo existente, disponibilidad, elegibilidad y ranking son conceptos distintos: un producto sin stock puede existir en catálogo aunque no sea elegible como ganador inmediato.
 
 ## Compra y reserva
 
@@ -48,6 +64,7 @@ Este documento describe el contrato operativo actual del backend. No sustituye m
 
 - Precio/stock usan respuestas deterministas basadas en SQL.
 - Stock al cliente se expresa como disponibilidad, sin cantidad cruda.
+- Evidencia interna y texto mostrable son capas distintas: un bloque RAG crudo, metadata de documento o envelope de indexación nunca es una respuesta lista para cliente.
 - El writer solo puede usar productos y hechos permitidos.
 - Cifras técnicas con unidad deben coincidir exactamente con evidencia autoritativa; no se redondean.
 - Montos institucionales respaldados, como umbrales de envío, no se clasifican como precio de producto.
@@ -55,10 +72,21 @@ Este documento describe el contrato operativo actual del backend. No sustituye m
 
 ## N+1 comercial
 
-- QA separa decisión, entrega visible y progresión comercial.
-- Un enum interno no acredita por sí solo que el N+1 fue entregado.
-- `ASK_MISSING_FACT`, `SOFT_CLOSE`, recomendación, comparación, reserva y handoff deben ser visibles en la respuesta cuando corresponden.
-- `ANSWER_ONLY` sigue siendo válido para hechos exactos, políticas naturales o aclaraciones específicas.
+Contrato vigente:
+
+```text
+N = resolver correctamente la pregunta/intención actual
++1 = exactamente una continuación relacionada, útil y ejecutable
+```
+
+- `LOW` usa N+1 ligero; no implica pregunta ni intención de compra.
+- `MEDIUM` usa continuación consultiva.
+- `HIGH` usa progresión comercial más fuerte.
+- Compra explícita usa el siguiente paso real de compra/reserva.
+- `ANSWER_ONLY` es excepcional cuando no existe una continuación segura/útil, cuando avanzar exigiría fabricar datos/capacidades, ante una denegación de capability, estado terminal o cuando avanzar sería engañoso.
+- `ASK_MISSING_FACT` solo puede llegar al cliente cuando `UNKNOWN && DECISION_IMPACT && CAN_CONSUME_ANSWER`.
+- N+1 nunca puede omitir, sustituir o distorsionar N.
+- Un enum interno no acredita por sí solo que el N+1 fue entregado: la continuación debe ser visible cuando corresponde.
 - No se repite discovery ya conocido ni se regresa a SPIN durante compra.
 
 ## Observabilidad
@@ -79,4 +107,5 @@ Este documento describe el contrato operativo actual del backend. No sustituye m
 
 - Tests unitarios e integración protegen referencia, estado, reserva, evidencia, N+1, telemetría y estilo.
 - `npm run qa:golden100` no se ejecuta automáticamente.
-- La certificación final usa QA CORE conversacional local y revisión de la respuesta visible, además de estado/debug.
+- La certificación final usa QA CORE conversacional local ejecutado externamente por el usuario y revisión de la respuesta visible, además de estado/debug.
+- GitHub Actions no es autoridad para QA conversacional live.
