@@ -197,6 +197,7 @@ export class ConversationEngine {
       quantity: commercial.quantity,
       invoiceRequired: commercial.invoiceRequired,
       objection: budget.priceObjection ? 'precio' : commercial.objection,
+      interestSignal: commercial.interestSignal,
       purchaseSignal: commercial.purchaseSignal,
       comparisonProducts,
     };
@@ -425,6 +426,7 @@ export class ConversationEngine {
       quantity: commercial.quantity,
       invoiceRequired: commercial.invoiceRequired,
       objection: budget.priceObjection ? 'precio' : commercial.objection,
+      interestSignal: commercial.interestSignal,
       purchaseSignal: intentPlan.primary === 'PURCHASE' ? true : commercial.purchaseSignal,
       commercialStage: stageFor(intent),
       commercialStrategy: strategyFor(intent),

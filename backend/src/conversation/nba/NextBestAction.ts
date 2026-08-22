@@ -17,9 +17,9 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'PRICE_AVAILABILITY':
     case 'PRICE':
     case 'STOCK':
-      // A cold factual lookup should end cleanly. Once the customer explicitly
-      // selected a product, a bounded soft close is useful and does not restart discovery.
-      return state.selectedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
+      // A cold factual lookup should end cleanly. Selection or expressed interest
+      // permits a bounded soft close without turning interest into a purchase.
+      return state.selectedProduct || (state.interestSignal && state.activeProduct) ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
     case 'PRODUCT_INFO':
     case 'ATTRIBUTE':

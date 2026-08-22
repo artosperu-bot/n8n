@@ -66,6 +66,7 @@ export type ConversationState = {
   quantity?: number|null;
   invoiceRequired?: boolean|null;
   objection?: string|null;
+  interestSignal?: boolean;
   purchaseSignal?: boolean;
   commercialStage?: string|null;
   commercialStrategy?: string|null;

@@ -2,7 +2,7 @@ import type { ConversationState } from '../../domain/types.ts';
 import { fold } from '../../shared/text.ts';
 
 export type CommercialFacts = Pick<ConversationState,
-  'customerType' | 'sector' | 'useCase' | 'problem' | 'priorities' | 'quantity' | 'invoiceRequired' | 'objection' | 'purchaseSignal' | 'spinFacts'
+  'customerType' | 'sector' | 'useCase' | 'problem' | 'priorities' | 'quantity' | 'invoiceRequired' | 'objection' | 'interestSignal' | 'purchaseSignal' | 'spinFacts'
 >;
 
 const PRIORITIES: Array<[string, RegExp]> = [
@@ -27,6 +27,11 @@ function hasStrongPurchaseSignal(text: string): boolean {
     || /\b(?:separar|reservar)(?:lo|la)?\b/.test(text)
     || /\bquiero\s+(?:q|que)\s+(?:un\s+)?asesor\s+(?:siga|continue|continúe|me\s+ayude)(?:\s+con\s+la\s+compra)?\b/.test(text)
     || /\b(?:hablemos|hablar)\s+(?:para|de)\s+compr/.test(text);
+}
+
+function hasInterestSignal(text:string):boolean {
+  return /\b(?:me\s+interesa|estoy\s+interesad[oa]|me\s+interesaria|podria\s+interesarme)\b/.test(text)
+    || hasStrongPurchaseSignal(text);
 }
 
 export function extractCommercialFacts(message: string, previous: ConversationState): CommercialFacts {
@@ -63,6 +68,9 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
   const purchaseSignal = hasStrongPurchaseSignal(t)
     ? true
     : (previous.purchaseSignal ?? false);
+  const interestSignal = hasInterestSignal(t)
+    ? true
+    : (previous.interestSignal ?? false);
 
   const spinFacts = unique([
     ...(previous.spinFacts ?? []),
@@ -75,5 +83,5 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
     ...(invoiceRequired ? ['requiere:factura'] : []),
   ]);
 
-  return { customerType, sector, useCase, problem, priorities, quantity, invoiceRequired, objection, purchaseSignal, spinFacts };
+  return { customerType, sector, useCase, problem, priorities, quantity, invoiceRequired, objection, interestSignal, purchaseSignal, spinFacts };
 }

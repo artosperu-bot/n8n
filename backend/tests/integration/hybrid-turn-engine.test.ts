@@ -89,6 +89,22 @@ test('recommendation tie without differentiating evidence preserves focus and ex
   assert.doesNotMatch(result.answer,/\b(?:te recomiendo|la mejor opci[oó]n es)\b/i);
 });
 
+test('conditional availability interest is remembered without confirming purchase or starting reservation',async()=>{
+  const conversations=new MemoryConversationRepository();
+  await conversations.saveState('s-conditional-interest',{
+    activeProduct:'Armor X13',queryTarget:'Armor X13',salientProduct:'Armor X13',selectedProduct:null,turnCount:2,
+  });
+  const result=await new HybridConversationEngine(deps(new FakeLlmProvider(),conversations)).processTurn({
+    sessionId:'s-conditional-interest',message:'si está disponible me interesa',
+  });
+  assert.equal(result.debug.intent,'STOCK');
+  assert.equal(result.debug.route,'SQL_STOCK');
+  assert.equal(result.state.interestSignal,true);
+  assert.equal(result.state.purchaseSignal,false);
+  assert.equal(result.state.reservationStage,null);
+  assert.equal(result.debug.nextBestAction,'SOFT_CLOSE');
+});
+
 test('direct image request remains a deterministic URL-only fast path', async () => {
   const engine = new HybridConversationEngine(deps(new FakeLlmProvider()));
   const r = await engine.processTurn({sessionId:'s-images',message:'Mándame imágenes del Armor 22'});

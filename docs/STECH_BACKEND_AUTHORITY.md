@@ -45,14 +45,14 @@ Leave the STECH conversational sales backend correct, useful, observable, regres
 - Reservation turn ownership closed in code: only compatible field data or explicit reservation operations own the turn; interruptions preserve pending state and abandonment clears local capture without claiming external cancellation.
 - Deterministic budget authority closed in code: explicit parsed budget remains primary over incompatible semantic planner intents while compatible capability criteria remain available.
 - Recommendation evidence sufficiency closed in code: zero comparable evidence and unresolved top ties expose an explicit no-winner reason, preserve product focus, and offer neutral alternatives or request a useful criterion; price differentiates only when expressed by the customer.
+- Conditional interest closed in code: availability interest is persisted separately from purchase intent, never starts reservation, and permits a bounded commercial soft-close.
 
 Do not reopen a closed dimension without fresh contradictory evidence.
 
 ## Open issues, ordered
 
-1. P1 conditional stock interest: current behavior must be reproduced before any implementation.
-2. External gate: exact signature and result contract for `dbo.sp_IA_RegistrarReserva24h_Idempotente` are not confirmed; execution remains blocked.
-3. Live conversational certification remains pending after code fixes.
+1. External gate: exact signature and result contract for `dbo.sp_IA_RegistrarReserva24h_Idempotente` are not confirmed; execution remains blocked.
+2. Live conversational certification remains pending after code fixes.
 
 ## Latest verified evidence
 
@@ -66,6 +66,7 @@ Do not reopen a closed dimension without fresh contradictory evidence.
 - Reservation GREEN: ownership, switch, abandonment, document, name and address plus adjacent suites 22/22 PASS.
 - Budget RED reproduced active-product `CAPABILITY` override; GREEN plus adjacent authority suites 33/33 PASS.
 - Recommendation RED reproduced catalog-order winner selection with zero evidence; GREEN plus adjacent recommendation/reference/state suites 42/42 PASS.
+- Conditional-interest RED reproduced the missing signal; GREEN plus adjacent extraction/NBA/engine suites 43/43 PASS.
 - Production/Supabase mutations: none.
 - Preexisting untracked `backend/package-lock.json`: preserved and excluded.
 
@@ -93,4 +94,4 @@ Do not reopen a closed dimension without fresh contradictory evidence.
 
 ## NEXT ACTION
 
-Write and run the conditional-interest regression against current behavior before changing production logic.
+Run the complete technical suite, build, local start smoke test, and conversational certification.
