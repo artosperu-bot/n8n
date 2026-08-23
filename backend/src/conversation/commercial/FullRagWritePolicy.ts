@@ -1,11 +1,27 @@
-import type { LlmWriteInput, RagPresentationMode } from '../../ports/LlmProvider.ts';
+import type { LlmWriteInput, RagPresentationMode, ProductHighlight } from '../../ports/LlmProvider.ts';
 import { selectProductHighlights } from './ProductHighlightSelector.ts';
 
+function byFamily(highlights:ProductHighlight[],family:ProductHighlight['family']):ProductHighlight|null{
+  return highlights.find(item=>item.family===family)??null;
+}
+function sentence(label:string,highlight:ProductHighlight|null):string|null{
+  if(!highlight?.summary)return null;
+  const lead=label==='Memoria'?'En memoria':label==='Batería'?'En batería':label==='Resistencia'?'En resistencia':label==='Cámara'?'En cámara':label==='Pantalla'?'La pantalla':label==='Rendimiento'?'En rendimiento':label;
+  return label==='Pantalla'?`${lead} viene con ${highlight.summary}`:`${lead}, ${highlight.summary}`;
+}
 function overviewAnswer(product:string,highlights:NonNullable<LlmWriteInput['productHighlights']>):string|null{
   if(highlights.length<1)return null;
-  const shown=highlights.slice(0,6);
-  const body=shown.map(item=>`${item.label}: ${item.summary}`).join('; ');
-  return `${product} destaca por ${body}.`;
+  const memory=sentence('Memoria',byFamily(highlights,'MEMORY'));
+  const battery=sentence('Batería',byFamily(highlights,'BATTERY'));
+  const resistance=sentence('Resistencia',byFamily(highlights,'RESISTANCE'));
+  const camera=sentence('Cámara',byFamily(highlights,'CAMERA'));
+  const display=sentence('Pantalla',byFamily(highlights,'DISPLAY'));
+  const performance=sentence('Rendimiento',byFamily(highlights,'PERFORMANCE'));
+  const first=[memory,battery].filter(Boolean).join('. ');
+  const second=[resistance,camera].filter(Boolean).join('. ');
+  const third=[display,performance].filter(Boolean).join('. ');
+  const body=[first,second,third].filter(Boolean).map(x=>`${x}.`).join(' ');
+  return `${product} es un equipo bien completo. ${body}`.replace(/\s+/g,' ').trim();
 }
 function mode(input:LlmWriteInput):RagPresentationMode{
   const intent=String(input.intent??'').toUpperCase();
