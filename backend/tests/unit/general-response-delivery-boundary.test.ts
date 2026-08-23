@@ -69,6 +69,33 @@ test('context and feature co-occurrence alone does not count as a delivered cont
   assert.equal(result.fallback.error,undefined);
 });
 
+test('availability continuation is customer-readable and not duplicated',async()=>{
+  const input:any={
+    commercialContractPrepared:true,
+    message:'¿Cuánto pesa el Armor 22?',
+    intent:'ATTRIBUTE',
+    state:{activeProduct:'Armor 22'},
+    directAnswer:'Armor 22 pesa 324 g.',
+    nextBestAction:'RELATED_VALUE',
+    executableNba:'RELATED_VALUE',
+    finalExecutableNba:'RELATED_VALUE',
+    decision:{nextBestAction:'RELATED_VALUE'},
+    allowedProducts:['Armor 22'],
+    verifiedFacts:[
+      {domain:'PRODUCT_RAG',key:'PESO',value:'324 g',productId:'P-ARMOR-22-256G',source:'TEST'},
+      {domain:'SQL',key:'DISPONIBILIDAD',value:'DISPONIBLE',productId:'P-ARMOR-22-256G',source:'SQL_BRIDGE'},
+    ],
+    commercialMove:{
+      action:'RELATED_VALUE',kind:'RELATED_VERIFIED_FACT',targetProduct:'Armor 22',intensity:'LIGHT',reason:'LIGHT_VERIFIED_CONTINUATION',basis:['VERIFIED_SQL_FACT'],attribute:'DISPONIBILIDAD',
+      verifiedFacts:[{domain:'SQL',key:'DISPONIBILIDAD',value:'DISPONIBLE',productId:'P-ARMOR-22-256G',source:'SQL_BRIDGE'}],
+      relevantCustomerContext:{useCase:null,problem:null,priorities:[],budget:null,objection:null},
+    },
+  };
+  const result=await safeWrite(llm('Armor 22 pesa 324 g. Además: DISPONIBLE. También está disponible.'),input,'fallback');
+  assert.doesNotMatch(result.answer,/\bDISPONIBLE\b/,'raw enum-like availability must not be customer-facing');
+  assert.equal((result.answer.match(/est[aá] disponible/gi)??[]).length,1,'availability should be stated once');
+});
+
 test('comparison presentation is structurally compact even when the writer is verbose',async()=>{
   const verbose=[
     'Armor X13 vs Armor 22.',
