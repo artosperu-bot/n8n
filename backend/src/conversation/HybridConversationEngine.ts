@@ -35,6 +35,7 @@ type Dependencies = {
 type CandidateRank = { quote: ProductQuote; evidence: RagEvidence[]; score: number; reasons:string[]; criteria:string[]; criterionScores:Record<string,number>; tradeoffs:string[]; confidence:number; winnerStatus:'WINNER'|'NO_COMPARABLE_EVIDENCE'|'TOP_TIE'|'NOT_TOP' };
 type RankCandidatesResult={ranks:CandidateRank[];trace:RecommendationDecisionTrace};
 type ReservationAdvance={stage:ConversationState['reservationStage'];document?:string|null;name?:string|null;address?:string|null;answer:string;nba:string;route:string;cancelled?:boolean};
+type ErpAuthorityDiagnostics={errors:string[]};
 
 function unique(values: Array<unknown>): string[] {
   return [...new Set(values.filter((v):v is string=>typeof v==='string').map(v=>v.trim()).filter(Boolean))];
@@ -153,7 +154,7 @@ function extractOrderCredentials(message:string):{orderNumber:string|null;email:
   const orderNumber=message.match(/\b(?:pedido|orden)\s*(?:n(?:ro|°)?\.?|#)?\s*([A-Z0-9-]{4,})\b/i)?.[1] ?? null;
   return {orderNumber,email};
 }
-function resolutionOrigin(referenceType:string|null|undefined, explicitSwitch:boolean, resolved:boolean, target:string|null, previous:ConversationState):string {
+function resolutionOrigin(referenceType:string|null|undefined, explicitSwitch:boolean, resolved:boolean,target:string|null,previous:ConversationState):string {
   if(!resolved)return 'SIN_RESOLVER';
   const ref=String(referenceType??'').toUpperCase();
   if(explicitSwitch||ref==='SELECTION_REFERENT')return 'SELECCION_USUARIO';
@@ -262,19 +263,22 @@ export class HybridConversationEngine {
   readonly #deps: Dependencies;
   constructor(deps: Dependencies) { this.#deps = deps; }
 
-  async #quote(name: string | null, candidates: ProductQuote[] = []): Promise<ProductQuote | null> {
+  async #quote(name: string | null, candidates: ProductQuote[] = [], diagnostics?:ErpAuthorityDiagnostics): Promise<ProductQuote | null> {
     if (!name) return null;
     const local = candidates.find(q => same(productName(q), name));
     if (local) return local;
-    try { return await this.#deps.erp.getProductQuote(name); } catch { return null; }
+    try { return await this.#deps.erp.getProductQuote(name); }
+    catch(error) { diagnostics?.errors.push(safeError(error)); return null; }
   }
 
-  async #searchCandidates(message: string, target: string | null): Promise<ProductQuote[]> {
+  async #searchCandidates(message: string, target: string | null, diagnostics?:ErpAuthorityDiagnostics): Promise<ProductQuote[]> {
     if (!this.#deps.erp.searchProducts) return [];
     const rows: ProductQuote[] = [];
-    try { rows.push(...await this.#deps.erp.searchProducts(message, 10)); } catch {}
+    try { rows.push(...await this.#deps.erp.searchProducts(message, 10)); }
+    catch(error) { diagnostics?.errors.push(safeError(error)); }
     if (target && !rows.some(q => same(productName(q), target))) {
-      try { rows.push(...await this.#deps.erp.searchProducts(target, 10)); } catch {}
+      try { rows.push(...await this.#deps.erp.searchProducts(target, 10)); }
+      catch(error) { diagnostics?.errors.push(safeError(error)); }
     }
     const seen = new Set<string>();
     return rows.filter(row => {
@@ -296,8 +300,6 @@ export class HybridConversationEngine {
   async #rankCandidates(state:ConversationState, query:string, maxBudget:number, exclude:string|null, max=2):Promise<RankCandidatesResult> {
     let options:ProductQuote[]=[];
     try {
-      // Catalog existence is independent from current stock. Availability and
-      // eligibility are derived only after the complete ERP catalog is loaded.
       options=this.#deps.erp.listCatalog
         ? await this.#deps.erp.listCatalog({onlyWithStock:false})
         : await this.#deps.erp.listProductsWithinBudget(maxBudget);
@@ -408,7 +410,8 @@ export class HybridConversationEngine {
       const needTargetConflict=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)&&!deterministicDecision.targetProduct&&Boolean(rawDecision.targetProduct)&&!explicitUnknownTarget(input.message,rawDecision);
       const forceDeterministic=(rawDecision.primaryIntent==='OTHER'&&deterministicOverride)||cameraImageConflict||strongReference||strongRecommendation||budgetAuthority||comparisonAuthority||needTargetConflict;
       const guardedDecision=forceDeterministic?{...rawDecision,primaryIntent:deterministicDecision.primaryIntent,targetProduct:deterministicDecision.targetProduct,referenceType:deterministicDecision.referenceType,selectedProduct:deterministicDecision.selectedProduct,mentionedProducts:deterministicDecision.mentionedProducts,comparisonProducts:deterministicDecision.comparisonProducts,attributes:deterministicDecision.attributes,nextBestAction:deterministicDecision.nextBestAction}:rawDecision;
-      const initialCandidates=await this.#searchCandidates(input.message,guardedDecision.targetProduct);
+      const erpDiagnostics:ErpAuthorityDiagnostics={errors:[]};
+      const initialCandidates=await this.#searchCandidates(input.message,guardedDecision.targetProduct,erpDiagnostics);
       const candidateNames=unique(initialCandidates.map(productName));
       const currentReference=resolveReference(input.message,baseState,{knownProducts:candidateNames});
       if(currentReference.mentionedProducts.length){
@@ -437,13 +440,20 @@ export class HybridConversationEngine {
       const interest=updateInterestLevel({message:input.message,intent,attributes:decision.attributes,product:decision.selectedProduct??target,previous,current:{...commercialState,queryTarget:target,comparisonProducts:decision.comparisonProducts}});
       commercialState.levelOfInterest=interest.levelOfInterest;
       commercialState.interestEvents=interest.interestEvents;
-      let quote=await this.#quote(target,initialCandidates);const requestedUnknown=Boolean(target&&!quote);let recommendedProduct=commercialState.recommendedProduct??null;let rag:RagEvidence[]=[];let images:ProductImage[]=[];let nba=decision.nextBestAction??nextBestAction(intent,commercialState);let progressionTrace:ReturnType<typeof evaluatePostAnswerCommercialProgression>|null=null;let answer='';let writerResult:Awaited<ReturnType<typeof safeWrite>>|null=null;
+      let quote=await this.#quote(target,initialCandidates,erpDiagnostics);
+      const erpError=quote?null:(erpDiagnostics.errors[0]??null);
+      const erpUnavailable=Boolean(target&&!quote&&erpError&&decision.needsSql);
+      const requestedUnknown=Boolean(target&&!quote&&!erpUnavailable);
+      let recommendedProduct=commercialState.recommendedProduct??null;let rag:RagEvidence[]=[];let images:ProductImage[]=[];let nba=decision.nextBestAction??nextBestAction(intent,commercialState);let progressionTrace:ReturnType<typeof evaluatePostAnswerCommercialProgression>|null=null;let answer='';let writerResult:Awaited<ReturnType<typeof safeWrite>>|null=null;
       let handoff=intent==='HUMAN'||nba==='ASSISTED_HANDOFF'||(intent==='PURCHASE'&&(commercialState.quantity??1)>=2);let handoffReason=handoff?(intent==='HUMAN'?'SOLICITUD_HUMANO':'CONTINUAR_VENTA'):null;const sqlTools:string[]=[];let route='HYBRID';
       let recommendationReasons:string[]=[];let recommendationCriteria:string[]=[];let recommendationTradeoffs:string[]=[];let recommendationAlternatives:string[]=[];let recommendationTrace:RecommendationDecisionTrace|null=null;
       let reservationStage=commercialState.reservationStage??null;let reservationDocument=commercialState.reservationDocument??null;let reservationCustomerName=commercialState.reservationCustomerName??null;let reservationAddress=commercialState.reservationAddress??null;
       const writerProducts=(extra:Array<string|null|undefined>=[])=>unique([...initialCandidates.map(productName),commercialState.activeProduct,commercialState.selectedProduct,commercialState.recommendedProduct,recommendedProduct,productName(quote),target,...extra]);
 
-      if(requestedUnknown&&intent!=='IMAGE'){
+      if(erpUnavailable&&intent!=='IMAGE'){
+        route='ERP_UNAVAILABLE';nba='ANSWER_ONLY';
+        answer=target?`Temporalmente no puedo consultar el ERP para confirmar ese dato de ${target}. Prefiero no inventarte el precio, stock o disponibilidad.`:'Temporalmente no puedo consultar el ERP para confirmar ese dato. Prefiero no inventarlo.';
+      }else if(requestedUnknown&&intent!=='IMAGE'){
         const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
         const ranked=await this.#rankCandidates(commercialState,query,commercialState.budget??99999999,target,2);const alternatives=ranked.ranks;recommendationTrace=ranked.trace;
         const winner=alternatives[0]?.winnerStatus==='WINNER'?alternatives[0]:null;if(winner)recommendedProduct=productName(winner.quote);rag=alternatives.flatMap(x=>x.evidence.slice(0,3));recommendationReasons=winner?.reasons??[];recommendationCriteria=alternatives[0]?.criteria??[];recommendationTradeoffs=winner?.tradeoffs??[];
@@ -555,12 +565,12 @@ export class HybridConversationEngine {
       const model=writerResult?.model??planner?.model??'stech-hybrid-deterministic';const pUsage=planner?.usage;const wUsage=writerResult?.llmResult?.usage;const completionMeta={messageId,requestId,conversationType:input.sessionId.startsWith('qa-')?'QA_LIVE':null,model,inputTokens:tokenSum([pUsage?.inputTokens,wUsage?.inputTokens]),outputTokens:tokenSum([pUsage?.outputTokens,wUsage?.outputTokens]),totalTokens:tokenSum([pUsage?.totalTokens,wUsage?.totalTokens]),cachedInputTokens:tokenSum([pUsage?.cachedInputTokens,wUsage?.cachedInputTokens]),totalPrompts:(planner?1:0)+(writerResult?.llmResult?1:0)};
       if(atomic){await this.#deps.conversations.completeTurn!(input.sessionId,input.message,answer,nextState,completionMeta);leaseAcquired=false;}else{await this.#deps.conversations.appendMessage(input.sessionId,'user',input.message,completionMeta);await this.#deps.conversations.saveState(input.sessionId,nextState);await this.#deps.conversations.appendMessage(input.sessionId,'assistant',answer,completionMeta);}
 
-      console.log(JSON.stringify({event:'STECH_TURN_TRACE',sessionId:input.sessionId,messageId,deterministicIntent:decisionTrace.deterministicIntent,plannerIntent:decisionTrace.plannerIntent,finalIntent:intent,route,nextBestAction:nba??null,target:decisionTrace.targetProduct??null,recommendedProduct:recommendedProduct??null,winner:recommendationTrace?.winner??null,winnerReason:recommendationTrace?.winnerReason??null,sectionsRequested:recommendationTrace?.sectionsRequested??[],rankedCandidates:(recommendationTrace?.rankedCandidates??[]).slice(0,5).map(x=>({product:x.product,score:x.score,confidence:x.confidence,criteria:x.criteria,criterionScores:x.criterionScores})),writerFallback:decisionTrace.writerFallback??null}));
+      console.log(JSON.stringify({event:'STECH_TURN_TRACE',sessionId:input.sessionId,messageId,deterministicIntent:decisionTrace.deterministicIntent,plannerIntent:decisionTrace.plannerIntent,finalIntent:intent,route,nextBestAction:nba??null,target:decisionTrace.targetProduct??null,recommendedProduct:recommendedProduct??null,winner:recommendationTrace?.winner??null,winnerReason:recommendationTrace?.winnerReason??null,sectionsRequested:recommendationTrace?.sectionsRequested??[],rankedCandidates:(recommendationTrace?.rankedCandidates??[]).slice(0,5).map(x=>({product:x.product,score:x.score,confidence:x.confidence,criteria:x.criteria,criterionScores:x.criterionScores})),writerFallback:decisionTrace.writerFallback??null,erpError}));
 
       const plannerTelemetry=await this.#recordUsage(input.sessionId,turn,'SEMANTIC_PLAN',messageId,planner);const writerTelemetry=await this.#recordUsage(input.sessionId,turn,'COMMERCIAL_WRITE',messageId,writerResult?.llmResult??null);const telemetry=!plannerTelemetry.delivered?plannerTelemetry:writerTelemetry;let automation:{delivered:boolean;error?:string}={delivered:false};
       try{const handoffProduct=selectedProduct??(intent==='QUOTE'?target:null);automation=handoff?await this.#deps.automation.publish({type:'handoff.requested',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{product:handoffProduct,selectedProduct:selectedProduct??null,activeProduct:activeProduct??null,recommendedProduct:recommendedProduct??null,comparisonProducts,quantity:nextState.quantity??null,invoiceRequired:nextState.invoiceRequired??null,reason:handoffReason,context:nextState}}):await this.#deps.automation.publish({type:'conversation.turn.completed',occurredAt:new Date().toISOString(),sessionId:input.sessionId,payload:{intent,route,product:activeProduct,nextBestAction:nba}});}catch(error){automation={delivered:false,error:error instanceof Error?error.message:String(error)};}
 
-      return{sessionId:input.sessionId,answer,state:{...nextState,contextVersion:(previous.contextVersion??0)+1},debug:{intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,queryTarget:nextState.queryTarget??null,activeProduct:nextState.activeProduct??null,salientProduct:nextState.salientProduct??null,selectedProduct:nextState.selectedProduct??null,recommendedProduct:nextState.recommendedProduct??null,comparisonProducts,explicitSwitch,budget:commercialState.budget??null,priceObjection:budgetTurn.priceObjection,erp:quote,images,requestedUnknown,ragSources:unique(rag.map(x=>x.source)),ragCount:rag.length,imageCount:images.length,nextBestAction:nextState.lastNba??nba,handoff,handoffReason,recommendationCriteria,recommendationReasons,recommendationTradeoffs,decisionTrace,planner:plannerDebug(planner),plannerFailure,writer:writerResult?{model:writerResult.model,fallback:writerResult.fallback,recommendationContinuity:writerResult.recommendationContinuity}:undefined,telemetry,automation,durationMs:Math.max(0,Math.round(performance.now()-started))}};
+      return{sessionId:input.sessionId,answer,state:{...nextState,contextVersion:(previous.contextVersion??0)+1},debug:{intent,secondaryIntents:decision.secondaryIntents,route,sqlTools,queryTarget:nextState.queryTarget??null,activeProduct:nextState.activeProduct??null,salientProduct:nextState.salientProduct??null,selectedProduct:nextState.selectedProduct??null,recommendedProduct:nextState.recommendedProduct??null,comparisonProducts,explicitSwitch,budget:commercialState.budget??null,priceObjection:budgetTurn.priceObjection,erp:quote,erpError,images,requestedUnknown,ragSources:unique(rag.map(x=>x.source)),ragCount:rag.length,imageCount:images.length,nextBestAction:nextState.lastNba??nba,handoff,handoffReason,recommendationCriteria,recommendationReasons,recommendationTradeoffs,decisionTrace,planner:plannerDebug(planner),plannerFailure,writer:writerResult?{model:writerResult.model,fallback:writerResult.fallback,recommendationContinuity:writerResult.recommendationContinuity}:undefined,telemetry,automation,durationMs:Math.max(0,Math.round(performance.now()-started))}};
     } catch(error) {
       console.error(JSON.stringify({event:'STECH_TURN_ERROR',sessionId:input.sessionId,messageId,error:safeError(error)}));
       if(leaseAcquired&&this.#deps.conversations.failTurn){try{await this.#deps.conversations.failTurn(input.sessionId,messageId,error instanceof Error?error.message:String(error));}catch{}}
