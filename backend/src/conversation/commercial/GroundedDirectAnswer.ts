@@ -4,11 +4,15 @@ import { fold } from '../../shared/text.ts';
 type GroundedDirectAnswerInput={message:string;intent:string;attribute:string|null;resolvedProduct:string|null;quote?:ProductQuote|null;rag?:RagEvidence[];verifiedFacts?:VerifiedFact[];};
 function productName(input:GroundedDirectAnswerInput):string{return String(input.resolvedProduct??input.quote?.shortName??input.quote?.product??'El producto').trim();}
 function compact(value:string,max=420):string{const clean=value.replace(/\s+/g,' ').trim();if(!clean)return'';const clipped=clean.length<=max?clean:`${clean.slice(0,max-1).trimEnd()}…`;return /[.!?…]$/.test(clipped)?clipped:`${clipped}.`;}
-function positive(value:string|null|undefined):boolean{return /^(?:s[ií]|si|true|yes|1)$/i.test(String(value??'').trim());}
-function negative(value:string|null|undefined):boolean{return /^(?:no|false|0)$/i.test(String(value??'').trim());}
+function positive(value:string|null|undefined):boolean{return /^(?:s[ií]|si|true|yes|1)$/i.test(String(value??'').trim().replace(/[.,;:!?]+$/,''));}
+function negative(value:string|null|undefined):boolean{return /^(?:no|false|0)$/i.test(String(value??'').trim().replace(/[.,;:!?]+$/,''));}
 function fact(input:GroundedDirectAnswerInput,key:string):string|null{const value=(input.verifiedFacts??[]).find(f=>f.domain==='PRODUCT_RAG'&&String(f.key).toUpperCase()===key.toUpperCase())?.value;return String(value??'').trim()||null;}
 function raw(input:GroundedDirectAnswerInput):string{return (input.rag??[]).map(r=>String(r.text??'')).join('\n');}
-function rawYesNo(input:GroundedDirectAnswerInput,label:RegExp):'Sí'|'No'|null{const m=raw(input).match(new RegExp(`${label.source}\\s*[:=]?\\s*(s[ií]|no)\\b`,'i'));return m?/^s/i.test(m[1])?'Sí':'No':null;}
+function rawYesNo(input:GroundedDirectAnswerInput,label:RegExp):'Sí'|'No'|null{
+  const pattern=new RegExp(`${label.source}\\s*[:=]?\\s*(s[ií]|no)(?=$|[\\s.,;:!?\)\\]])`,'i');
+  const m=raw(input).match(pattern);
+  return m?/^s/i.test(m[1])?'Sí':'No':null;
+}
 function val(input:GroundedDirectAnswerInput,key:string,fallback?:RegExp):string|null{const known=fact(input,key);if(known)return known;const m=fallback?raw(input).match(fallback):null;return m?.[1]?.trim()??null;}
 function joinNatural(items:string[]):string{const clean=items.filter(Boolean);if(clean.length<=1)return clean[0]??'';if(clean.length===2)return `${clean[0]} y ${clean[1]}`;return `${clean.slice(0,-1).join(', ')} y ${clean.at(-1)}`;}
 function cleanHasta(value:string|null):string|null{return value?value.replace(/^hasta\s+/i,'').trim():null;}
