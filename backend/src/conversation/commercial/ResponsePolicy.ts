@@ -21,14 +21,25 @@ function customerLanguage(value:string|null|undefined):string|null {
 
 function contextualBenefit(move:CommercialMove):string|null {
   const context=move.relevantCustomerContext;
-  const priority=customerLanguage(context.priorities[0]);
-  if(priority)return `Si priorizas ${priority}, este dato puede ayudarte a elegir mejor.`;
-  const problem=customerLanguage(context.problem);
-  if(problem)return `Si te preocupa ${problem}, este dato puede ayudarte a elegir mejor.`;
+  const rawUseCase=String(context.useCase??'').trim();
   const useCase=customerLanguage(context.useCase);
-  if(useCase)return `Para ${useCase}, este dato puede ayudarte a elegir mejor.`;
-  const objection=customerLanguage(context.objection);
-  if(objection)return `Si ese punto es importante para ti, este dato puede ayudarte a decidir.`;
+  const priority=customerLanguage(context.priorities[0]);
+  const problem=customerLanguage(context.problem);
+  const fact=String(move.verifiedFacts[0]?.value??'').trim().replace(/[.!?]+$/,'')||null;
+
+  if(useCase&&rawUseCase.length<=80&&!/[;|]/.test(rawUseCase))return fact
+    ?`Para ${useCase}, ${fact} es un dato útil al elegir el equipo.`
+    :`Para ${useCase}, este dato puede ayudarte a elegir mejor.`;
+  if(priority)return fact
+    ?`Si priorizas ${priority}, ${fact} es un dato útil al elegir el equipo.`
+    :`Si priorizas ${priority}, este dato puede ayudarte a elegir mejor.`;
+  if(problem)return fact
+    ?`Si te preocupa ${problem}, ${fact} es un dato útil al elegir el equipo.`
+    :`Si te preocupa ${problem}, este dato puede ayudarte a elegir mejor.`;
+  if(useCase)return fact
+    ?`Para ${useCase}, ${fact} es un dato útil al elegir el equipo.`
+    :`Para ${useCase}, este dato puede ayudarte a elegir mejor.`;
+  if(context.objection)return 'Si ese punto es importante para ti, este dato puede ayudarte a decidir.';
   return null;
 }
 
