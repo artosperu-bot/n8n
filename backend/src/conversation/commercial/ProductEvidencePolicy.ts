@@ -12,12 +12,12 @@ function sectionsForAttribute(attribute:string):string[] {
   const t=fold(attribute);
   if(/\bnfc\b/.test(t))return['CONECTIVIDAD','FUNCIONES'];
   if(/\b5g\b|\b4g\b|lte/.test(t))return['REDES','CONECTIVIDAD'];
-  if(/termic|thermal|flir|temperatura|calor/.test(t))return['TERMICA','SENSORES','RESISTENCIA'];
+  if(/termic|thermal|flir|temperatura|calor/.test(t))return['TERMICA','SENSORES','RESISTENCIA','BATERIA'];
   if(/\bram\b|almacen|memoria|rom|espacio/.test(t))return['MEMORIA'];
   if(/bateria|carga|autonomia/.test(t))return['BATERIA'];
-  if(/camara|foto|fotografia|video|imagen/.test(t))return['CAMARA'];
+  if(/camara|foto|fotografia|video|imagen|nocturn/.test(t))return['CAMARA'];
   if(/golpe|caida|agua|polvo|ip68|ip69|mil-std|resisten|durab/.test(t))return['RESISTENCIA'];
-  if(/procesador|cpu|gpu|rendimiento|juego|gaming|free fire|pubg|cod mobile/.test(t))return['RENDIMIENTO','MEMORIA','PANTALLA'];
+  if(/procesador|cpu|gpu|rendimiento|juego|gaming|free fire|pubg|cod mobile/.test(t))return['RENDIMIENTO','MEMORIA','PANTALLA','BATERIA'];
   if(/pantalla|display|hz|resolucion/.test(t))return['PANTALLA'];
   if(/sim|esim/.test(t))return['SIM','REDES'];
   if(/huella|face|facial|seguridad/.test(t))return['SEGURIDAD','SENSORES'];
@@ -33,16 +33,21 @@ function sectionsForPriority(priority:string):string[]{return sectionsForAttribu
 function inferredSections(state:ConversationState):string[]{
   const use=fold(state.useCase??state.sector??'');
   const problem=fold(state.problem??'');
-  const combined=`${use} ${problem}`;
+  const priorities=fold((state.priorities??[]).join(' '));
+  const combined=`${use} ${problem} ${priorities}`;
   const result:string[]=[];
-  if(/delivery|repart|logistica/.test(use))result.push('BATERIA','RESISTENCIA','POSICIONAMIENTO','REDES','CONECTIVIDAD');
-  if(/campo|construccion|obra|tecnico/.test(use))result.push('RESISTENCIA','BATERIA');
+
+  if(/gaming|juego|jugar|free fire|pubg|cod mobile|call of duty/.test(combined))result.push('RENDIMIENTO','MEMORIA','PANTALLA','BATERIA');
+  if(/delivery|repart|logistica/.test(combined))result.push('BATERIA','POSICIONAMIENTO','REDES','CONECTIVIDAD','RESISTENCIA');
+  if(/campo|construccion|obra|mineria|tecnico/.test(combined))result.push('RESISTENCIA','BATERIA','POSICIONAMIENTO');
+  if(/trabajo nocturno|noche|nocturn|vigilancia/.test(combined))result.push('CAMARA','BATERIA','RESISTENCIA');
+  if(/termic|temperatura|calor|inspeccion.*temperatura/.test(combined))result.push('TERMICA','RESISTENCIA','BATERIA','SENSORES');
+  if(/oficina|multitarea|varias apps|whatsapp|correo|navegador|trabajo/.test(combined))result.push('RENDIMIENTO','MEMORIA','BATERIA');
+  if(/foto|fotografia|camara|video|contenido|redes sociales|subir.*red/.test(combined))result.push('CAMARA','MEMORIA','PANTALLA');
+
   if(/caida|golpe|durabilidad/.test(problem))result.push('RESISTENCIA');
   if(/autonomia|bateria/.test(problem))result.push('BATERIA');
-  if(/foto|fotografia|camara|video|redes sociales|subir.*red/.test(combined))result.push('CAMARA','MEMORIA','CONECTIVIDAD','REDES');
-  if(/termic|temperatura|calor/.test(combined))result.push('TERMICA','SENSORES','RESISTENCIA');
-  if(/juego|jugar|gaming|free fire|pubg|cod mobile|call of duty/.test(combined))result.push('RENDIMIENTO','MEMORIA','PANTALLA','BATERIA');
-  return result;
+  return unique(result);
 }
 
 export function productEvidenceSections(intent: IntentLike, state: ConversationState): string[] {
@@ -57,9 +62,9 @@ export function productEvidenceSections(intent: IntentLike, state: ConversationS
     const explicit=unique((intent.attributes??[]).flatMap(sectionsForAttribute));
     if(explicit.length)return explicit.slice(0,5);
     const priorities=unique((state.priorities??[]).flatMap(sectionsForPriority));
-    if(priorities.length)return priorities.slice(0,4);
     const inferred=unique(inferredSections(state));
-    return (inferred.length?inferred:['RESISTENCIA','BATERIA','RENDIMIENTO','CAMARA']).slice(0,4);
+    if(priorities.length||inferred.length)return unique([...priorities,...inferred]).slice(0,5);
+    return ['RESISTENCIA','BATERIA','RENDIMIENTO','MEMORIA','CAMARA'];
   }
   if (intent.primary === 'EVALUATE_USE' || intent.primary === 'RECOMMEND' || intent.primary === 'OBJECTION') {
     const priorities = unique((state.priorities ?? []).flatMap(sectionsForPriority));
