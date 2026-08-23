@@ -15,6 +15,7 @@ export type RecommendationCandidateTrace = {
 };
 export type RecommendationDecisionTrace = {
   catalogCandidates:string[];
+  availableCandidates:string[];
   eligibleCandidates:RecommendationCandidateTrace[];
   discardedCandidates:Array<{product:string;reason:'BUDGET'|'NO_STOCK'|'EXCLUDED'}>;
   sectionsRequested:string[];

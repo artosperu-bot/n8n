@@ -18,6 +18,7 @@ import { resolveIntentPlan } from './intent/IntentPlan.ts';
 import { nextBestAction } from './nba/NextBestAction.ts';
 import { evaluatePostAnswerCommercialProgression } from './nba/PostAnswerCommercialProgression.ts';
 import { rankRecommendations } from './recommendation/RecommendationPolicy.ts';
+import { partitionRecommendationCandidates } from './recommendation/CandidatePool.ts';
 import { resolveReference } from './reference/ReferenceResolver.ts';
 import { reduceState } from './state/StateReducer.ts';
 import { safeWrite } from './writer/WriterGuard.ts';
@@ -295,23 +296,20 @@ export class HybridConversationEngine {
   async #rankCandidates(state:ConversationState, query:string, maxBudget:number, exclude:string|null, max=2):Promise<RankCandidatesResult> {
     let options:ProductQuote[]=[];
     try {
+      // Catalog existence is independent from current stock. Availability and
+      // eligibility are derived only after the complete ERP catalog is loaded.
       options=this.#deps.erp.listCatalog
-        ? await this.#deps.erp.listCatalog({onlyWithStock:true})
+        ? await this.#deps.erp.listCatalog({onlyWithStock:false})
         : await this.#deps.erp.listProductsWithinBudget(maxBudget);
     } catch {
       try { options=await this.#deps.erp.listProductsWithinBudget(maxBudget); }
-      catch { return {ranks:[],trace:{catalogCandidates:[],eligibleCandidates:[],discardedCandidates:[],sectionsRequested:[],sectionsRecovered:[],rankedCandidates:[],winner:null}}; }
+      catch { return {ranks:[],trace:{catalogCandidates:[],availableCandidates:[],eligibleCandidates:[],discardedCandidates:[],sectionsRequested:[],sectionsRecovered:[],rankedCandidates:[],winner:null}}; }
     }
-    const catalogCandidates=unique(options.map(productName));
-    const discardedCandidates:RecommendationDecisionTrace['discardedCandidates']=[];
-    const eligible:ProductQuote[]=[];
-    for(const q of options){
-      const name=productName(q)??q.product;
-      if(q.price!=null&&q.price>maxBudget){discardedCandidates.push({product:name,reason:'BUDGET'});continue;}
-      if(q.stock!=null&&q.stock<=0){discardedCandidates.push({product:name,reason:'NO_STOCK'});continue;}
-      if(same(name,exclude)){discardedCandidates.push({product:name,reason:'EXCLUDED'});continue;}
-      eligible.push(q);
-    }
+    const pool=partitionRecommendationCandidates(options,{maxBudget,exclude});
+    const catalogCandidates=unique(pool.catalog.map(productName));
+    const availableCandidates=unique(pool.available.map(productName));
+    const discardedCandidates:RecommendationDecisionTrace['discardedCandidates']=pool.discarded;
+    const eligible:ProductQuote[]=pool.eligible;
     const sections=recommendationSections(state);
     const candidates:Array<{quote:ProductQuote;evidence:RagEvidence[]}>=[];
     for(const quote of eligible.slice(0,20)){
@@ -332,6 +330,7 @@ export class HybridConversationEngine {
       ranks,
       trace:{
         catalogCandidates,
+        availableCandidates,
         eligibleCandidates:eligible.slice(0,20).map(q=>({product:productName(q)??q.product,productId:q.productRagId??null})),
         discardedCandidates,
         sectionsRequested:sections,
