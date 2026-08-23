@@ -18,7 +18,8 @@
     "qa:live:all": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=all",
     "qa:golden100": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=golden100",
     "qa:acceptance20": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-acceptance20.ts",
-    "qa:full-rag20": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-full-rag20.ts"
+    "qa:full-rag20": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-full-rag20.ts",
+    "qa:full-rag50": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-full-rag50.ts"
   },
   "dependencies": { "mssql": "^12.7.0" }
 }
