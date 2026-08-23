@@ -17,13 +17,13 @@ function sectionsForAttribute(attribute:string):string[] {
   if(/bateria|carga|autonomia/.test(t))return['BATERIA'];
   if(/camara|foto|fotografia|video|imagen/.test(t))return['CAMARA'];
   if(/golpe|caida|agua|polvo|ip68|ip69|mil-std|resisten|durab/.test(t))return['RESISTENCIA'];
-  if(/procesador|cpu|gpu|rendimiento|juego/.test(t))return['RENDIMIENTO'];
+  if(/procesador|cpu|gpu|rendimiento|juego|gaming|free fire|pubg|cod mobile/.test(t))return['RENDIMIENTO','MEMORIA','PANTALLA'];
   if(/pantalla|display|hz|resolucion/.test(t))return['PANTALLA'];
   if(/sim|esim/.test(t))return['SIM','REDES'];
   if(/huella|face|facial|seguridad/.test(t))return['SEGURIDAD','SENSORES'];
   if(/sensor|giroscop|brujula|proximidad/.test(t))return['SENSORES','FUNCIONES'];
-  if(/wifi|bluetooth|gps|usb|otg|conect|compart|redes sociales|subir.*red/.test(t))return['CONECTIVIDAD','REDES','FUNCIONES'];
-  if(/audio|parlante|speaker|microfono/.test(t))return['AUDIO'];
+  if(/wifi|bluetooth|gps|usb|otg|conect|compart|redes sociales|subir.*red|infrarrojo/.test(t))return['CONECTIVIDAD','REDES','FUNCIONES'];
+  if(/audio|parlante|speaker|microfono|audifono|jack/.test(t))return['AUDIO','CONECTIVIDAD'];
   if(/android|sistema|os\b/.test(t))return['SISTEMA'];
   if(/peso|dimension|tamano|fisic/.test(t))return['FISICO'];
   return[];
@@ -41,6 +41,7 @@ function inferredSections(state:ConversationState):string[]{
   if(/autonomia|bateria/.test(problem))result.push('BATERIA');
   if(/foto|fotografia|camara|video|redes sociales|subir.*red/.test(combined))result.push('CAMARA','MEMORIA','CONECTIVIDAD','REDES');
   if(/termic|temperatura|calor/.test(combined))result.push('TERMICA','SENSORES','RESISTENCIA');
+  if(/juego|jugar|gaming|free fire|pubg|cod mobile|call of duty/.test(combined))result.push('RENDIMIENTO','MEMORIA','PANTALLA','BATERIA');
   return result;
 }
 
