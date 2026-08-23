@@ -27,6 +27,16 @@ function compareExpected(expected:any,actual:any){
     .filter(field=>hasOwn(expected??{},field))
     .map(field=>({field,expected:expected[field],actual:actual[field],pass:actual[field]===expected[field]}));
 }
+function turnRagSources(turn:any):string[]{
+  const debug=turn?.observation?.response?.debug??{};
+  return Array.isArray(debug.ragSources)?debug.ragSources.map(String):[];
+}
+function ragRoute(sources:string[]):string{
+  if(sources.some(source=>source.startsWith('SUPABASE_LEXICAL_FALLBACK_')))return 'LEXICAL_FALLBACK';
+  if(sources.some(source=>source.startsWith('SUPABASE_VECTOR_DOCUMENTS:')))return 'VECTOR_PRODUCT';
+  if(sources.some(source=>source.startsWith('SUPABASE_VECTOR_INSTITUCIONAL:')))return 'VECTOR_INSTITUTIONAL';
+  return sources.length?'OTHER_RAG':'NO_RAG_SOURCE';
+}
 
 const baseUrl=(process.env.QA_BASE_URL??'http://127.0.0.1:3000').replace(/\/$/,'');
 const result=await runLiveQa({
@@ -88,6 +98,31 @@ const contractSummary={
   scenariosDetail:contractScenarios,
 };
 
+const ragTurns=result.report.scenarios.flatMap(scenario=>scenario.turns.map((turn,index)=>{
+  const sources=turnRagSources(turn);
+  const requiresRag=Boolean(turn?.observation?.response?.state?.requiresRag??turn?.observation?.response?.debug?.requiresRag);
+  return{
+    scenarioId:scenario.id,
+    sessionId:scenario.sessionId,
+    turn:index+1,
+    message:turn.message,
+    requiresRag,
+    route:ragRoute(sources),
+    sources,
+  };
+}));
+const relevantRagTurns=ragTurns.filter(turn=>turn.requiresRag||turn.sources.length>0);
+const ragRetrievalSummary={
+  runId:result.report.runId,
+  relevantTurns:relevantRagTurns.length,
+  vectorProduct:relevantRagTurns.filter(turn=>turn.route==='VECTOR_PRODUCT').length,
+  vectorInstitutional:relevantRagTurns.filter(turn=>turn.route==='VECTOR_INSTITUTIONAL').length,
+  lexicalFallback:relevantRagTurns.filter(turn=>turn.route==='LEXICAL_FALLBACK').length,
+  otherRag:relevantRagTurns.filter(turn=>turn.route==='OTHER_RAG').length,
+  missingSource:relevantRagTurns.filter(turn=>turn.route==='NO_RAG_SOURCE').length,
+  turns:relevantRagTurns,
+};
+
 const latestDir=resolve('qa-results/acceptance20/latest');
 await mkdir(latestDir,{recursive:true});
 await writeFile(
@@ -100,10 +135,18 @@ await writeFile(
   `${JSON.stringify(contractSummary,null,2)}\n`,
   'utf8',
 );
+await writeFile(
+  resolve(latestDir,'rag-retrieval-summary.json'),
+  `${JSON.stringify(ragRetrievalSummary,null,2)}\n`,
+  'utf8',
+);
 
 console.log('Acceptance20 contract: backend/docs/STECH_QA_ACCEPTANCE_20_BACKEND_SUPABASE.md');
+console.log('RAG authority: backend/docs/STECH_RAG_VECTOR_V38.md');
 console.log(`Expected backend checks=${checksPass}/${checksTotal}`);
 console.log(`Persistence snapshots=${persistenceAvailable}/${persistedSessions.length}`);
+console.log(`RAG vector product=${ragRetrievalSummary.vectorProduct}, vector institutional=${ragRetrievalSummary.vectorInstitutional}, lexical fallback=${ragRetrievalSummary.lexicalFallback}, missing source=${ragRetrievalSummary.missingSource}`);
 console.log('Persisted snapshot: qa-results/acceptance20/latest/persisted-sessions.json');
 console.log('Contract score: qa-results/acceptance20/latest/acceptance-contract-summary.json');
+console.log('RAG retrieval: qa-results/acceptance20/latest/rag-retrieval-summary.json');
 process.exitCode=result.exitCode;
