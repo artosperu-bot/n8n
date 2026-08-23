@@ -4,13 +4,13 @@ import { extractReservationBundle, reservationBundleMissing } from '../../src/co
 import { renderCommercialMove } from '../../src/conversation/commercial/ResponsePolicy.ts';
 
 test('reservation data can be captured from one structured customer message',()=>{
-  const data=extractReservationBundle('DNI: 12345678 | Nombre: Juan Perez Lopez | Dirección: Av. Arequipa 1234, Lima');
+  const data=extractReservationBundle('DNI: 12345678, Nombre: Juan Perez Lopez, Dirección: Av. Arequipa 1234, Lima');
   assert.deepEqual(data,{document:'12345678',name:'Juan Perez Lopez',address:'Av. Arequipa 1234, Lima'});
   assert.deepEqual(reservationBundleMissing(data),[]);
 });
 
 test('reservation bundle reports only fields that are still missing',()=>{
-  const data=extractReservationBundle('DNI: 12345678 | Nombre: Juan Perez Lopez');
+  const data=extractReservationBundle('DNI: 12345678, Nombre: Juan Perez Lopez');
   assert.deepEqual(reservationBundleMissing(data),['dirección completa']);
 });
 
