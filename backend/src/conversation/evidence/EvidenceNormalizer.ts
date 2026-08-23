@@ -1,22 +1,153 @@
 import type { ProductQuote, RagEvidence, VerifiedFact } from '../../domain/types.ts';
 import { fold } from '../../shared/text.ts';
 
-function compact(value:string,max=320):string {const clean=value.replace(/\s+/g,' ').trim();return clean.length<=max?clean:`${clean.slice(0,max-1).trimEnd()}…`;}
+function compact(value:string,max=320):string {
+  const clean=value.replace(/\s+/g,' ').trim();
+  return clean.length<=max?clean:`${clean.slice(0,max-1).trimEnd()}…`;
+}
 function productName(q:ProductQuote):string { return String(q.shortName??q.product).trim(); }
 const RAG_ENVELOPE_KEYS=new Set(['producto','producto id','codigo','sku','seccion','grupo tecnico','titulo','contenido','palabras clave']);
-function envelopeLabel(line:string):string|null { const match=line.match(/^([^:\n]{2,40})\s*:\s*/);return match?fold(match[1]).replace(/\s+/g,' ').trim():null; }
-function displayText(raw:string):string {const normalized=raw.replace(/\r\n?/g,'\n').trim();if(!normalized)return '';const lines=normalized.split('\n').map(line=>line.trim()).filter(Boolean);const envelopeCount=lines.reduce((count,line)=>count+(RAG_ENVELOPE_KEYS.has(envelopeLabel(line)??'')?1:0),0);if(envelopeCount<2)return compact(normalized);const contentIndex=lines.findIndex(line=>envelopeLabel(line)==='contenido');if(contentIndex>=0){const first=lines[contentIndex].replace(/^[^:\n]{2,40}\s*:\s*/,'').trim();const tail=lines.slice(contentIndex+1).filter(line=>!RAG_ENVELOPE_KEYS.has(envelopeLabel(line)??''));return compact([first,...tail].filter(Boolean).join(' '));}return compact(lines.filter(line=>!RAG_ENVELOPE_KEYS.has(envelopeLabel(line)??'')).join(' '));}
+function envelopeLabel(line:string):string|null {
+  const match=line.match(/^([^:\n]{2,40})\s*:\s*/);
+  return match?fold(match[1]).replace(/\s+/g,' ').trim():null;
+}
+function displayText(raw:string):string {
+  const normalized=raw.replace(/\r\n?/g,'\n').trim();if(!normalized)return '';
+  const lines=normalized.split('\n').map(line=>line.trim()).filter(Boolean);
+  const envelopeCount=lines.reduce((count,line)=>count+(RAG_ENVELOPE_KEYS.has(envelopeLabel(line)??'')?1:0),0);
+  if(envelopeCount<2)return compact(normalized);
+  const contentIndex=lines.findIndex(line=>envelopeLabel(line)==='contenido');
+  if(contentIndex>=0){
+    const first=lines[contentIndex].replace(/^[^:\n]{2,40}\s*:\s*/,'').trim();
+    const tail=lines.slice(contentIndex+1).filter(line=>!RAG_ENVELOPE_KEYS.has(envelopeLabel(line)??''));
+    return compact([first,...tail].filter(Boolean).join(' '));
+  }
+  return compact(lines.filter(line=>!RAG_ENVELOPE_KEYS.has(envelopeLabel(line)??'')).join(' '));
+}
 function baseFact(row:RagEvidence){return {domain:'PRODUCT_RAG' as const,productId:row.productId??null,source:row.source};}
-function yesNo(value:string|undefined):'Sí'|'No'|null{if(!value)return null;return /^s[ií]$/i.test(value.trim())?'Sí':/^no$/i.test(value.trim())?'No':null;}
+function yesNo(value:string|undefined):'Sí'|'No'|null {
+  if(!value)return null;
+  const clean=value.trim().replace(/[.,;:!?]+$/,'');
+  return /^s[ií]$/i.test(clean)?'Sí':/^no$/i.test(clean)?'No':null;
+}
 function decimal(value:string):string{return value.replace(',','.');}
-function memoryFacts(text:string,row:RagEvidence):VerifiedFact[]{const facts:VerifiedFact[]=[];const base=baseFact(row);const combined=text.match(/\b(\d+(?:[.,]\d+)?)\s*GB\s*\+\s*(\d+(?:[.,]\d+)?)\s*GB\s*(?:de\s*)?(?:RAM\s*)?virtual\b/i);const physical=combined?.[1]??text.match(/\b(?:memoria\s+)?RAM\s*(?:f[ií]sica)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];const virtual=combined?.[2]??text.match(/\b(?:ampliaci[oó]n\s+de\s+)?RAM\s+virtual(?:\s+m[aá]xima)?\s*[:=]?\s*(?:de\s+)?(?:hasta\s+)?(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];const storage=text.match(/\b(?:almacenamiento(?:\s+interno)?|memoria\s+interna|ROM)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(GB|TB)\b/i);const microsd=text.match(/\bmicro\s*SD(?:\s+m[aá]xima|\s+hasta)?\s*[:=]?\s*(?:hasta\s+)?(\d+(?:[.,]\d+)?)\s*(GB|TB)\b/i);if(physical)facts.push({...base,key:'RAM_FISICA',value:`${decimal(physical)} GB`});if(virtual)facts.push({...base,key:'RAM_VIRTUAL',value:`hasta ${decimal(virtual)} GB`});if(storage)facts.push({...base,key:'ALMACENAMIENTO',value:`${decimal(storage[1])} ${storage[2].toUpperCase()}`});if(microsd)facts.push({...base,key:'MICROSD_MAX',value:`hasta ${decimal(microsd[1])} ${microsd[2].toUpperCase()}`});return facts;}
-function resistanceFacts(text:string,row:RagEvidence):VerifiedFact[]{const facts:VerifiedFact[]=[];const base=baseFact(row);const fall=text.match(/\bresistencia\s+a\s+ca[ií]das?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*m\b/i);const depth=text.match(/\bprofundidad\s+IP68\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*m\b/i);const time=text.match(/\btiempo\s+IP68\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*min(?:utos?)?\b/i);const ip68=text.match(/\b(?:certificaci[oó]n\s+)?IP68\s*[:=]?\s*(s[ií]|no)\b/i);const ip69=text.match(/\b(?:certificaci[oó]n\s+)?IP69K?\s*[:=]?\s*(s[ií]|no)\b/i);const mil=text.match(/\bMIL-STD-810H\s*[:=]?\s*(s[ií]|no)\b/i);if(fall)facts.push({...base,key:'RESISTENCIA_CAIDAS',value:`${decimal(fall[1])} m`});if(ip68)facts.push({...base,key:'IP68',value:yesNo(ip68[1])!});if(ip69)facts.push({...base,key:'IP69K',value:yesNo(ip69[1])!});if(mil)facts.push({...base,key:'MIL_STD_810H',value:yesNo(mil[1])!});if(depth)facts.push({...base,key:'PROFUNDIDAD_IP68',value:`${decimal(depth[1])} m`});if(time)facts.push({...base,key:'TIEMPO_IP68',value:`${decimal(time[1])} min`});return facts;}
-function connectivityFacts(text:string,row:RagEvidence):VerifiedFact[]{const facts:VerifiedFact[]=[];const base=baseFact(row);const nfc=text.match(/\bNFC\b\s*(?:integrado\s*)?[:=]?\s*(s[ií]|no)\b/i)??text.match(/\b(?:tiene|incluye|soporta|cuenta con)\s+NFC\b/i);const fiveG=text.match(/\b(?:conectividad\s+|red\s+|soporte\s+)?5G\s*[:=]?\s*(s[ií]|no)\b/i);const fourG=text.match(/\b(?:red\s+)?4G(?:\s+LTE)?\s*[:=]?\s*(s[ií]|no)\b/i);const bluetooth=text.match(/\bversi[oó]n\s+Bluetooth\s*[:=]?\s*([0-9.]+)\b/i);const wifi=text.match(/\best[aá]ndares?\s+Wi-?Fi\s*[:=]?\s*([^.;\n]+)/i);if(nfc)facts.push({...base,key:'NFC',value:nfc[1]?yesNo(nfc[1])!:'Sí'});if(fiveG)facts.push({...base,key:'5G',value:yesNo(fiveG[1])!});if(fourG)facts.push({...base,key:'4G_LTE',value:yesNo(fourG[1])!});if(bluetooth)facts.push({...base,key:'BLUETOOTH_VERSION',value:bluetooth[1]});if(wifi)facts.push({...base,key:'WIFI_STANDARD',value:wifi[1].trim()});return facts;}
-function cameraFacts(text:string,row:RagEvidence):VerifiedFact[]{const facts:VerifiedFact[]=[];const base=baseFact(row);const main=text.match(/\bc[aá]mara\s+(?:principal|trasera)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*MP\b/i);const front=text.match(/\bc[aá]mara\s+frontal\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*MP\b/i);const nightMp=text.match(/\b(?:c[aá]mara\s+de\s+)?visi[oó]n\s+nocturna\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*MP\b/i)??text.match(/\bc[aá]mara\s+nocturna\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*MP\b/i);const nightYes=text.match(/\b(?:c[aá]mara\s+)?visi[oó]n\s+nocturna\s*[:=]?\s*(s[ií]|no)\b/i);const mainSensor=text.match(/\bsensor\s+c[aá]mara\s+principal\s*[:=]?\s*([^.;\n]+)/i);const nightSensor=text.match(/\bsensor\s+c[aá]mara\s+nocturna\s*[:=]?\s*([^.;\n]+)/i);const video=text.match(/\bresoluci[oó]n\s+m[aá]xima\s+de\s+video\s*[:=]?\s*([^.;\n]+)/i);if(main)facts.push({...base,key:'CAMARA_PRINCIPAL_MP',value:`${decimal(main[1])} MP`});if(mainSensor)facts.push({...base,key:'CAMARA_PRINCIPAL_SENSOR',value:mainSensor[1].trim()});if(front)facts.push({...base,key:'CAMARA_FRONTAL_MP',value:`${decimal(front[1])} MP`});if(nightMp){facts.push({...base,key:'VISION_NOCTURNA',value:'Sí'});facts.push({...base,key:'CAMARA_NOCTURNA_MP',value:`${decimal(nightMp[1])} MP`});}else if(nightYes)facts.push({...base,key:'VISION_NOCTURNA',value:yesNo(nightYes[1])!});if(nightSensor)facts.push({...base,key:'CAMARA_NOCTURNA_SENSOR',value:nightSensor[1].trim()});if(video)facts.push({...base,key:'VIDEO_MAX_CLASE',value:video[1].trim()});return facts;}
-function thermalFacts(text:string,row:RagEvidence):VerifiedFact[]{const facts:VerifiedFact[]=[];const base=baseFact(row);const thermal=text.match(/\bc[aá]mara\s+t[eé]rmica\s*[:=]?\s*(s[ií]|no)\b/i);const resolution=text.match(/\bresoluci[oó]n\s+t[eé]rmica\s*[:=]?\s*(\d+)\s*[x×]\s*(\d+)/i);if(thermal)facts.push({...base,key:'CAMARA_TERMICA',value:yesNo(thermal[1])!});if(resolution)facts.push({...base,key:'RESOLUCION_TERMICA',value:`${resolution[1]}×${resolution[2]}`});return facts;}
-function batteryFacts(text:string,row:RagEvidence):VerifiedFact[]{const facts:VerifiedFact[]=[];const base=baseFact(row);const capacity=text.match(/\b(?:capacidad(?:\s+de\s+bater[ií]a)?|bater[ií]a)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*mAh\b/i);const charge=text.match(/\bcarga(?:\s+cableada)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*W\b/i);if(capacity)facts.push({...base,key:'BATERIA_MAH',value:`${decimal(capacity[1])} mAh`});if(charge)facts.push({...base,key:'CARGA_W',value:`${decimal(charge[1])} W`});return facts;}
-function displayFacts(text:string,row:RagEvidence):VerifiedFact[]{const facts:VerifiedFact[]=[];const base=baseFact(row);const hz=text.match(/\b(?:frecuencia(?:\s+de\s+refresco)?|refresco)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*Hz\b/i);const size=text.match(/\bpantalla(?:\s+de)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*pulgadas\b/i)??text.match(/\b(\d+(?:[.,]\d+)?)\s*pulgadas\b/i);const resolution=text.match(/\b(?:resoluci[oó]n(?:\s+de\s+pantalla)?)\s*[:=]?\s*(\d{3,4})\s*[x×]\s*(\d{3,4})\s*px?\b/i);if(hz)facts.push({...base,key:'PANTALLA_HZ',value:`${decimal(hz[1])} Hz`});if(size)facts.push({...base,key:'PANTALLA_TAMANO',value:`${decimal(size[1])} pulgadas`});if(resolution)facts.push({...base,key:'PANTALLA_RESOLUCION',value:`${resolution[1]}×${resolution[2]} px`});return facts;}
-function performanceFacts(text:string,row:RagEvidence):VerifiedFact[]{const facts:VerifiedFact[]=[];const base=baseFact(row);const cpu=text.match(/\b(?:procesador|chipset|soc)\s*[:=]?\s*([^.;\n]{3,80})/i);if(cpu)facts.push({...base,key:'PROCESADOR',value:cpu[1].trim()});return facts;}
+// JS \b is ASCII-oriented and fails after accented í in "Sí.". Every boolean
+// parser therefore uses a punctuation/whitespace lookahead instead of trailing \b.
+const BOOL='(s[ií]|no)(?=$|[\\s.,;:!?)] )'.replace(')] ',')\\]]');
+function boolMatch(text:string,prefix:string):RegExpMatchArray|null {
+  return text.match(new RegExp(`${prefix}\\s*[:=]?\\s*${BOOL}`,'i'));
+}
+
+function memoryFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];const base=baseFact(row);
+  const combined=text.match(/\b(\d+(?:[.,]\d+)?)\s*GB\s*\+\s*(\d+(?:[.,]\d+)?)\s*GB\s*(?:de\s*)?(?:RAM\s*)?virtual\b/i);
+  const physical=combined?.[1]??text.match(/\b(?:memoria\s+)?RAM\s*(?:f[ií]sica)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];
+  const virtual=combined?.[2]??text.match(/\b(?:ampliaci[oó]n\s+de\s+)?RAM\s+virtual(?:\s+m[aá]xima)?\s*[:=]?\s*(?:de\s+)?(?:hasta\s+)?(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];
+  const storage=text.match(/\b(?:almacenamiento(?:\s+interno)?|memoria\s+interna|ROM)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(GB|TB)\b/i);
+  const microsd=text.match(/\bmicro\s*SD(?:\s+m[aá]xima|\s+hasta)?\s*[:=]?\s*(?:hasta\s+)?(\d+(?:[.,]\d+)?)\s*(GB|TB)\b/i);
+  if(physical)facts.push({...base,key:'RAM_FISICA',value:`${decimal(physical)} GB`});
+  if(virtual)facts.push({...base,key:'RAM_VIRTUAL',value:`hasta ${decimal(virtual)} GB`});
+  if(storage)facts.push({...base,key:'ALMACENAMIENTO',value:`${decimal(storage[1])} ${storage[2].toUpperCase()}`});
+  if(microsd)facts.push({...base,key:'MICROSD_MAX',value:`hasta ${decimal(microsd[1])} ${microsd[2].toUpperCase()}`});
+  return facts;
+}
+function resistanceFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];const base=baseFact(row);
+  const fall=text.match(/\bresistencia\s+a\s+ca[ií]das?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*m\b/i);
+  const depth=text.match(/\bprofundidad\s+IP68\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*m\b/i);
+  const time=text.match(/\btiempo\s+IP68\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*min(?:utos?)?\b/i);
+  const ip68=boolMatch(text,'\\b(?:certificaci[oó]n\\s+)?IP68');
+  const ip69=boolMatch(text,'\\b(?:certificaci[oó]n\\s+)?IP69K?');
+  const mil=boolMatch(text,'\\bMIL-STD-810H');
+  if(fall)facts.push({...base,key:'RESISTENCIA_CAIDAS',value:`${decimal(fall[1])} m`});
+  if(ip68)facts.push({...base,key:'IP68',value:yesNo(ip68[1])!});
+  if(ip69)facts.push({...base,key:'IP69K',value:yesNo(ip69[1])!});
+  if(mil)facts.push({...base,key:'MIL_STD_810H',value:yesNo(mil[1])!});
+  if(depth)facts.push({...base,key:'PROFUNDIDAD_IP68',value:`${decimal(depth[1])} m`});
+  if(time)facts.push({...base,key:'TIEMPO_IP68',value:`${decimal(time[1])} min`});
+  return facts;
+}
+function connectivityFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];const base=baseFact(row);
+  const nfc=boolMatch(text,'\\bNFC\\b')??text.match(/\b(?:tiene|incluye|soporta|cuenta con)\s+NFC\b/i);
+  const fiveG=boolMatch(text,'\\b(?:conectividad\\s+|red\\s+|soporte\\s+)?5G');
+  const fourG=boolMatch(text,'\\b(?:red\\s+)?4G(?:\\s+LTE)?');
+  const bluetooth=text.match(/\bversi[oó]n\s+Bluetooth\s*[:=]?\s*([0-9.]+)\b/i);
+  const wifi=text.match(/\best[aá]ndares?\s+Wi-?Fi\s*[:=]?\s*([^.;\n]+)/i);
+  if(nfc)facts.push({...base,key:'NFC',value:nfc[1]?yesNo(nfc[1])!:'Sí'});
+  if(fiveG)facts.push({...base,key:'5G',value:yesNo(fiveG[1])!});
+  if(fourG)facts.push({...base,key:'4G_LTE',value:yesNo(fourG[1])!});
+  if(bluetooth)facts.push({...base,key:'BLUETOOTH_VERSION',value:bluetooth[1]});
+  if(wifi)facts.push({...base,key:'WIFI_STANDARD',value:wifi[1].trim()});
+  return facts;
+}
+function cameraFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];const base=baseFact(row);
+  const main=text.match(/\bc[aá]mara\s+(?:principal|trasera)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*MP\b/i);
+  const front=text.match(/\bc[aá]mara\s+frontal\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*MP\b/i);
+  const nightMp=text.match(/\b(?:c[aá]mara\s+de\s+)?visi[oó]n\s+nocturna\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*MP\b/i)??text.match(/\bc[aá]mara\s+nocturna\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*MP\b/i);
+  const nightYes=boolMatch(text,'\\b(?:c[aá]mara\\s+)?visi[oó]n\\s+nocturna');
+  const mainSensor=text.match(/\bsensor\s+c[aá]mara\s+principal\s*[:=]?\s*([^.;\n]+)/i);
+  const nightSensor=text.match(/\bsensor\s+c[aá]mara\s+nocturna\s*[:=]?\s*([^.;\n]+)/i);
+  const video=text.match(/\bresoluci[oó]n\s+m[aá]xima\s+de\s+video\s*[:=]?\s*([^.;\n]+)/i);
+  if(main)facts.push({...base,key:'CAMARA_PRINCIPAL_MP',value:`${decimal(main[1])} MP`});
+  if(mainSensor)facts.push({...base,key:'CAMARA_PRINCIPAL_SENSOR',value:mainSensor[1].trim()});
+  if(front)facts.push({...base,key:'CAMARA_FRONTAL_MP',value:`${decimal(front[1])} MP`});
+  if(nightMp){facts.push({...base,key:'VISION_NOCTURNA',value:'Sí'});facts.push({...base,key:'CAMARA_NOCTURNA_MP',value:`${decimal(nightMp[1])} MP`});}
+  else if(nightYes)facts.push({...base,key:'VISION_NOCTURNA',value:yesNo(nightYes[1])!});
+  if(nightSensor)facts.push({...base,key:'CAMARA_NOCTURNA_SENSOR',value:nightSensor[1].trim()});
+  if(video)facts.push({...base,key:'VIDEO_MAX_CLASE',value:video[1].trim()});
+  return facts;
+}
+function thermalFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];const base=baseFact(row);
+  const thermal=boolMatch(text,'\\bc[aá]mara\\s+t[eé]rmica');
+  const resolution=text.match(/\bresoluci[oó]n\s+t[eé]rmica\s*[:=]?\s*(\d+)\s*[x×]\s*(\d+)/i);
+  if(thermal)facts.push({...base,key:'CAMARA_TERMICA',value:yesNo(thermal[1])!});
+  if(resolution)facts.push({...base,key:'RESOLUCION_TERMICA',value:`${resolution[1]}×${resolution[2]}`});
+  return facts;
+}
+function batteryFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];const base=baseFact(row);
+  const capacity=text.match(/\b(?:capacidad(?:\s+de\s+bater[ií]a)?|bater[ií]a)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*mAh\b/i);
+  const charge=text.match(/\bcarga(?:\s+cableada)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*W\b/i);
+  if(capacity)facts.push({...base,key:'BATERIA_MAH',value:`${decimal(capacity[1])} mAh`});
+  if(charge)facts.push({...base,key:'CARGA_W',value:`${decimal(charge[1])} W`});
+  return facts;
+}
+function displayFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];const base=baseFact(row);
+  const hz=text.match(/\b(?:frecuencia(?:\s+de\s+refresco)?|refresco)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*Hz\b/i);
+  const size=text.match(/\bpantalla(?:\s+de)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*pulgadas\b/i)??text.match(/\b(\d+(?:[.,]\d+)?)\s*pulgadas\b/i);
+  const resolution=text.match(/\b(?:resoluci[oó]n(?:\s+de\s+pantalla)?)\s*[:=]?\s*(\d{3,4})\s*[x×]\s*(\d{3,4})\s*px?\b/i);
+  if(hz)facts.push({...base,key:'PANTALLA_HZ',value:`${decimal(hz[1])} Hz`});
+  if(size)facts.push({...base,key:'PANTALLA_TAMANO',value:`${decimal(size[1])} pulgadas`});
+  if(resolution)facts.push({...base,key:'PANTALLA_RESOLUCION',value:`${resolution[1]}×${resolution[2]} px`});
+  return facts;
+}
+function performanceFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];const base=baseFact(row);
+  const cpu=text.match(/\b(?:procesador|chipset|soc)\s*[:=]?\s*([^.;\n]{3,80})/i);
+  if(cpu)facts.push({...base,key:'PROCESADOR',value:cpu[1].trim()});
+  return facts;
+}
 function atomicProductFacts(text:string,row:RagEvidence):VerifiedFact[]{return [...memoryFacts(text,row),...resistanceFacts(text,row),...connectivityFacts(text,row),...cameraFacts(text,row),...thermalFacts(text,row),...batteryFacts(text,row),...displayFacts(text,row),...performanceFacts(text,row)];}
 
-export function normalizeEvidence(input:{intent:string;quote?:ProductQuote|null;rag?:RagEvidence[]}):VerifiedFact[]{const intent=String(input.intent??'').toUpperCase();const facts:VerifiedFact[]=[];const q=input.quote??null;if(q){facts.push({domain:'SQL',key:'PRODUCTO',value:productName(q),productId:q.productRagId??null,source:q.source});if(['PRICE','PRICE_AVAILABILITY','QUOTE','STOCK'].includes(intent)&&q.price!=null)facts.push({domain:'SQL',key:'PRECIO',value:`${q.currency||'PEN'} ${Number(q.price).toFixed(2)}`,productId:q.productRagId??null,source:q.source});if(['PRICE','PRICE_AVAILABILITY','STOCK'].includes(intent)&&q.stock!=null)facts.push({domain:'SQL',key:'DISPONIBILIDAD',value:q.stock>0?'DISPONIBLE':'NO_DISPONIBLE',productId:q.productRagId??null,source:q.source});}for(const row of input.rag??[]){const raw=String(row.text??'');const atomic=row.domain==='INSTITUTIONAL'?[]:atomicProductFacts(raw,row);facts.push(...atomic);const value=displayText(raw);if(!value)continue;const domain=row.domain==='INSTITUTIONAL'||row.source.includes('INSTITUCIONAL')?'INSTITUTIONAL_RAG':'PRODUCT_RAG';const key=String(row.section??row.source.split(':').at(-1)??'EVIDENCIA').toUpperCase();const focusedAttribute=['ATTRIBUTE','CAPABILITY'].includes(intent);if(!(focusedAttribute&&domain==='PRODUCT_RAG'&&atomic.length>0))facts.push({domain,key,value,productId:row.productId??null,source:row.source});}const seen=new Set<string>();return facts.filter(f=>{const key=`${f.domain}|${f.key}|${f.value}`;if(seen.has(key))return false;seen.add(key);return true;}).slice(0,24);}
+export function normalizeEvidence(input:{intent:string;quote?:ProductQuote|null;rag?:RagEvidence[]}):VerifiedFact[]{
+  const intent=String(input.intent??'').toUpperCase();const facts:VerifiedFact[]=[];const q=input.quote??null;
+  if(q){
+    facts.push({domain:'SQL',key:'PRODUCTO',value:productName(q),productId:q.productRagId??null,source:q.source});
+    if(['PRICE','PRICE_AVAILABILITY','QUOTE','STOCK'].includes(intent)&&q.price!=null)facts.push({domain:'SQL',key:'PRECIO',value:`${q.currency||'PEN'} ${Number(q.price).toFixed(2)}`,productId:q.productRagId??null,source:q.source});
+    if(['PRICE','PRICE_AVAILABILITY','STOCK'].includes(intent)&&q.stock!=null)facts.push({domain:'SQL',key:'DISPONIBILIDAD',value:q.stock>0?'DISPONIBLE':'NO_DISPONIBLE',productId:q.productRagId??null,source:q.source});
+  }
+  for(const row of input.rag??[]){
+    const raw=String(row.text??'');const atomic=row.domain==='INSTITUTIONAL'?[]:atomicProductFacts(raw,row);facts.push(...atomic);
+    const value=displayText(raw);if(!value)continue;
+    const domain=row.domain==='INSTITUTIONAL'||row.source.includes('INSTITUCIONAL')?'INSTITUTIONAL_RAG':'PRODUCT_RAG';
+    const key=String(row.section??row.source.split(':').at(-1)??'EVIDENCIA').toUpperCase();
+    const focusedAttribute=['ATTRIBUTE','CAPABILITY'].includes(intent);
+    if(!(focusedAttribute&&domain==='PRODUCT_RAG'&&atomic.length>0))facts.push({domain,key,value,productId:row.productId??null,source:row.source});
+  }
+  const seen=new Set<string>();
+  return facts.filter(f=>{const key=`${f.domain}|${f.key}|${f.value}`;if(seen.has(key))return false;seen.add(key);return true;}).slice(0,24);
+}
