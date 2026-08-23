@@ -6,7 +6,7 @@ function byFamily(highlights:ProductHighlight[],family:ProductHighlight['family'
 }
 function sentence(label:string,highlight:ProductHighlight|null):string|null{
   if(!highlight?.summary)return null;
-  const lead=label==='Memoria'?'En memoria':label==='Batería'?'En batería':label==='Resistencia'?'En resistencia':label==='Cámara'?'En cámara':label==='Pantalla'?'La pantalla':label==='Rendimiento'?'En rendimiento':label;
+  const lead=label==='Memoria'?'En memoria':label==='Batería'?'En batería':label==='Resistencia'?'En resistencia':label==='Cámara'?'En cámara':label==='Pantalla'?'La pantalla':label;
   return label==='Pantalla'?`${lead} viene con ${highlight.summary}`:`${lead}, ${highlight.summary}`;
 }
 function overviewAnswer(product:string,highlights:NonNullable<LlmWriteInput['productHighlights']>):string|null{
@@ -16,10 +16,9 @@ function overviewAnswer(product:string,highlights:NonNullable<LlmWriteInput['pro
   const resistance=sentence('Resistencia',byFamily(highlights,'RESISTANCE'));
   const camera=sentence('Cámara',byFamily(highlights,'CAMERA'));
   const display=sentence('Pantalla',byFamily(highlights,'DISPLAY'));
-  const performance=sentence('Rendimiento',byFamily(highlights,'PERFORMANCE'));
   const first=[memory,battery].filter(Boolean).join('. ');
   const second=[resistance,camera].filter(Boolean).join('. ');
-  const third=[display,performance].filter(Boolean).join('. ');
+  const third=display;
   const body=[first,second,third].filter(Boolean).map(x=>`${x}.`).join(' ');
   return `${product} es un equipo bien completo. ${body}`.replace(/\s+/g,' ').trim();
 }
@@ -32,7 +31,7 @@ function mode(input:LlmWriteInput):RagPresentationMode{
 }
 export function applyFullRagWritePolicy(input:LlmWriteInput):LlmWriteInput{
   const presentationMode=mode(input);
-  const productHighlights=selectProductHighlights({intent:input.intent,attribute:input.attribute??null,facts:input.verifiedFacts??[],limit:presentationMode==='PRODUCT_OVERVIEW'?6:2});
+  const productHighlights=selectProductHighlights({intent:input.intent,attribute:input.attribute??null,facts:input.verifiedFacts??[],limit:presentationMode==='PRODUCT_OVERVIEW'?5:2});
   let directAnswer=input.directAnswer??null;
   if(presentationMode==='PRODUCT_OVERVIEW'){
     const product=String(input.resolvedProduct??input.activeProduct??input.quote?.shortName??input.quote?.product??'Este equipo').trim();
