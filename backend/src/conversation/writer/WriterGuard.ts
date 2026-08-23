@@ -219,6 +219,55 @@ function cleanPresentation(answer:string):string {
     .trim();
   return normalizeAvailabilityPresentation(cleaned);
 }
+function trailingQuestion(answer:string):string|null{
+  const questions=[...answer.matchAll(/¿[^?]{1,180}\?/g)].map(match=>match[0].trim());
+  return questions.at(-1)??null;
+}
+function truncateNatural(text:string,max:number):string{
+  const compact=text.replace(/\s+/g,' ').trim();
+  if(compact.length<=max)return compact;
+  const cut=compact.slice(0,max);const boundary=Math.max(cut.lastIndexOf('. '),cut.lastIndexOf('; '),cut.lastIndexOf(', '),cut.lastIndexOf(' '));
+  return `${cut.slice(0,boundary>Math.floor(max*0.65)?boundary:max).trimEnd()}…`;
+}
+function compactRecommendationPresentation(input:LlmWriteInput,answer:string):string{
+  const intent=String(input.intent??'').toUpperCase();
+  if(!['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent))return answer;
+  const question=trailingQuestion(answer);
+  const withoutQuestion=question?answer.replace(question,'').trim():answer.trim();
+  const leadLines=withoutQuestion.split('\n').map(line=>line.trim()).filter(line=>line&&!/^[-*•]\s+/.test(line));
+  let lead=leadLines.join(' ').trim();
+  const sentences=lead.split(/(?<=[.!?])\s+/).filter(Boolean);
+  lead=truncateNatural(sentences.slice(0,2).join(' '),330);
+  const product=String(input.recommendedProduct??input.state?.recommendedProduct??'').trim();
+  if(product&&!new RegExp(escapes(product),'i').test(lead))lead=`Te recomiendo ${product}. ${lead}`.trim();
+  return [lead,question].filter(Boolean).join(' ').trim();
+}
+function focusedCapabilityFact(input:LlmWriteInput):string|null{
+  const message=fold(input.message);
+  const product=String(input.resolvedProduct??input.state?.queryTarget??input.state?.activeProduct??'').trim();
+  if(/\bram\b/.test(message)){
+    const ram=ramProfile(input);if(!ram)return null;
+    const physical=Number.isInteger(ram.physical)?String(ram.physical):String(ram.physical).replace('.',',');
+    const virtual=Number.isInteger(ram.virtual)?String(ram.virtual):String(ram.virtual).replace('.',',');
+    return `Tiene ${physical} GB de RAM física + hasta ${virtual} GB de RAM virtual.`;
+  }
+  if(/\b(?:caida|caidas|golpe|golpes)\b/.test(message)){
+    const fact=[...(input.commercialMove?.verifiedFacts??[]),...(input.verifiedFacts??[])]
+      .find(row=>/CAID|IMPACT/.test(String(row.key??'').toUpperCase())||/ca[ií]da/i.test(String(row.value??'')));
+    if(!fact)return null;
+    const raw=String(fact.value??'').replace(/\s+/g,' ').trim();
+    const value=raw.match(/(?:resistencia\s+a\s+ca[ií]das?\s*:\s*)?([^.;|]+)/i)?.[1]?.trim()??raw;
+    return `${product?`${product} `:''}tiene resistencia a caídas de ${value}.`;
+  }
+  return null;
+}
+function compactFocusedCapabilityPresentation(input:LlmWriteInput,answer:string):string{
+  const intent=String(input.intent??'').toUpperCase();
+  if(!['CAPABILITY','ATTRIBUTE'].includes(intent))return answer;
+  const focused=focusedCapabilityFact(input);
+  if(!focused)return answer;
+  return focused;
+}
 function compactComparisonPresentation(input:LlmWriteInput,answer:string):string{
   if(String(input.intent??'').toUpperCase()!=='COMPARE'||answer.length<=750)return answer;
   const lines=answer.split('\n').map(line=>line.trim()).filter(Boolean);
@@ -309,12 +358,13 @@ function commercialMoveDelivered(input:LlmWriteInput,answer:string):boolean{
       :status==='NO_DISPONIBLE'?/\bno\s+(?:esta\s+)?disponible\b|\bsin\s+stock\b|\bno\s+hay\s+stock\b/.test(text):false;
   }
   if(move.kind==='CONTEXTUAL_BENEFIT'){
+    const rendered=renderCommercialMove(move,input.intent);
+    if(rendered&&fold(answer).includes(fold(rendered)))return true;
     const context=move.relevantCustomerContext;
     const contextGroups=unique([context.useCase,context.problem,...context.priorities,context.objection]).map(value=>fold(value).replace(/[_-]+/g,' ').split(/\s+/).filter(token=>token.length>=4&&!['para','principal'].includes(token))).filter(tokens=>tokens.length);
-    if(!contextGroups.some(tokens=>tokens.every(token=>text.includes(token))))return false;
     const factTokens=move.verifiedFacts.flatMap(fact=>fold(fact.value).split(/[^a-z0-9.,]+/)).filter(token=>token.length>=3||/\d/.test(token));
-    if(!factTokens.some(token=>text.includes(token)))return false;
-    return /\b(?:util|ayuda|sirve|conviene|encaja|adecuad[oa]|ideal|permite|facilita|reduce|protege|proteccion|te da|da mas margen)\b/.test(text);
+    if(contextGroups.some(tokens=>tokens.every(token=>text.includes(token)))&&factTokens.some(token=>text.includes(token))&&/\b(?:util|ayuda|sirve|conviene|encaja|adecuad[oa]|ideal|permite|facilita|reduce|protege|proteccion|te da|da mas margen)\b/.test(text))return true;
+    return false;
   }
   if(move.kind==='RELATED_VERIFIED_FACT'&&move.verifiedFacts[0]?.key==='PRECIO'&&String(input.intent).toUpperCase()==='STOCK')return /\bprecio\b/.test(text);
   return move.verifiedFacts.some(fact=>fold(answer).includes(fold(fact.value)));
@@ -328,17 +378,25 @@ function preserveCommercialMove(input:LlmWriteInput,answer:string):string{
   }
   return continuation?`${answer.trim()} ${continuation}`.trim():answer;
 }
-function directAnswerDelivered(directAnswer:string,answer:string):boolean{
+function directAnswerDelivered(input:LlmWriteInput,directAnswer:string,answer:string):boolean{
+  const message=fold(input.message);
+  if(/\bram\b/.test(message))return !omitsRamComponent(input,answer);
+  if(/\b(?:caida|caidas|golpe|golpes)\b/.test(message)){
+    const wanted=numericClaims(directAnswer).find(claim=>claim.unit==='m');
+    if(!wanted)return /caida|golpe/i.test(answer);
+    return numericClaims(answer).some(claim=>claim.unit==='m'&&claim.value===wanted.value)&&/caida|golpe/i.test(answer);
+  }
   const required=numericClaims(directAnswer);if(required.length){const actual=numericClaims(answer);return required.every(wanted=>actual.some(value=>value.value===wanted.value&&value.unit===wanted.unit));}
   const ignored=new Set(['este','esta','tiene','para','sobre','producto','equipo','armor']);const tokens=fold(directAnswer).split(/[^a-z0-9]+/).filter(token=>token.length>=4&&!ignored.has(token));const text=fold(answer);return tokens.length>0&&tokens.slice(0,4).every(token=>text.includes(token));
 }
-function preserveDirectAnswer(input:LlmWriteInput,answer:string):string{const direct=cleanPresentation(String(input.directAnswer??''));if(!direct||directAnswerDelivered(direct,answer))return answer;return `${direct} ${answer.trim()}`.trim();}
+function preserveDirectAnswer(input:LlmWriteInput,answer:string):string{const direct=cleanPresentation(String(input.directAnswer??''));if(!direct||directAnswerDelivered(input,direct,answer))return answer;return `${direct} ${answer.trim()}`.trim();}
 function stripTrailingQuestion(answer:string):string {const text=answer.trim();const inverted=text.indexOf('¿');if(inverted>0)return text.slice(0,inverted).trim();if(inverted===0)return '';const questionEnd=text.lastIndexOf('?');if(questionEnd<0)return text;const before=text.slice(0,questionEnd);const boundary=Math.max(before.lastIndexOf('.'),before.lastIndexOf('!'),before.lastIndexOf('\n'));return boundary>=0?before.slice(0,boundary+1).trim():'';}
 function internalFallback(answer:string):boolean{return /\b(?:SOFT_CLOSE|ANSWER_ONLY|RELATED_VALUE|ASK_MISSING_FACT|OFFER_ALTERNATIVE|COLLECT_RESERVATION_DATA|EXECUTE_RESERVATION|ASSISTED_HANDOFF|RECOMMEND_WITHIN_BUDGET|N\+1)\b|\bcompara\b[^.]{0,90}\bde forma sim[eé]trica\b/i.test(answer);}
 function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
   if(requestedUnsupportedCapability(input.message)){const refusal=/\b(?:prueba|demo|demostraci[oó]n|cita)\b/i.test(input.message)?'No tengo habilitada una agenda de pruebas desde aquí.':'No tengo habilitada esa gestión desde aquí.';const direct=cleanPresentation(String(input.directAnswer??''));return direct?`${direct} ${refusal}`:refusal;}
   const ram=ramProfile(input);const providedFallback=cleanPresentation(fallbackAnswer);const genericFit=/^(?:Esa opci[oó]n encaja con los criterios indicados|Listo, tomo esa informaci[oó]n como referencia)\.?$/i;const groundedDirect=cleanPresentation(String(input.directAnswer??''));let cleaned=groundedDirect||(providedFallback&&!genericFit.test(providedFallback)?providedFallback:'');
   if(ram&&/\bram\b/i.test(input.message)){const physical=Number.isInteger(ram.physical)?String(ram.physical):String(ram.physical).replace('.',',');const virtual=Number.isInteger(ram.virtual)?String(ram.virtual):String(ram.virtual).replace('.',',');cleaned=`Tiene ${physical} GB de RAM física + hasta ${virtual} GB de RAM virtual.`;}
+  const focused=focusedCapabilityFact(input);if(focused)cleaned=focused;
   if(!cleaned)cleaned=cleanPresentation(fallbackAnswer);const action=String(input.nextBestAction??input.decision?.nextBestAction??'').toUpperCase();
   if(action==='RELATED_VALUE'&&input.commercialMove?.kind==='CONTEXTUAL_BENEFIT'&&genericFit.test(cleaned)){cleaned=renderVerifiedFact(input.commercialMove.verifiedFacts[0])??cleaned;}
   const factUnknown=/^(?:Sobre\s+[^,.]+,\s*)?(?:ese\s+detalle\s+no\s+est[aá]\s+especificado|no\s+tengo\s+confirmado\s+ese\s+dato\s+exacto)\.?$/i;
@@ -346,13 +404,18 @@ function safeFallback(input:LlmWriteInput,fallbackAnswer:string):string {
   if(!cleaned&&action==='SOFT_CLOSE')cleaned='Listo, tomo esa información como referencia.';if(!cleaned&&action==='RECOMMEND')cleaned='Esa opción encaja con los criterios indicados.';
   if(internalFallback(cleaned)){const intent=String(input.intent??'').toUpperCase();cleaned=intent==='COMPARE'?'Aún no hay una diferencia clara entre esas opciones.':['RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent)?'Aún no hay una opción que destaque con claridad.':'No tengo confirmado ese dato exacto.';}
   if(action==='ASK_MISSING_FACT'&&/[¿?]/.test(cleaned)&&!questionConsumesMissingFact(input,cleaned))cleaned=stripTrailingQuestion(cleaned);
-  cleaned=executeNba(input,cleaned);cleaned=preserveCommercialMove(input,cleaned);if(String(input.decision?.nextBestAction??'').toUpperCase()!=='ANSWER_ONLY')return cleaned;return stripTrailingQuestion(cleaned)||'No tengo confirmado ese dato exacto.';
+  cleaned=executeNba(input,cleaned);cleaned=compactFocusedCapabilityPresentation(input,cleaned);cleaned=compactRecommendationPresentation(input,cleaned);cleaned=preserveCommercialMove(input,cleaned);if(String(input.decision?.nextBestAction??'').toUpperCase()!=='ANSWER_ONLY')return cleaned;return stripTrailingQuestion(cleaned)||'No tengo confirmado ese dato exacto.';
 }
 
 export async function safeWrite(llm:LlmProvider,input:LlmWriteInput,fallbackAnswer:string):Promise<WriterGuardResult>{
   try{
     const writeInput=input.commercialContractPrepared?input:prepareCommercialWriteInput(input);const result=await llm.write(writeInput);
-    let cleaned=compactComparisonPresentation(writeInput,preserveDirectAnswer(writeInput,executeNba(writeInput,cleanPresentation(result.text))));
+    let cleaned=cleanPresentation(result.text);
+    cleaned=executeNba(writeInput,cleaned);
+    cleaned=preserveDirectAnswer(writeInput,cleaned);
+    cleaned=compactFocusedCapabilityPresentation(writeInput,cleaned);
+    cleaned=compactComparisonPresentation(writeInput,cleaned);
+    cleaned=compactRecommendationPresentation(writeInput,cleaned);
     let violation=guardGeneratedAnswer(writeInput,cleaned);
     if(violation==='NBA_ANSWER_ONLY_QUESTION'){const salvaged=stripTrailingQuestion(cleaned);if(salvaged&&!guardGeneratedAnswer(writeInput,salvaged)){cleaned=salvaged;violation=null;}}
     if(violation==='COMMERCIAL_MOVE_NOT_DELIVERED'){
