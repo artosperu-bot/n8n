@@ -14,97 +14,107 @@ type GroundedDirectAnswerInput={
 function productName(input:GroundedDirectAnswerInput):string{
   return String(input.resolvedProduct??input.quote?.shortName??input.quote?.product??'El producto').trim();
 }
-
 function compact(value:string,max=420):string{
-  const clean=value.replace(/\s+/g,' ').trim();
-  if(!clean)return '';
+  const clean=value.replace(/\s+/g,' ').trim();if(!clean)return'';
   const clipped=clean.length<=max?clean:`${clean.slice(0,max-1).trimEnd()}…`;
   return /[.!?…]$/.test(clipped)?clipped:`${clipped}.`;
 }
-
-function attributePattern(attribute:string|null):RegExp|null{
-  const normalized=fold(attribute??'');
-  const aliases:Record<string,RegExp>={
-    fisico:/peso|dimension|grosor|fisico/,
-    memoria:/ram|memoria|almacen/,
-    ram:/ram|memoria/,
-    bateria:/bateria|autonomia|carga/,
-    resistencia:/resisten|caida|ip68|ip69|mil/,
-    camara:/camara|foto|video|mp|vision nocturna|nocturna/,
-    conectividad:/nfc|wifi|wi-fi|bluetooth|usb|otg|infrarrojo|conectividad/,
-    redes:/5g|4g|lte|redes?|volte|bandas/,
-    termica:/termic|temperatura|camara termica|resolucion termica/,
-  };
-  if(aliases[normalized])return aliases[normalized];
-  if(!normalized)return null;
-  const escaped=normalized.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  return new RegExp(escaped,'i');
-}
-
-function matchingEvidence(input:GroundedDirectAnswerInput):RagEvidence|null{
-  const pattern=attributePattern(input.attribute);
-  const matched=(input.rag??[]).find(row=>pattern?.test(fold(`${row.section??''} ${row.text}`)))??null;
-  return matched??(pattern?null:input.rag?.[0]??null);
-}
-
-function customerDisplayFact(input:GroundedDirectAnswerInput):VerifiedFact|null{
-  const facts=(input.verifiedFacts??[]).filter(fact=>fact.domain==='PRODUCT_RAG');
-  if(!facts.length)return null;
-  const pattern=attributePattern(input.attribute);
-  if(!pattern)return facts[0]??null;
-  return facts.find(fact=>pattern.test(fold(`${fact.key} ${fact.value}`)))??null;
-}
-
-function positive(value:string):boolean{
-  return /^(?:s[ií]|si|true|yes|1)$/i.test(String(value??'').trim());
-}
-
-function supportLabel(fact:VerifiedFact):string|null{
-  const key=String(fact.key??'').toUpperCase();
-  if(key==='IP68'&&positive(fact.value))return 'IP68';
-  if(key==='IP69K'&&positive(fact.value))return 'IP69K';
-  if(key==='MIL_STD_810H'&&positive(fact.value))return 'MIL-STD-810H';
-  return null;
-}
-
-function sameAttributeSupport(input:GroundedDirectAnswerInput,excludeKeys:string[]=[]):string[]{
-  const pattern=attributePattern(input.attribute);
-  if(!pattern)return [];
-  const excluded=new Set(excludeKeys.map(key=>key.toUpperCase()));
-  return (input.verifiedFacts??[])
-    .filter(fact=>fact.domain==='PRODUCT_RAG'&&!excluded.has(String(fact.key).toUpperCase()))
-    .filter(fact=>pattern.test(fold(`${fact.key} ${fact.value}`)))
-    .map(supportLabel)
-    .filter((value):value is string=>Boolean(value))
-    .filter((value,index,all)=>all.indexOf(value)===index)
-    .slice(0,3);
-}
-
-function verifiedValue(input:GroundedDirectAnswerInput,key:string):string|null{
-  const value=(input.verifiedFacts??[]).find(fact=>fact.domain==='PRODUCT_RAG'&&String(fact.key).toUpperCase()===key.toUpperCase())?.value;
+function positive(value:string|null|undefined):boolean{return /^(?:s[ií]|si|true|yes|1)$/i.test(String(value??'').trim());}
+function negative(value:string|null|undefined):boolean{return /^(?:no|false|0)$/i.test(String(value??'').trim());}
+function fact(input:GroundedDirectAnswerInput,key:string):string|null{
+  const value=(input.verifiedFacts??[]).find(f=>f.domain==='PRODUCT_RAG'&&String(f.key).toUpperCase()===key.toUpperCase())?.value;
   return String(value??'').trim()||null;
 }
-
-function fullResistanceAnswer(input:GroundedDirectAnswerInput):string|null{
-  const fall=verifiedValue(input,'RESISTENCIA_CAIDAS');
-  const depth=verifiedValue(input,'PROFUNDIDAD_IP68');
-  const time=verifiedValue(input,'TIEMPO_IP68');
-  const certifications=(input.verifiedFacts??[]).map(supportLabel).filter((x):x is string=>Boolean(x)).filter((x,i,a)=>a.indexOf(x)===i);
-  if(!fall&&!depth&&!time&&!certifications.length)return null;
-  const pieces:string[]=[];
-  if(certifications.length)pieces.push(`cuenta con ${certifications.join(', ').replace(/, ([^,]+)$/,' y $1')}`);
-  if(fall)pieces.push(`resistencia a caídas de ${fall}`);
-  if(depth&&time)pieces.push(`protección IP68 documentada hasta ${depth} durante ${time}`);
-  else if(depth)pieces.push(`protección IP68 documentada hasta ${depth}`);
-  return `${productName(input)} ${pieces.join('; ')}.`;
+function raw(input:GroundedDirectAnswerInput):string{return (input.rag??[]).map(r=>String(r.text??'')).join('\n');}
+function rawYesNo(input:GroundedDirectAnswerInput,label:RegExp):'Sí'|'No'|null{
+  const text=raw(input);const m=text.match(new RegExp(`${label.source}\\s*[:=]?\\s*(s[ií]|no)\\b`,'i'));
+  return m?/^s/i.test(m[1])?'Sí':'No':null;
 }
+function val(input:GroundedDirectAnswerInput,key:string,fallback?:RegExp):string|null{
+  const known=fact(input,key);if(known)return known;
+  const m=fallback?raw(input).match(fallback):null;return m?.[1]?.trim()??null;
+}
+function joinNatural(items:string[]):string{
+  const clean=items.filter(Boolean);if(clean.length<=1)return clean[0]??'';if(clean.length===2)return `${clean[0]} y ${clean[1]}`;return `${clean.slice(0,-1).join(', ')} y ${clean.at(-1)}`;
+}
+function cleanHasta(value:string|null):string|null{return value?value.replace(/^hasta\s+/i,'').trim():null;}
 
-function naturalFactLabel(key:string):string{
-  const labels:Record<string,string>={
-    NFC:'NFC','5G':'5G','4G_LTE':'4G LTE',VISION_NOCTURNA:'visión nocturna',CAMARA_TERMICA:'cámara térmica',
-    BATERIA_MAH:'batería',CARGA_W:'carga',CAMARA_NOCTURNA_MP:'cámara nocturna',RESOLUCION_TERMICA:'resolución térmica',
-  };
-  return labels[key.toUpperCase()]??key.toLocaleLowerCase('es').replace(/[_-]+/g,' ');
+function memoryAnswer(input:GroundedDirectAnswerInput):string|null{
+  const physical=val(input,'RAM_FISICA',/RAM\s+f[ií]sica\s*[:=]?\s*([^.;\n]+)/i);
+  const virtual=cleanHasta(val(input,'RAM_VIRTUAL',/RAM\s+virtual(?:\s+m[aá]xima)?\s*[:=]?\s*(?:hasta\s+)?([^.;\n]+)/i));
+  const storage=val(input,'ALMACENAMIENTO',/almacenamiento(?:\s+interno)?\s*[:=]?\s*([^.;\n]+)/i);
+  const pieces:string[]=[];
+  if(physical)pieces.push(`${physical} de RAM física`);if(virtual)pieces.push(`hasta ${virtual} de RAM virtual`);if(storage)pieces.push(`${storage} de almacenamiento`);
+  return pieces.length?`${productName(input)} tiene ${joinNatural(pieces)}.`:null;
+}
+function batteryAnswer(input:GroundedDirectAnswerInput):string|null{
+  const capacity=val(input,'BATERIA_MAH',/(?:capacidad(?:\s+de\s+bater[ií]a)?|bater[ií]a)\s*[:=]?\s*([0-9.,]+\s*mAh)/i);
+  const charge=val(input,'CARGA_W',/carga(?:\s+cableada)?\s*[:=]?\s*([0-9.,]+\s*W)/i);
+  if(!capacity&&!charge)return null;
+  return `${productName(input)} tiene ${capacity?`batería de ${capacity}`:'batería documentada'}${charge?` y carga de ${charge}`:''}.`;
+}
+function resistanceAnswer(input:GroundedDirectAnswerInput):string|null{
+  const fall=val(input,'RESISTENCIA_CAIDAS',/resistencia\s+a\s+ca[ií]das?\s*[:=]?\s*([0-9.,]+\s*m)/i);
+  const depth=val(input,'PROFUNDIDAD_IP68',/profundidad\s+IP68\s*[:=]?\s*([0-9.,]+\s*m)/i);
+  const time=val(input,'TIEMPO_IP68',/tiempo\s+IP68\s*[:=]?\s*([0-9.,]+\s*min(?:utos?)?)/i);
+  const certs:string[]=[];
+  const ip68=fact(input,'IP68')??rawYesNo(input,/(?:certificaci[oó]n\s+)?IP68/);if(positive(ip68))certs.push('IP68');
+  const ip69=fact(input,'IP69K')??rawYesNo(input,/(?:certificaci[oó]n\s+)?IP69K?/);if(positive(ip69))certs.push('IP69K');
+  const mil=fact(input,'MIL_STD_810H')??rawYesNo(input,/MIL-STD-810H/);if(positive(mil))certs.push('MIL-STD-810H');
+  if(!fall&&!certs.length&&!depth)return null;
+  const parts:string[]=[];
+  if(certs.length)parts.push(`certificaciones ${joinNatural(certs)}`);
+  if(fall)parts.push(`resistencia a caídas de ${fall}`);
+  if(depth&&time)parts.push(`protección IP68 documentada hasta ${depth} durante ${time}`);
+  return `${productName(input)} cuenta con ${joinNatural(parts)}.`;
+}
+function cameraAnswer(input:GroundedDirectAnswerInput):string|null{
+  const main=val(input,'CAMARA_PRINCIPAL_MP',/c[aá]mara\s+(?:principal|trasera)\s*[:=]?\s*([0-9.,]+\s*MP)/i);
+  const front=val(input,'CAMARA_FRONTAL_MP',/c[aá]mara\s+frontal\s*[:=]?\s*([0-9.,]+\s*MP)/i);
+  const night=val(input,'CAMARA_NOCTURNA_MP',/(?:visi[oó]n\s+nocturna|c[aá]mara\s+nocturna)\s*[:=]?\s*([0-9.,]+\s*MP)/i);
+  const nightFlag=fact(input,'VISION_NOCTURNA')??rawYesNo(input,/(?:c[aá]mara\s+)?visi[oó]n\s+nocturna/);
+  const pieces:string[]=[];
+  if(main)pieces.push(`cámara principal de ${main}`);if(front)pieces.push(`cámara frontal de ${front}`);if(night)pieces.push(`cámara de visión nocturna de ${night}`);else if(positive(nightFlag))pieces.push('visión nocturna');
+  return pieces.length?`${productName(input)} tiene ${joinNatural(pieces)}.`:null;
+}
+function nfcAnswer(input:GroundedDirectAnswerInput):string|null{
+  const value=fact(input,'NFC')??rawYesNo(input,/\bNFC\b/);if(!value)return null;
+  return positive(value)?`Sí, ${productName(input)} tiene NFC.`:negative(value)?`No, ${productName(input)} no tiene NFC.`:null;
+}
+function networkAnswer(input:GroundedDirectAnswerInput):string|null{
+  const five=fact(input,'5G')??rawYesNo(input,/(?:conectividad\s+|red\s+|soporte\s+)?5G/);
+  if(positive(five))return `Sí, ${productName(input)} tiene conectividad 5G.`;
+  if(negative(five))return `No, ${productName(input)} no tiene 5G.`;
+  const four=fact(input,'4G_LTE')??rawYesNo(input,/(?:red\s+)?4G(?:\s+LTE)?/);
+  if(positive(four))return `No tengo 5G confirmado para ${productName(input)}; lo que sí está documentado es 4G LTE.`;
+  return null;
+}
+function nightVisionAnswer(input:GroundedDirectAnswerInput):string|null{
+  const night=val(input,'CAMARA_NOCTURNA_MP',/(?:visi[oó]n\s+nocturna|c[aá]mara\s+nocturna)\s*[:=]?\s*([0-9.,]+\s*MP)/i);
+  const flag=fact(input,'VISION_NOCTURNA')??rawYesNo(input,/(?:c[aá]mara\s+)?visi[oó]n\s+nocturna/);
+  if(night)return `Sí, ${productName(input)} tiene cámara de visión nocturna de ${night}.`;
+  if(positive(flag))return `Sí, ${productName(input)} tiene visión nocturna.`;
+  if(negative(flag))return `No, ${productName(input)} no tiene visión nocturna.`;
+  return null;
+}
+function thermalAnswer(input:GroundedDirectAnswerInput):string|null{
+  const flag=fact(input,'CAMARA_TERMICA')??rawYesNo(input,/c[aá]mara\s+t[eé]rmica/);
+  const resolution=val(input,'RESOLUCION_TERMICA',/resoluci[oó]n\s+t[eé]rmica\s*[:=]?\s*([0-9]+\s*[x×]\s*[0-9]+)/i);
+  if(positive(flag))return `Sí, ${productName(input)} tiene cámara térmica${resolution?` con resolución de ${resolution}`:''}.`;
+  if(negative(flag))return `No, ${productName(input)} no tiene cámara térmica.`;
+  return null;
+}
+function attributeAnswer(input:GroundedDirectAnswerInput):string|null{
+  const asked=fold(`${input.attribute??''} ${input.message}`);
+  if(/nfc/.test(asked))return nfcAnswer(input);
+  if(/5g/.test(asked))return networkAnswer(input);
+  if(/termic|temperatura/.test(asked))return thermalAnswer(input);
+  if(/vision\s+nocturna|camara\s+nocturna|nocturn/.test(asked))return nightVisionAnswer(input);
+  if(/resisten|caida|golpe|ip68|ip69|mil/.test(asked))return resistanceAnswer(input);
+  if(/camara|camaras|foto|video/.test(asked))return cameraAnswer(input);
+  if(/ram|memoria|almacen/.test(asked))return memoryAnswer(input);
+  if(/bateria|autonomia|carga/.test(asked))return batteryAnswer(input);
+  return null;
 }
 
 export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):string|null{
@@ -114,52 +124,8 @@ export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):strin
   const quote=input.quote??null;
   if(['PRICE','PRICE_AVAILABILITY'].includes(intent)&&quote?.price!=null)return `${productName(input)} está a S/ ${quote.price}.`;
   if(intent==='STOCK'&&quote?.stock!=null)return quote.stock>0?'Sí, está disponible.':'Ahora no está disponible.';
-
   const institutional=(input.rag??[]).find(row=>row.domain==='INSTITUTIONAL'||/INSTITUCIONAL|POLICY/i.test(row.source));
   if(['POLICY','WARRANTY'].includes(intent)&&institutional?.text)return compact(institutional.text);
-
-  const evidence=matchingEvidence(input);
-  const raw=String(evidence?.text??'');
-  const requested=fold(`${input.message} ${input.attribute??''}`);
-
-  if(raw&&/peso|fisico/.test(requested)){
-    const weight=raw.match(/\bpeso(?:\s+(?:del\s+)?(?:producto|equipo))?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(kg|g)\b/i);
-    if(weight)return `${productName(input)} pesa ${weight[1]} ${weight[2]}.`;
-  }
-
-  if(/\bram\b|memoria/.test(requested)){
-    const physical=verifiedValue(input,'RAM_FISICA');
-    const virtual=verifiedValue(input,'RAM_VIRTUAL');
-    if(physical&&virtual)return `Tiene ${physical} de RAM física + hasta ${virtual} de RAM virtual.`;
-  }
-
-  if(/resisten|rugged|proteccion|durab/.test(requested)&&!/solo\s+caida/.test(requested)){
-    const full=fullResistanceAnswer(input);
-    if(full)return full;
-  }
-
-  if(/caida|caidas|golpe|golpes/.test(requested)){
-    const fall=verifiedValue(input,'RESISTENCIA_CAIDAS');
-    if(fall){
-      const support=sameAttributeSupport(input,['RESISTENCIA_CAIDAS']);
-      const certifications=support.length?` También cuenta con ${support.join(', ').replace(/, ([^,]+)$/,' y $1')}.`:'';
-      return `${productName(input)} tiene resistencia a caídas de ${fall}.${certifications}`;
-    }
-  }
-
-  const displayFact=customerDisplayFact(input);
-  if(!displayFact)return null;
-  const display=String(displayFact.value??'').trim();
-  if(!display)return null;
-  const label=naturalFactLabel(String(displayFact.key??'EVIDENCIA'));
-
-  if(/^(?:s[ií]|no)$/i.test(display))return /^s/i.test(display)?`Sí, tiene ${label}.`:`No, no tiene ${label}.`;
-  const labelled=display.match(/^([^:\n]{2,80})\s*:\s*([^\n]+?)\s*\.?$/);
-  if(labelled){
-    const naturalLabel=labelled[1].trim();
-    const value=labelled[2].trim().replace(/[.!?]+$/,'');
-    if(/ram\s+f[ií]sica/i.test(naturalLabel))return `Tiene ${value} de RAM física.`;
-    return `${naturalLabel}: ${value}.`;
-  }
-  return `${label.charAt(0).toUpperCase()+label.slice(1)}: ${display.replace(/[.!?]+$/,'')}.`;
+  if(['CAPABILITY','ATTRIBUTE'].includes(intent))return attributeAnswer(input);
+  return null;
 }
