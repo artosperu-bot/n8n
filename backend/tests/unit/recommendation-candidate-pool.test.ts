@@ -9,12 +9,12 @@ const rows:any[]=[
   {product:'Armor 25T Pro',shortName:'Armor 25T Pro',price:1999,stock:0,currency:'PEN',source:'SQL_BRIDGE'},
 ];
 
-test('catalog keeps real products even when stock is zero while eligible candidates exclude them',()=>{
+test('catalog and documentary eligibility keep real products even when stock is zero',()=>{
   const result=partitionRecommendationCandidates(rows,{maxBudget:999999,exclude:null});
   assert.deepEqual(result.catalog.map(x=>x.shortName),['Armor X12 Pro','Armor X13','Armor 22','Armor 25T Pro']);
   assert.deepEqual(result.available.map(x=>x.shortName),['Armor X12 Pro','Armor X13','Armor 22']);
-  assert.deepEqual(result.eligible.map(x=>x.shortName),['Armor X12 Pro','Armor X13','Armor 22']);
-  assert.ok(result.discarded.some(x=>x.product==='Armor 25T Pro'&&x.reason==='NO_STOCK'));
+  assert.deepEqual(result.eligible.map(x=>x.shortName),['Armor X12 Pro','Armor X13','Armor 22','Armor 25T Pro']);
+  assert.ok(!result.discarded.some(x=>x.product==='Armor 25T Pro'&&x.reason==='NO_STOCK'));
 });
 
 test('budget filters eligibility but never erases products from catalog',()=>{
