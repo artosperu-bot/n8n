@@ -44,6 +44,16 @@ function isDirectImageRequest(t:string):boolean {
     || /^(?:foto|fotos|imagen|imagenes)\s+(?:del?|de la)\s+/.test(t);
 }
 
+function hasDirectModelChoice(t:string):boolean {
+  const model='(?:[a-z][a-z0-9-]*\\s+){0,2}[a-z]*\\d+[a-z0-9-]*';
+  return new RegExp(`\\b${model}\\b\\s+(?:o|vs|versus)\\s+\\b${model}\\b`,'i').test(t);
+}
+
+function hasComparativePriceQuestion(t:string):boolean {
+  return /\bpor\s+que\b[^?.!]{0,90}\b(?:cuesta|vale|sale)\b[^?.!]{0,45}\bmas\b[^?.!]{0,45}\bque\b/.test(t)
+    || /\b(?:cuesta|vale|sale)\b[^?.!]{0,45}\bmas\b[^?.!]{0,45}\bque\b[^?.!]{0,45}\bpor\s+que\b/.test(t);
+}
+
 export function resolveIntentPlan(message: string): IntentPlan {
   const t = fold(message);
   const hits: SemanticIntent[] = [];
@@ -56,7 +66,10 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(categorias?)\b/)) hits.push('CATEGORIES');
   if (has(/\b(subcategorias?)\b/)) hits.push('SUBCATEGORIES');
   if (has(/\b(catalogo|que productos|que equipos|que modelos tienen|muestrame)\b/)) hits.push('CATALOG');
-  if (has(/\b(compara|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)) hits.push('COMPARE');
+  const explicitComparison = has(/\b(compara|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)
+    || hasDirectModelChoice(t)
+    || hasComparativePriceQuestion(t);
+  if (explicitComparison) hits.push('COMPARE');
   const recommendationLanguage = has(/\b(recomienda|recomiendas|recomiendan|recomendar|recomendacion|cual me conviene|que modelo me conviene|que modelo entra|q modelo entra|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica|cual parecido|que parecido|cual similar|que similar)\b/)
     || has(/\b(cual|que|q)\b[^?.!]{0,35}\b(parecido|similar)\b[^?.!]{0,35}\b(tienen|hay|disponible)\b/)
     || has(/\b(cual|que|qué)\b[^?.!]{0,45}\b(?:entra|cabe|queda)\b[^?.!]{0,35}\bpresupuesto\b/)
@@ -90,8 +103,8 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const intents = unique(hits);
   const declarativeNeed = use && has(/\b(necesito|necesitamos|busco|quiero algo|quiero un|quiero una)\b/) && !/[?¿]/.test(message);
   const precedence: SemanticIntent[] = declarativeNeed
-    ? ['PURCHASE','QUOTE','PRICE_AVAILABILITY','STOCK','COMPARE','RECOMMEND','EVALUATE_USE','IMAGES','WARRANTY','POLICY','ATTRIBUTE','PRODUCT_INFO','OBJECTION','HUMAN','OTHER']
-    : ['ORDER_STATUS','PURCHASE','QUOTE','PRICE_AVAILABILITY','STOCK','COMPARE','RECOMMEND','IMAGES','CATEGORIES','SUBCATEGORIES','CATALOG','WARRANTY','POLICY','PRODUCT_INFO','OBJECTION','EVALUATE_USE','ATTRIBUTE','HUMAN','GREETING','OTHER'];
+    ? ['PURCHASE','QUOTE','COMPARE','PRICE_AVAILABILITY','STOCK','RECOMMEND','EVALUATE_USE','IMAGES','WARRANTY','POLICY','ATTRIBUTE','PRODUCT_INFO','OBJECTION','HUMAN','OTHER']
+    : ['ORDER_STATUS','PURCHASE','QUOTE','COMPARE','PRICE_AVAILABILITY','STOCK','RECOMMEND','IMAGES','CATEGORIES','SUBCATEGORIES','CATALOG','WARRANTY','POLICY','PRODUCT_INFO','OBJECTION','EVALUATE_USE','ATTRIBUTE','HUMAN','GREETING','OTHER'];
   const primary = precedence.find(x => intents.includes(x)) ?? 'OTHER';
 
   return {
