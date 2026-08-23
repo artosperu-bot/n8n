@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildGroundedDirectAnswer } from '../../src/conversation/commercial/GroundedDirectAnswer.ts';
 import { productEvidenceSections } from '../../src/conversation/commercial/ProductEvidencePolicy.ts';
+import { extractCommercialFacts } from '../../src/conversation/commercial/CommercialFacts.ts';
 
 test('thermal yes answer includes the most useful verified thermal characteristics',()=>{
   const answer=buildGroundedDirectAnswer({
@@ -32,4 +33,16 @@ test('gaming use retrieves performance memory and display evidence',()=>{
   assert.ok(sections.includes('RENDIMIENTO'));
   assert.ok(sections.includes('MEMORIA'));
   assert.ok(sections.includes('PANTALLA'));
+});
+
+test('commercial facts preserve thermal and NFC as explicit hard priorities',()=>{
+  const thermal=extractCommercialFacts('Necesito un celular con cámara térmica, cuál tienen?',{} as any);
+  assert.ok(thermal.priorities.includes('termica'));
+  const nfc=extractCommercialFacts('Necesito NFC sí o sí',{} as any);
+  assert.ok(nfc.priorities.includes('nfc'));
+});
+
+test('gaming language is preserved as a genuine use case',()=>{
+  const facts=extractCommercialFacts('Lo quiero para jugar Free Fire',{} as any);
+  assert.equal(facts.useCase,'gaming');
 });
