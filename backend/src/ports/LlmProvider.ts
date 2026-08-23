@@ -1,9 +1,14 @@
 import type { ConversationState, ProductQuote, RagEvidence, VerifiedFact } from '../domain/types.ts';
 
-export type RecentDialogueMessage = {
-  role: 'user' | 'assistant';
-  content: string;
+export type RecentDialogueMessage = { role: 'user' | 'assistant'; content: string; };
+
+export type ProductHighlight={
+  family:'MEMORY'|'BATTERY'|'RESISTANCE'|'CAMERA'|'DISPLAY'|'PERFORMANCE'|'CONNECTIVITY'|'NETWORK'|'THERMAL'|'OTHER';
+  label:string;
+  facts:VerifiedFact[];
+  summary:string;
 };
+export type RagPresentationMode='PRODUCT_OVERVIEW'|'ATTRIBUTE'|'INSTITUTIONAL'|'DEFAULT';
 
 export type CommercialMove = {
   action:'RELATED_VALUE';
@@ -14,127 +19,32 @@ export type CommercialMove = {
   basis:Array<'SQL'|'VERIFIED_PRODUCT_FEATURE'|'CUSTOMER_CONTEXT'>;
   attribute:string|null;
   verifiedFacts:VerifiedFact[];
-  relevantCustomerContext:{
-    useCase:string|null;
-    problem:string|null;
-    priorities:string[];
-    budget:number|null;
-    objection:string|null;
-  };
+  relevantCustomerContext:{useCase:string|null;problem:string|null;priorities:string[];budget:number|null;objection:string|null;};
 };
 
 export type LlmWriteInput = {
-  message: string;
-  intent: string;
-  state: ConversationState;
-  quote?: ProductQuote | null;
-  rag?: RagEvidence[];
-  verifiedFacts?: VerifiedFact[];
+  message: string; intent: string; state: ConversationState; quote?: ProductQuote | null; rag?: RagEvidence[]; verifiedFacts?: VerifiedFact[];
   deterministicAnswer?: string | null;
   /** Immutable grounded answer to the current question, composed before any commercial continuation. */
   directAnswer?: string | null;
   decision?: TurnDecision | null;
-  /** Canonical products the writer is allowed to present as real in this turn. */
-  allowedProducts?: string[];
-  /** Canonical, verified products that may be offered as alternatives this turn. */
-  alternatives?: string[];
-  /** Candidate proposed before capability/safety validation. It is trace-only after the contract is prepared. */
-  candidateNba?: string | null;
-  /** Single canonical action after capability/safety validation. Downstream presentation must not silently replace it. */
-  finalExecutableNba?: string | null;
-  /** Backward-compatible alias for finalExecutableNba. */
-  nextBestAction?: string | null;
-  commercialStage?: string | null;
-  knownFacts?: Record<string, unknown>;
-  missingFacts?: string[];
-  missingFact?: string | null;
-  decisionImpact?: boolean;
-  interestSignal?: boolean;
-  purchaseSignal?: boolean;
-  objection?: string | null;
-  activeProduct?: string | null;
-  selectedProduct?: string | null;
-  recommendedProduct?: string | null;
-  previousRecommendedProduct?: string | null;
-  recommendationChanged?: boolean;
-  recommendationChangeReason?: string | null;
-  useCase?: string | null;
-  problem?: string | null;
-  priorities?: string[];
-  budget?: number | null;
-  verifiedFeatures?: VerifiedFact[];
-  customerContext?: Record<string, unknown>;
-  commercialGoal?: string | null;
-  capabilityAction?: string | null;
-  turnCapabilities?: Record<string, boolean>;
-  resolvedCurrentIntent?: string;
-  commercialSignals?: Record<string, unknown>;
-  resolvedProduct?: string | null;
-  supportedCapabilities?: string[];
-  /** Backward-compatible alias for finalExecutableNba. */
-  executableNba?: string;
-  levelOfInterest?: number;
-  attribute?: string | null;
-  implications?: string[];
-  pendingQuestion?: string | null;
-  pendingAction?: string | null;
-  commercialMove?: CommercialMove | null;
-  imageUrls?: string[];
-  /** Internal boundary marker: the engine prepared and validated the commercial contract. */
-  commercialContractPrepared?: boolean;
+  allowedProducts?: string[]; alternatives?: string[]; candidateNba?: string | null; finalExecutableNba?: string | null; nextBestAction?: string | null;
+  commercialStage?: string | null; knownFacts?: Record<string, unknown>; missingFacts?: string[]; missingFact?: string | null; decisionImpact?: boolean;
+  interestSignal?: boolean; purchaseSignal?: boolean; objection?: string | null; activeProduct?: string | null; selectedProduct?: string | null; recommendedProduct?: string | null;
+  previousRecommendedProduct?: string | null; recommendationChanged?: boolean; recommendationChangeReason?: string | null; useCase?: string | null; problem?: string | null; priorities?: string[]; budget?: number | null;
+  verifiedFeatures?: VerifiedFact[]; productHighlights?:ProductHighlight[]; presentationMode?:RagPresentationMode;
+  customerContext?: Record<string, unknown>; commercialGoal?: string | null; capabilityAction?: string | null; turnCapabilities?: Record<string, boolean>; resolvedCurrentIntent?: string;
+  commercialSignals?: Record<string, unknown>; resolvedProduct?: string | null; supportedCapabilities?: string[]; executableNba?: string; levelOfInterest?: number; attribute?: string | null;
+  implications?: string[]; pendingQuestion?: string | null; pendingAction?: string | null; commercialMove?: CommercialMove | null; imageUrls?: string[]; commercialContractPrepared?: boolean;
 };
 
-export type LlmDecisionInput = {
-  message: string;
-  state: ConversationState;
-  history?: RecentDialogueMessage[];
-};
-
+export type LlmDecisionInput = { message: string; state: ConversationState; history?: RecentDialogueMessage[]; };
 export type TurnDecision = {
-  primaryIntent: string;
-  secondaryIntents: string[];
-  targetProduct: string | null;
-  mentionedProducts: string[];
-  referenceType: string | null;
-  explicitSwitch: boolean;
-  selectedProduct: string | null;
-  comparisonProducts: string[];
-  attributes: string[];
-  customerNeed: string | null;
-  customerProblem: string | null;
-  priorities: string[];
-  objection: string | null;
-  commercialStage: string | null;
-  spinContribution: string | null;
-  nextBestAction: string | null;
-  needsSql: boolean;
-  needsProductRag: boolean;
-  needsInstitutionalRag: boolean;
-  confidence: number;
+  primaryIntent: string; secondaryIntents: string[]; targetProduct: string | null; mentionedProducts: string[]; referenceType: string | null; explicitSwitch: boolean; selectedProduct: string | null;
+  comparisonProducts: string[]; attributes: string[]; customerNeed: string | null; customerProblem: string | null; priorities: string[]; objection: string | null; commercialStage: string | null;
+  spinContribution: string | null; nextBestAction: string | null; needsSql: boolean; needsProductRag: boolean; needsInstitutionalRag: boolean; confidence: number;
 };
-
-export type LlmUsage = {
-  inputTokens: number | null;
-  outputTokens: number | null;
-  totalTokens: number | null;
-  cachedInputTokens: number | null;
-};
-
-export type LlmResult = {
-  text: string;
-  model: string;
-  usage: LlmUsage;
-  durationMs: number;
-};
-
-export type LlmDecisionResult = {
-  decision: TurnDecision;
-  model: string;
-  usage: LlmUsage;
-  durationMs: number;
-};
-
-export interface LlmProvider {
-  decide?(input: LlmDecisionInput): Promise<LlmDecisionResult>;
-  write(input: LlmWriteInput): Promise<LlmResult>;
-}
+export type LlmUsage = { inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; cachedInputTokens: number | null; };
+export type LlmResult = { text: string; model: string; usage: LlmUsage; durationMs: number; };
+export type LlmDecisionResult = { decision: TurnDecision; model: string; usage: LlmUsage; durationMs: number; };
+export interface LlmProvider { decide?(input: LlmDecisionInput): Promise<LlmDecisionResult>; write(input: LlmWriteInput): Promise<LlmResult>; }
