@@ -15,11 +15,14 @@ export type IntentPlan = {
 };
 
 const ATTRS: Array<[RegExp, string]> = [
+  [/\b(nfc)\b/, 'NFC'],
+  [/\b(5g)\b/, '5G'],
+  [/\b(camara termica|camara termal|termica|thermal|flir)\b/, 'TERMICA'],
   [/\b(bateria|autonomia|carga|cargador|cargar)\b|\bdur(?:e|ar|acion)\b[^.!?]{0,25}\btodo\s+el\s+dia\b/, 'BATERIA'],
-  [/\b(camara|foto|fotos|video|vision nocturna)\b/, 'CAMARA'],
+  [/\b(camara|camaras|foto|fotos|video|vision nocturna)\b/, 'CAMARA'],
   [/\b(resistente|resistencia|ip68|ip69k|mil(?:-std)?|caida|caidas|golpe|golpes|agua|polvo)\b/, 'RESISTENCIA'],
-  [/\b(nfc|wifi|wi fi|bluetooth|usb|otg|infrarrojo)\b/, 'CONECTIVIDAD'],
-  [/\b(5g|4g|lte|red|redes|bandas|volte)\b/, 'REDES'],
+  [/\b(wifi|wi fi|bluetooth|usb|otg|infrarrojo)\b/, 'CONECTIVIDAD'],
+  [/\b(4g|lte|red|redes|bandas|volte)\b/, 'REDES'],
   [/\b(sim|dual sim|nano sim|esim)\b/, 'SIM'],
   [/\b(ram|memoria|almacenamiento|espacio|microsd|micro sd|rom)\b/, 'MEMORIA'],
   [/\b(procesador|rendimiento|cpu|gpu|rapido|velocidad)\b/, 'RENDIMIENTO'],
@@ -66,11 +69,13 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(categorias?)\b/)) hits.push('CATEGORIES');
   if (has(/\b(subcategorias?)\b/)) hits.push('SUBCATEGORIES');
   if (has(/\b(catalogo|que productos|que equipos|que modelos tienen|muestrame)\b/)) hits.push('CATALOG');
-  const explicitComparison = has(/\b(compara|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)
+  const explicitComparison = has(/\b(compara|comparame|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)
     || hasDirectModelChoice(t)
     || hasComparativePriceQuestion(t);
   if (explicitComparison) hits.push('COMPARE');
-  const recommendationLanguage = has(/\b(recomienda|recomiendas|recomiendan|recomendar|recomendacion|cual me conviene|que modelo me conviene|que modelo entra|q modelo entra|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica|cual parecido|que parecido|cual similar|que similar)\b/)
+  const hardTechnicalNeed=has(/\b(necesito|requiero|busco)\b[^.!?]{0,45}\b(nfc|5g|camara termica|termica|thermal|flir)\b/);
+  const recommendationLanguage = has(/\b(recomienda|recomiendas|recomiendan|recomendar|recomendacion|cual me conviene|que modelo me conviene|que modelo entra|q modelo entra|que modelo cumple|cual modelo cumple|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica|cual parecido|que parecido|cual similar|que similar)\b/)
+    || hardTechnicalNeed
     || has(/\b(cual|que|q)\b[^?.!]{0,35}\b(parecido|similar)\b[^?.!]{0,35}\b(tienen|hay|disponible)\b/)
     || has(/\b(cual|que|qué)\b[^?.!]{0,45}\b(?:entra|cabe|queda)\b[^?.!]{0,35}\bpresupuesto\b/)
     || has(/\b(?:el|la)\s+mas\s+(?:resistente|potente|economico|barato|rapido)\b/)
