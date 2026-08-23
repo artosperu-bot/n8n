@@ -145,7 +145,7 @@ function compactRecommendationPresentation(input:LlmWriteInput,answer:string):st
   const product=String(input.recommendedProduct??input.state?.recommendedProduct??'').trim();const state:any=input.state??{};const budget=input.budget??state.budget??null;const useCase=compactUseCase(input.useCase??state.useCase??null);
   const technicalDump=answer.length>300||/\b(?:bandas?|802\.11|USB\s*Type|ranuras?|FDD-LTE|WCDMA|GSM)\b/i.test(answer)||/^\s*[-*•]\s+/m.test(answer);
   if(technicalDump&&product){
-    const reasons:string[]=[];if(budget!=null)reasons.push(`entra en tu presupuesto de hasta S/ ${budget}`);if(useCase)reasons.push(`es la opción que seguiría evaluando para ${useCase}`);
+    const reasons:string[]=[];if(budget!=null)reasons.push('entra dentro del presupuesto que me diste');if(useCase)reasons.push(`es la opción que seguiría evaluando para ${useCase}`);
     const lead=`Te recomiendo ${product}. ${reasons.length?`${reasons.join(' y ')}.`:'Es la opción que mejor encaja con los criterios ya confirmados.'}`;
     return [lead,question].filter(Boolean).join(' ').trim();
   }
