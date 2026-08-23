@@ -60,10 +60,10 @@ export function productEvidenceSections(intent: IntentLike, state: ConversationS
   }
   if (intent.primary === 'COMPARE') {
     const explicit=unique((intent.attributes??[]).flatMap(sectionsForAttribute));
-    if(explicit.length)return explicit.slice(0,5);
     const priorities=unique((state.priorities??[]).flatMap(sectionsForPriority));
     const inferred=unique(inferredSections(state));
-    if(priorities.length||inferred.length)return unique([...priorities,...inferred]).slice(0,5);
+    const focused=unique([...explicit,...priorities,...inferred]);
+    if(focused.length)return focused.slice(0,5);
     return ['RESISTENCIA','BATERIA','RENDIMIENTO','MEMORIA','CAMARA'];
   }
   if (intent.primary === 'EVALUATE_USE' || intent.primary === 'RECOMMEND' || intent.primary === 'OBJECTION') {
