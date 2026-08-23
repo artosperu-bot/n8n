@@ -22,11 +22,14 @@ function same(a:string|null|undefined,b:string|null|undefined):boolean{
 
 /**
  * STECH-AUDIT:
- * ROLE: separates product existence from recommendation eligibility.
+ * ROLE: separates product existence, current availability and documentary eligibility.
  * INPUT AUTHORITY: ERP catalog rows.
  * OUTPUT AUTHORITY: catalog / available / eligible candidate sets.
- * MAY DECIDE: budget, stock and explicit exclusion eligibility only.
- * MUST NOT DECIDE: recommendation winner, product facts or customer-facing wording.
+ * MAY DECIDE: budget and explicit exclusion eligibility only.
+ * MUST NOT DECIDE: technical capability truth, recommendation winner or customer-facing wording.
+ * IMPORTANT: stock must not erase a product before RAG evaluates a hard technical requirement.
+ * Availability remains separately exposed in `available`; downstream business ranking may still
+ * prefer available products when no hard technical requirement is present.
  */
 export function partitionRecommendationCandidates(
   rows:ProductQuote[],
@@ -39,14 +42,8 @@ export function partitionRecommendationCandidates(
 
   for(const row of catalog){
     const name=productName(row);
-    // Budget is evaluated first so the trace records the first explicit business
-    // constraint that excludes the candidate. Product existence is never erased.
     if(options.maxBudget!=null&&row.price!=null&&row.price>options.maxBudget){
       discarded.push({product:name,reason:'BUDGET'});
-      continue;
-    }
-    if(row.stock!=null&&row.stock<=0){
-      discarded.push({product:name,reason:'NO_STOCK'});
       continue;
     }
     if(options.exclude&&same(name,options.exclude)){
