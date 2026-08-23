@@ -16,7 +16,7 @@ function repeatsKnownQuestion(answer:string,state:any):boolean{
 function relatedValueDelivered(intent:string,answer:string,debug:any):boolean{
   const text=answer.toLocaleLowerCase('es');
   const kind=String(debug?.decisionTrace?.commercialMoveKind??debug?.commercialMoveKind??'').toUpperCase();
-  if(kind==='STOCK_STATUS'||intent==='PRICE'||intent==='PRICE_AVAILABILITY')return /\b(?:disponib|stock|hay unidades?)\b/i.test(text);
+  if(kind==='STOCK_STATUS'||intent==='PRICE'||intent==='PRICE_AVAILABILITY')return /\b(?:disponible|disponibilidad|stock|hay unidades?)\b/i.test(text);
   if(kind==='RELATED_VERIFIED_FACT'&&intent==='STOCK')return /\bprecio\b|\bS\/\s*\d+/i.test(answer);
   if(intent==='STOCK')return /\bprecio\b|\bS\/\s*\d+/i.test(answer);
   return /\b(?:adem[aá]s|tambi[eé]n|por otro lado)\b|\bpara\b[^.!?]{0,70}\b(?:útil|sirve|ayuda|conviene|encaja)\b/i.test(answer);
