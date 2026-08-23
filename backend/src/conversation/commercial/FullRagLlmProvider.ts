@@ -1,6 +1,7 @@
 import type { LlmDecisionInput, LlmDecisionResult, LlmProvider, LlmResult, LlmWriteInput } from '../../ports/LlmProvider.ts';
 import { applyFullRagWritePolicy } from './FullRagWritePolicy.ts';
 import { buildColdRagComparison } from './FullRagComparison.ts';
+import { buildFullRagUseCaseAnswer } from './FullRagUseCase.ts';
 
 function meaningfulCustomerContext(input:LlmWriteInput):boolean{const state:any=input.state??{};const useCase=String(input.useCase??state.useCase??'').trim();const problem=String(input.problem??state.problem??'').trim();const priorities=(input.priorities??state.priorities??[]).map(x=>String(x).trim()).filter(Boolean);return Boolean(useCase||problem||new Set(priorities.map(x=>x.toLocaleLowerCase('es'))).size>=2);}
 function usesDocumentaryRag(input:LlmWriteInput):boolean{return Boolean(input.verifiedFacts?.some(fact=>fact.domain==='PRODUCT_RAG'||fact.domain==='INSTITUTIONAL_RAG'));}
@@ -18,9 +19,30 @@ export class FullRagLlmProvider implements LlmProvider{
   constructor(delegate:LlmProvider){this.#delegate=delegate;}
   decide(input:LlmDecisionInput):Promise<LlmDecisionResult>{if(!this.#delegate.decide)throw new Error('Wrapped LLM does not implement decide');return this.#delegate.decide(input);}
   async write(input:LlmWriteInput):Promise<LlmResult>{
-    const enriched=applyFullRagWritePolicy(input);if(usesDocumentaryRag(enriched))enriched.deterministicAnswer=naturalSalesPlan(enriched);Object.assign(input,enriched);
-    if(enriched.directAnswer&&((enriched.presentationMode==='PRODUCT_OVERVIEW'&&!meaningfulCustomerContext(enriched))||(enriched.presentationMode==='ATTRIBUTE'&&!meaningfulCustomerContext(enriched))))return deterministicResult(enriched.directAnswer,enriched.presentationMode==='ATTRIBUTE'?'full-rag-attribute-v2':'full-rag-overview-v2');
-    if(String(enriched.intent??'').toUpperCase()==='COMPARE'&&!meaningfulCustomerContext(enriched)){const comparison=buildColdRagComparison(enriched.rag??[]);if(comparison)return deterministicResult(comparison,'full-rag-compare-v1');}
+    const enriched=applyFullRagWritePolicy(input);
+    const intent=String(enriched.intent??'').toUpperCase();
+    const state:any=enriched.state??{};
+
+    if(intent==='EVALUATE_USE'){
+      const product=String(enriched.resolvedProduct??enriched.quote?.shortName??enriched.quote?.product??enriched.activeProduct??state.activeProduct??'').trim();
+      const useCaseAnswer=product?buildFullRagUseCaseAnswer({message:enriched.message,product,rows:enriched.rag??[],useCase:enriched.useCase??state.useCase??null,problem:enriched.problem??state.problem??null,priorities:enriched.priorities??state.priorities??[]}):null;
+      if(useCaseAnswer)enriched.directAnswer=useCaseAnswer;
+    }
+
+    if(usesDocumentaryRag(enriched))enriched.deterministicAnswer=naturalSalesPlan(enriched);
+    Object.assign(input,enriched);
+
+    if(enriched.directAnswer&&(
+      (enriched.presentationMode==='PRODUCT_OVERVIEW'&&!meaningfulCustomerContext(enriched))||
+      (enriched.presentationMode==='ATTRIBUTE'&&!meaningfulCustomerContext(enriched))||
+      intent==='EVALUATE_USE'
+    ))return deterministicResult(enriched.directAnswer,intent==='EVALUATE_USE'?'full-rag-use-case-v1':enriched.presentationMode==='ATTRIBUTE'?'full-rag-attribute-v2':'full-rag-overview-v2');
+
+    if(intent==='COMPARE'){
+      const comparison=buildColdRagComparison(enriched.rag??[],{message:enriched.message,attributes:enriched.decision?.attributes??[],useCase:enriched.useCase??state.useCase??null,priorities:enriched.priorities??state.priorities??[]});
+      if(comparison)return deterministicResult(comparison,'full-rag-compare-v2');
+    }
+
     const result=await this.#delegate.write(enriched);return{...result,text:sanitize(result.text,enriched)};
   }
 }
