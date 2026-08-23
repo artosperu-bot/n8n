@@ -74,6 +74,11 @@ export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):strin
     if(physical&&virtual)return `Tiene ${physical} de RAM física + ${virtual} de RAM virtual.`;
   }
 
+  if(/caida|caidas|golpe|golpes/.test(requested)){
+    const fall=(input.verifiedFacts??[]).find(fact=>fact.key==='RESISTENCIA_CAIDAS')?.value;
+    if(fall)return `${productName(input)} tiene resistencia a caídas de ${fall}.`;
+  }
+
   // Raw RAG is evidence, not presentation text. Only normalized PRODUCT_RAG facts may
   // become the generic direct answer when no exact extractor above applies.
   const display=customerDisplayFact(input)?.value??'';
