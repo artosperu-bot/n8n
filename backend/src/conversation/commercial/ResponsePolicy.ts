@@ -12,37 +12,42 @@ function customerLanguage(value:string|null|undefined):string|null {
     .replace(/[_-]+/g,' ')
     .replace(/\s+/g,' ')
     .replace(/^\s*(?:uso|uso principal|caso de uso)\s+(?:en|para)\s+/i,'')
-    .replace(/^\s*(?:dispositivo|equipo|celular|tel[eé]fono)\s+(?:que|para)\s+/i,'')
-    .replace(/^\s*uso\s+b[aá]sico\s*:\s*/i,'')
-    .replace(/^\s*mensajer[ií]a\s+por\s+/i,'')
+    .replace(/^\s*(?:dispositivo|equipo|celular)\s+que\s+/i,'')
     .split(/[;|]/,1)[0]
     .trim()
     .replace(/[.!?]+$/,'');
   return clean||null;
 }
 
-function contextTokens(move:CommercialMove):string[]{
-  const context=move.relevantCustomerContext;
-  return [context.problem,...context.priorities,context.useCase]
-    .flatMap(value=>String(value??'').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[^a-z0-9]+/))
-    .filter(token=>token.length>=5&&!['telefono','celular','equipo','basico','diario','mensajeria','llamadas','principal'].includes(token));
+function conciseVerifiedFact(fact:VerifiedFact|null|undefined):string|null{
+  if(!fact)return null;
+  const value=String(fact.value??'').replace(/\s+/g,' ').trim();
+  if(!value)return null;
+  const keyed=value.match(/(?:resistencia\s+a\s+ca[ií]das?|ram\s+(?:f[ií]sica|virtual)|bater[ií]a|peso|pantalla|c[aá]mara)\s*:\s*([^.;|]+)/i);
+  if(keyed)return `${String(fact.key??'').toUpperCase().includes('CAID')?'Resistencia a caídas':String(fact.key??'').replace(/[_-]+/g,' ').toLocaleLowerCase('es')}: ${keyed[1].trim()}`;
+  const first=value.split(/(?<=[.!?])\s+|[;|]/,1)[0]?.trim()??value;
+  return first.length<=120?first:`${first.slice(0,117).trimEnd()}…`;
 }
 
-function conciseFact(value:string|null|undefined,move:CommercialMove):string|null {
-  const raw=String(value??'').replace(/\s+/g,' ').trim();
-  if(!raw)return null;
-  if(raw.length<=120&&!/caracter[ií]sticas confirmadas|palabras clave|\s-\s/i.test(raw))return raw.replace(/[.!?]+$/,'');
-  const segments=raw
-    .replace(/^.*?caracter[ií]sticas confirmadas[^:]*:\s*/i,'')
-    .split(/\s+-\s+|(?<=[.!?])\s+/)
-    .map(x=>x.replace(/^[-•*]\s*/,'').trim().replace(/[.!?]+$/,''))
-    .filter(x=>x.length>=4&&!/^(?:producto|producto id|c[oó]digo|sku|secci[oó]n|grupo t[eé]cnico|t[ií]tulo|contenido|palabras clave)\s*:/i.test(x));
-  const tokens=contextTokens(move);
-  const normalized=(text:string)=>text.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const contextMatch=segments.find(segment=>tokens.some(token=>normalized(segment).includes(token)));
-  const numeric=segments.find(segment=>/\d/.test(segment));
-  const chosen=contextMatch??numeric??segments[0]??raw;
-  return chosen.length>120?`${chosen.slice(0,117).trimEnd()}…`:chosen;
+function attributeContextRelevant(move:CommercialMove):boolean{
+  const attr=String(move.attribute??move.verifiedFacts[0]?.key??'').toUpperCase();
+  const context=[move.relevantCustomerContext.useCase,move.relevantCustomerContext.problem,...move.relevantCustomerContext.priorities]
+    .filter(Boolean).join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if(!context)return false;
+  if(/RESIST|CAID|IP68|IP69|MIL/.test(attr))return /resisten|caida|golpe|trabajo|campo|obra|construccion|durabilidad|proteccion/.test(context);
+  if(/RAM|MEMORIA|RENDIMIENTO/.test(attr))return /whatsapp|llamada|app|aplicacion|multitarea|trabajo|juego|rendimiento|uso diario|simple/.test(context);
+  if(/BATER/.test(attr))return /bateria|autonomia|jornada|trabajo|delivery|campo|uso diario/.test(context);
+  if(/CAMARA/.test(attr))return /foto|camara|video|redes sociales|contenido/.test(context);
+  return true;
+}
+
+function neutralAttributeBenefit(move:CommercialMove,fact:string|null):string|null{
+  const attr=String(move.attribute??move.verifiedFacts[0]?.key??'').toUpperCase();
+  if(/RESIST|CAID|IP68|IP69|MIL/.test(attr))return fact?`Si también valoras resistencia, ${fact} es un dato útil para decidir.`:'Si también valoras resistencia, este dato puede ayudarte a decidir.';
+  if(/RAM|MEMORIA|RENDIMIENTO/.test(attr))return fact?`Si también priorizas rendimiento y memoria, ${fact} es un dato útil para decidir.`:'Si también priorizas rendimiento y memoria, este dato puede ayudarte a decidir.';
+  if(/BATER/.test(attr))return fact?`Si también priorizas batería, ${fact} es un dato útil para decidir.`:'Si también priorizas batería, este dato puede ayudarte a decidir.';
+  if(/CAMARA/.test(attr))return fact?`Si también priorizas cámara, ${fact} es un dato útil para decidir.`:'Si también priorizas cámara, este dato puede ayudarte a decidir.';
+  return fact?`${fact} es un dato útil al elegir el equipo.`:'Este dato puede ayudarte a elegir mejor.';
 }
 
 function contextualBenefit(move:CommercialMove):string|null {
@@ -51,9 +56,10 @@ function contextualBenefit(move:CommercialMove):string|null {
   const useCase=customerLanguage(context.useCase);
   const priority=customerLanguage(context.priorities[0]);
   const problem=customerLanguage(context.problem);
-  const fact=conciseFact(move.verifiedFacts[0]?.value,move);
+  const fact=conciseVerifiedFact(move.verifiedFacts[0]);
 
-  if(useCase&&rawUseCase.length<=90&&!/[;|]/.test(rawUseCase))return fact
+  if(!attributeContextRelevant(move))return neutralAttributeBenefit(move,fact);
+  if(useCase&&rawUseCase.length<=80&&!/[;|]/.test(rawUseCase))return fact
     ?`Para ${useCase}, ${fact} es un dato útil al elegir el equipo.`
     :`Para ${useCase}, este dato puede ayudarte a elegir mejor.`;
   if(priority)return fact
@@ -66,7 +72,7 @@ function contextualBenefit(move:CommercialMove):string|null {
     ?`Para ${useCase}, ${fact} es un dato útil al elegir el equipo.`
     :`Para ${useCase}, este dato puede ayudarte a elegir mejor.`;
   if(context.objection)return 'Si ese punto es importante para ti, este dato puede ayudarte a decidir.';
-  return null;
+  return neutralAttributeBenefit(move,fact);
 }
 
 export function renderCommercialMove(move:CommercialMove|null,intent:string=''):string|null{
@@ -85,8 +91,7 @@ export function renderCommercialMove(move:CommercialMove|null,intent:string=''):
   const benefit=contextualBenefit(move);
   if(benefit)return benefit;
   if(!fact)return null;
-  const concise=conciseFact(fact.value,move);
-  return concise?`Además, ${concise.replace(/[.!?]+$/,'')}.`:null;
+  return `Además, ${String(fact.value).trim().replace(/[.!?]+$/,'')}.`;
 }
 
 export function renderVerifiedFact(fact:VerifiedFact|null|undefined):string|null{
