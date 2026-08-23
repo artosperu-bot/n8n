@@ -1,5 +1,6 @@
 import type { ProductQuote, RagEvidence } from '../../domain/types.ts';
 import { fold } from '../../shared/text.ts';
+import { satisfiesAllHardRequirements } from './HardRequirementPolicy.ts';
 
 export type RecommendationCandidate={quote:ProductQuote;evidence:RagEvidence[]};
 export type RecommendationContext={
@@ -151,11 +152,12 @@ function explain(criterion:string,metrics:Metrics):string|null{
 }
 
 export function rankRecommendations(candidates:RecommendationCandidate[],context:RecommendationContext={}):RankedRecommendation[]{
-  const filtered=candidates.filter(c=>{
+  const businessEligible=candidates.filter(c=>{
     if(context.maxBudget!=null&&c.quote.price!=null&&c.quote.price>context.maxBudget)return false;
     if(c.quote.stock!=null&&c.quote.stock<=0)return false;
     return true;
   });
+  const filtered=businessEligible.filter(candidate=>satisfiesAllHardRequirements(candidate.evidence,context.priorities??[]));
   if(!filtered.length)return[];
   const criteria=criteriaFrom(context);
   const rows=filtered.map((candidate,index)=>({
@@ -183,9 +185,6 @@ export function rankRecommendations(candidates:RecommendationCandidate[],context
       total+=normalized;covered+=1;
       const reason=explain(criterion,row.metrics[criterion]);if(reason)reasons.push(reason);
     }
-    // Missing comparable evidence is not a free pass. The score represents fit
-    // across the whole decision criterion set, while confidence separately exposes
-    // how much of that set had usable evidence.
     const score=criteria.length?total/criteria.length:0;
     return {
       ...row.candidate,
