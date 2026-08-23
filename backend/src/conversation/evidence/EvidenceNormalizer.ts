@@ -34,12 +34,20 @@ function displayText(raw:string):string {
   return compact(lines.filter(line=>!RAG_ENVELOPE_KEYS.has(envelopeLabel(line)??'')).join(' '));
 }
 
+function baseFact(row:RagEvidence){
+  return {domain:'PRODUCT_RAG' as const,productId:row.productId??null,source:row.source};
+}
+function yesNo(value:string|undefined):'Sí'|'No'|null{
+  if(!value)return null;
+  return /^s[ií]$/i.test(value.trim())?'Sí':/^no$/i.test(value.trim())?'No':null;
+}
+
 function memoryFacts(text:string,row:RagEvidence):VerifiedFact[] {
   const facts:VerifiedFact[]=[];
   const combined=text.match(/\b(\d+(?:[.,]\d+)?)\s*GB\s*\+\s*(\d+(?:[.,]\d+)?)\s*GB\s*(?:de\s*)?(?:RAM\s*)?virtual\b/i);
   const physical=combined?.[1]??text.match(/\b(?:memoria\s+)?RAM\s*(?:f[ií]sica)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];
   const virtual=combined?.[2]??text.match(/\b(?:ampliaci[oó]n\s+de\s+)?RAM\s+virtual(?:\s+m[aá]xima)?\s*[:=]?\s*(?:de\s+)?(?:hasta\s+)?(\d+(?:[.,]\d+)?)\s*GB\b/i)?.[1];
-  const base={domain:'PRODUCT_RAG' as const,productId:row.productId??null,source:row.source};
+  const base=baseFact(row);
   if(physical)facts.push({...base,key:'RAM_FISICA',value:`${physical.replace(',','.')} GB`});
   if(virtual)facts.push({...base,key:'RAM_VIRTUAL',value:`hasta ${virtual.replace(',','.')} GB`});
   return facts;
@@ -47,20 +55,76 @@ function memoryFacts(text:string,row:RagEvidence):VerifiedFact[] {
 
 function resistanceFacts(text:string,row:RagEvidence):VerifiedFact[]{
   const facts:VerifiedFact[]=[];
-  const base={domain:'PRODUCT_RAG' as const,productId:row.productId??null,source:row.source};
+  const base=baseFact(row);
   const fall=text.match(/\bresistencia\s+a\s+ca[ií]das?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*m\b/i);
   const depth=text.match(/\bprofundidad\s+IP68\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*m\b/i);
   const time=text.match(/\btiempo\s+IP68\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*min(?:utos?)?\b/i);
-  const ip68=text.match(/\bcertificaci[oó]n\s+IP68\s*[:=]?\s*(s[ií]|no)\b/i);
-  const ip69=text.match(/\bcertificaci[oó]n\s+IP69K?\s*[:=]?\s*(s[ií]|no)\b/i);
+  const ip68=text.match(/\b(?:certificaci[oó]n\s+)?IP68\s*[:=]?\s*(s[ií]|no)\b/i);
+  const ip69=text.match(/\b(?:certificaci[oó]n\s+)?IP69K?\s*[:=]?\s*(s[ií]|no)\b/i);
   const mil=text.match(/\bMIL-STD-810H\s*[:=]?\s*(s[ií]|no)\b/i);
   if(fall)facts.push({...base,key:'RESISTENCIA_CAIDAS',value:`${fall[1].replace(',','.')} m`});
-  if(ip68)facts.push({...base,key:'IP68',value:/^s/i.test(ip68[1])?'Sí':'No'});
-  if(ip69)facts.push({...base,key:'IP69K',value:/^s/i.test(ip69[1])?'Sí':'No'});
-  if(mil)facts.push({...base,key:'MIL_STD_810H',value:/^s/i.test(mil[1])?'Sí':'No'});
+  if(ip68)facts.push({...base,key:'IP68',value:yesNo(ip68[1])!});
+  if(ip69)facts.push({...base,key:'IP69K',value:yesNo(ip69[1])!});
+  if(mil)facts.push({...base,key:'MIL_STD_810H',value:yesNo(mil[1])!});
   if(depth)facts.push({...base,key:'PROFUNDIDAD_IP68',value:`${depth[1].replace(',','.')} m`});
   if(time)facts.push({...base,key:'TIEMPO_IP68',value:`${time[1].replace(',','.')} min`});
   return facts;
+}
+
+function connectivityFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];
+  const base=baseFact(row);
+  const nfc=text.match(/\bNFC\s*[:=]?\s*(s[ií]|no)\b/i);
+  const fiveG=text.match(/\b(?:conectividad\s+|red\s+|soporte\s+)?5G\s*[:=]?\s*(s[ií]|no)\b/i);
+  const fourG=text.match(/\b(?:red\s+)?4G(?:\s+LTE)?\s*[:=]?\s*(s[ií]|no)\b/i);
+  if(nfc)facts.push({...base,key:'NFC',value:yesNo(nfc[1])!});
+  if(fiveG)facts.push({...base,key:'5G',value:yesNo(fiveG[1])!});
+  if(fourG)facts.push({...base,key:'4G_LTE',value:yesNo(fourG[1])!});
+  return facts;
+}
+
+function cameraFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];
+  const base=baseFact(row);
+  const nightMp=text.match(/\b(?:c[aá]mara\s+)?visi[oó]n\s+nocturna\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*MP\b/i)
+    ??text.match(/\bc[aá]mara\s+nocturna\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*MP\b/i);
+  const nightYes=text.match(/\b(?:c[aá]mara\s+)?visi[oó]n\s+nocturna\s*[:=]?\s*(s[ií]|no)\b/i);
+  if(nightMp){
+    facts.push({...base,key:'VISION_NOCTURNA',value:'Sí'});
+    facts.push({...base,key:'CAMARA_NOCTURNA_MP',value:`${nightMp[1].replace(',','.')} MP`});
+  }else if(nightYes)facts.push({...base,key:'VISION_NOCTURNA',value:yesNo(nightYes[1])!});
+  return facts;
+}
+
+function thermalFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];
+  const base=baseFact(row);
+  const thermal=text.match(/\bc[aá]mara\s+t[eé]rmica\s*[:=]?\s*(s[ií]|no)\b/i);
+  const resolution=text.match(/\bresoluci[oó]n\s+t[eé]rmica\s*[:=]?\s*(\d+)\s*[x×]\s*(\d+)/i);
+  if(thermal)facts.push({...base,key:'CAMARA_TERMICA',value:yesNo(thermal[1])!});
+  if(resolution)facts.push({...base,key:'RESOLUCION_TERMICA',value:`${resolution[1]}×${resolution[2]}`});
+  return facts;
+}
+
+function batteryFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];
+  const base=baseFact(row);
+  const capacity=text.match(/\b(?:capacidad(?:\s+de\s+bater[ií]a)?|bater[ií]a)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*mAh\b/i);
+  const charge=text.match(/\bcarga(?:\s+cableada)?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*W\b/i);
+  if(capacity)facts.push({...base,key:'BATERIA_MAH',value:`${capacity[1].replace(',','.')} mAh`});
+  if(charge)facts.push({...base,key:'CARGA_W',value:`${charge[1].replace(',','.')} W`});
+  return facts;
+}
+
+function atomicProductFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  return [
+    ...memoryFacts(text,row),
+    ...resistanceFacts(text,row),
+    ...connectivityFacts(text,row),
+    ...cameraFacts(text,row),
+    ...thermalFacts(text,row),
+    ...batteryFacts(text,row),
+  ];
 }
 
 export function normalizeEvidence(input:{
@@ -83,13 +147,16 @@ export function normalizeEvidence(input:{
 
   for(const row of input.rag??[]){
     const raw=String(row.text??'');
-    if(String(row.section??'').toUpperCase()==='MEMORIA'||/\bRAM\b/i.test(raw))facts.push(...memoryFacts(raw,row));
-    if(/\b(?:resistencia\s+a\s+ca[ií]das?|IP68|IP69K?|MIL-STD-810H)\b/i.test(raw))facts.push(...resistanceFacts(raw,row));
+    const atomic=row.domain==='INSTITUTIONAL'?[]:atomicProductFacts(raw,row);
+    facts.push(...atomic);
     const value=displayText(raw);
     if(!value)continue;
-    const domain=row.domain==='INSTITUTIONAL'||row.source.startsWith('SUPABASE_INSTITUCIONAL')?'INSTITUTIONAL_RAG':'PRODUCT_RAG';
+    const domain=row.domain==='INSTITUTIONAL'||row.source.includes('INSTITUCIONAL')?'INSTITUTIONAL_RAG':'PRODUCT_RAG';
     const key=String(row.section??row.source.split(':').at(-1)??'EVIDENCIA').toUpperCase();
-    facts.push({domain,key,value,productId:row.productId??null,source:row.source});
+    const focusedAttribute=['ATTRIBUTE','CAPABILITY'].includes(intent);
+    if(!(focusedAttribute&&domain==='PRODUCT_RAG'&&atomic.length>0)){
+      facts.push({domain,key,value,productId:row.productId??null,source:row.source});
+    }
   }
 
   const seen=new Set<string>();
@@ -98,5 +165,5 @@ export function normalizeEvidence(input:{
     if(seen.has(key))return false;
     seen.add(key);
     return true;
-  }).slice(0,12);
+  }).slice(0,16);
 }
