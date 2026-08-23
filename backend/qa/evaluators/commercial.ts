@@ -132,7 +132,8 @@ export function assessFabGrounding(observation:QaTurnObservation):boolean{
     if(/FISICO|PESO|DIMENSION|GROSOR/.test(attribute))return /peso|pesa|gramos|\bg\b|dimensi|grosor/i.test(answer);
     return new RegExp(`\\b${attribute.replace(/[^A-Z0-9]/g,'')}\\b`,'i').test(answer);
   });
-  const benefit=/\b(?:te ayuda|te da|m[aá]s margen|mejor encaje|[uú]til|permite|facilita|reduce|conviene|ideal|encaja|protecci[oó]n ante|mayor|superior|m[aá]s r[aá]pid[ao]|para (?:tu|ese|esa|trabajo|obra|construcci[oó]n|uso|jornada))\b/i.test(answer);
+  const commercial=answer.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const benefit=/\b(?:te ayuda|te da|mas margen|mejor encaje|util|permite|facilita|reduce|conviene|ideal|encaja|adecuad[oa]|proteccion ante|mayor|superior|mas rapid[oa]|para (?:tu|ese|esa|trabajo|obra|construccion|uso|jornada)|si priorizas|si prefieres)\b/i.test(commercial);
   return feature&&benefit;
 }
 
