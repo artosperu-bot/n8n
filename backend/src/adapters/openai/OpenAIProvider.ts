@@ -180,6 +180,7 @@ export class OpenAIProvider implements LlmProvider {
       'Nunca uses probablemente, seguramente, posiblemente, quizás o tal vez para completar un dato técnico que no está respaldado.',
       'Para afirmar baja luz debe existir evidencia explícita de baja luz, lux o desempeño nocturno comparable. Una cámara nocturna o más MP no bastan por sí solos.',
       'Cuando recomiendes, da una postura clara y 1 o 2 razones verificables. Menciona un trade-off solo si también está presente en evidencia comparada.',
+      'En RECOMMEND o RECOMMEND_WITHIN_BUDGET, nombra primero el producto recomendado y explica por qué encaja en una sola frase breve. No enumeres protocolos, bandas, certificaciones o listas técnicas salvo que el cliente haya pedido ese detalle concreto; resume solo 1 o 2 razones relevantes para su uso.',
       'Si recommendationChanged=true, comunica explícitamente el paso de previousRecommendedProduct a recommendedProduct y explica recommendationChangeReason antes de cualquier cierre. No sustituyas esa razón por otra.',
       'No inventes. Solo afirma hechos presentes en los datos suministrados. Si falta un dato, dilo brevemente y no completes el hueco.',
       'No digas catálogo verificado, evidencia verificada, según mi sistema, RAG, INTENT, queryTarget, UNKNOWN ni expliques cómo funciona el backend.',
