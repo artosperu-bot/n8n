@@ -160,9 +160,10 @@ export class OpenAIProvider implements LlmProvider {
 
   async write(input: LlmWriteInput): Promise<LlmResult> {
     const started = performance.now();
-    const evidence = input.verifiedFacts?.length
-      ? input.verifiedFacts.slice(0,12).map(f => `${f.domain}:${f.key}=${f.value}`).join('\n')
-      : (input.rag ?? []).slice(0,6).map(x => x.text.replace(/\s+/g, ' ').slice(0,320)).join('\n');
+    const evidence = (input.verifiedFacts ?? [])
+      .slice(0,12)
+      .map(f => `${f.domain}:${f.key}=${f.value}`)
+      .join('\n') || 'SIN_DATO_VERIFICADO';
     const instructions = [
       'Eres un vendedor consultivo de STECH PERU por chat. Suena como una persona experta, cercana y concreta de Perú; corto y humano, nunca como un sistema.',
       'Responde normalmente en 1 a 3 frases; usa más solo si una comparación o ficha realmente lo necesita.',
@@ -198,7 +199,7 @@ export class OpenAIProvider implements LlmProvider {
       model: this.#model,
       ...(/^gpt-5(?:$|[-.])/i.test(this.#model) ? { text: { verbosity: 'low' } } : {}),
       instructions,
-      input: `CLIENTE:\n${input.message}\n\nRESPUESTA_DIRECTA:\n${input.directAnswer??'SIN_RESPUESTA_DIRECTA'}\n\nCONTRATO_COMERCIAL:\n${JSON.stringify({resolvedCurrentIntent:input.resolvedCurrentIntent,commercialStage:input.commercialStage,commercialSignals:input.commercialSignals,knownFacts:input.knownFacts,missingFacts:input.missingFacts,missingFact:input.missingFact,decisionImpact:input.decisionImpact,verifiedFeatures:input.verifiedFeatures,commercialMove:input.commercialMove,resolvedProduct:input.resolvedProduct,recommendedProduct:input.recommendedProduct,previousRecommendedProduct:input.previousRecommendedProduct,recommendationChanged:input.recommendationChanged,recommendationChangeReason:input.recommendationChangeReason,levelOfInterest:input.levelOfInterest,attribute:input.attribute,implications:input.implications,pendingQuestion:input.pendingQuestion,pendingAction:input.pendingAction,supportedCapabilities:input.supportedCapabilities,EXECUTABLE_NBA:input.executableNba,capabilityAction:input.capabilityAction,alternatives:input.alternatives,customerContext:input.customerContext})}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_DE_RESPUESTA:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nVERIFICADOS:\n${evidence || 'SIN_DATO'}`,
+      input: `CLIENTE:\n${input.message}\n\nRESPUESTA_DIRECTA:\n${input.directAnswer??'SIN_RESPUESTA_DIRECTA'}\n\nCONTRATO_COMERCIAL:\n${JSON.stringify({resolvedCurrentIntent:input.resolvedCurrentIntent,commercialStage:input.commercialStage,commercialSignals:input.commercialSignals,knownFacts:input.knownFacts,missingFacts:input.missingFacts,missingFact:input.missingFact,decisionImpact:input.decisionImpact,verifiedFeatures:input.verifiedFeatures,commercialMove:input.commercialMove,resolvedProduct:input.resolvedProduct,recommendedProduct:input.recommendedProduct,previousRecommendedProduct:input.previousRecommendedProduct,recommendationChanged:input.recommendationChanged,recommendationChangeReason:input.recommendationChangeReason,levelOfInterest:input.levelOfInterest,attribute:input.attribute,implications:input.implications,pendingQuestion:input.pendingQuestion,pendingAction:input.pendingAction,supportedCapabilities:input.supportedCapabilities,EXECUTABLE_NBA:input.executableNba,capabilityAction:input.capabilityAction,alternatives:input.alternatives,customerContext:input.customerContext})}\n\nCONTEXTO_COMERCIAL:\n${JSON.stringify(this.#compactState(input.state))}\n\nPLAN_DE_RESPUESTA:\n${input.deterministicAnswer ?? 'SIN_PLAN'}\n\nVERIFICADOS:\n${evidence}`,
     });
     return {
       text: this.#extractText(json),
