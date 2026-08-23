@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { rankRecommendations } from '../../src/conversation/recommendation/RecommendationPolicy.ts';
 import type { ProductQuote, RagEvidence } from '../../src/domain/types.ts';
 
-function quote(name:string,price:number):ProductQuote{
-  return {product:name,shortName:name,productRagId:`P-${name}`,price,stock:5,currency:'PEN',source:'FAKE_TEST_DATA'};
+function quote(name:string,price:number,stock=5):ProductQuote{
+  return {product:name,shortName:name,productRagId:`P-${name}`,price,stock,currency:'PEN',source:'FAKE_TEST_DATA'};
 }
 function ev(product:string,section:string,text:string,similarity:number):RagEvidence{
   return {text,source:`TEST:${section}`,score:similarity,productId:`P-${product}`,section,domain:'PRODUCT'};
@@ -54,6 +54,20 @@ test('thermal inspection need makes TERMICA a first-class criterion',()=>{
   assert.equal(rows[0]?.quote.shortName,'Thermal');
   assert.ok(rows[0]?.criteria.includes('TERMICA'));
   assert.ok((rows[0]?.criterionScores.TERMICA??0)>(rows[1]?.criterionScores.TERMICA??0));
+});
+
+test('hard technical requirement from use case outranks availability and never substitutes night vision for thermal camera',()=>{
+  const rows=rankRecommendations([
+    {quote:quote('Armor 22',1399,9),evidence:[
+      ev('Armor 22','CAMARA','Cámara principal: 64 MP. Cámara nocturna: 64 MP. Visión nocturna: Sí.',0.95),
+      ev('Armor 22','TERMICA','Cámara térmica: No.',0.7),
+    ]},
+    {quote:quote('Armor 25T Pro',1999,0),evidence:[
+      ev('Armor 25T Pro','TERMICA','Cámara térmica: Sí. Resolución térmica horizontal: 160 px. Resolución térmica vertical: 120 px.',0.8),
+    ]},
+  ],{priorities:['camara'],useCase:'usar cámara térmica para inspecciones'});
+  assert.equal(rows[0]?.quote.shortName,'Armor 25T Pro');
+  assert.ok(rows.every(row=>row.quote.shortName!=='Armor 22'));
 });
 
 test('technical tie does not silently become cheapest-product preference when price is not a criterion',()=>{
