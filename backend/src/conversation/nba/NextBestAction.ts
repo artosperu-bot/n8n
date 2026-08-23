@@ -22,6 +22,13 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
       return state.selectedProduct || (state.interestSignal && state.activeProduct) ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
     case 'PRODUCT_INFO':
+      // A real product overview is useful only if it can progress toward a decision.
+      // Ask one missing decision criterion when no usable context exists; once the
+      // customer already gave use/problem/priorities, do not restart discovery.
+      return state.useCase || state.problem || (state.priorities?.length ?? 0) > 0
+        ? 'ANSWER_ONLY'
+        : 'ASK_MISSING_FACT';
+
     case 'ATTRIBUTE':
     case 'CAPABILITY':
     case 'IMAGES':
