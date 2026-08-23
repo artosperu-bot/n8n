@@ -1,6 +1,6 @@
 import type { QaFinding, QaNbaEvaluation, QaTurnObservation } from '../types.ts';
 
-const PROGRESSION_NBAS=new Set(['ASK_MISSING_FACT','OFFER_ALTERNATIVE','COMPARE','RECOMMEND','SOFT_CLOSE','ASSISTED_HANDOFF','COLLECT_RESERVATION_DATA','EXECUTE_RESERVATION']);
+const PROGRESSION_NBAS=new Set(['RELATED_VALUE','ASK_MISSING_FACT','OFFER_ALTERNATIVE','COMPARE','RECOMMEND','SOFT_CLOSE','ASSISTED_HANDOFF','COLLECT_RESERVATION_DATA','EXECUTE_RESERVATION']);
 const PURCHASE_NBAS=new Set(['ASSISTED_HANDOFF','COLLECT_RESERVATION_DATA','EXECUTE_RESERVATION']);
 
 function repeatsKnownQuestion(answer:string,state:any):boolean{
@@ -13,9 +13,19 @@ function repeatsKnownQuestion(answer:string,state:any):boolean{
   return false;
 }
 
-function actionDelivered(nba:string,answer:string):boolean{
+function relatedValueDelivered(intent:string,answer:string,debug:any):boolean{
+  const text=answer.toLocaleLowerCase('es');
+  const kind=String(debug?.decisionTrace?.commercialMoveKind??debug?.commercialMoveKind??'').toUpperCase();
+  if(kind==='STOCK_STATUS'||intent==='PRICE'||intent==='PRICE_AVAILABILITY')return /\b(?:disponib|stock|hay unidades?)\b/i.test(text);
+  if(kind==='RELATED_VERIFIED_FACT'&&intent==='STOCK')return /\bprecio\b|\bS\/\s*\d+/i.test(answer);
+  if(intent==='STOCK')return /\bprecio\b|\bS\/\s*\d+/i.test(answer);
+  return /\b(?:adem[aá]s|tambi[eé]n|por otro lado)\b|\bpara\b[^.!?]{0,70}\b(?:útil|sirve|ayuda|conviene|encaja)\b/i.test(answer);
+}
+
+function actionDelivered(nba:string,answer:string,intent:string,debug:any):boolean{
   if(!answer.trim())return false;
   if(nba==='ANSWER_ONLY')return true;
+  if(nba==='RELATED_VALUE')return relatedValueDelivered(intent,answer,debug);
   if(nba==='ASK_MISSING_FACT')return /\?/.test(answer);
   if(nba==='SOFT_CLOSE')return /\?|quieres|deseas|puedo|reviso|confirmo|avanz|apart|reserv|cotiz|te ayudo|para (?:continuar|comprar)/i.test(answer);
   if(nba==='OFFER_ALTERNATIVE')return /alternativ|otra opci[oó]n|m[aá]s econ[oó]mic|puedo ofrecer/i.test(answer);
@@ -35,6 +45,11 @@ function unsupportedCommercialAction(answer:string,nba:string):boolean{
   const recommendation=/(?:\bte recomiendo\b|\bmi recomendacion es\b)/.test(operational)&&nba!=='RECOMMEND';
   const alternative=/\b(?:otra|una)\s+(?:alternativa|opcion)\s+(?:es|seria)\b|\bpuedo ofrecerte\b/.test(operational)&&nba!=='OFFER_ALTERNATIVE';
   return unsupported||advisor||stock||recommendation||alternative;
+}
+
+function internalMetadataLeak(answer:string):boolean{
+  const labels=[...answer.matchAll(/(?:^|[\n.!?]\s*)\b(?:Producto\s+ID|C[oó]digo|SKU|Secci[oó]n|Grupo\s+t[eé]cnico|T[ií]tulo|Contenido)\s*:/gi)];
+  return labels.length>=2;
 }
 
 function sameProduct(a:unknown,b:unknown):boolean{
@@ -77,7 +92,7 @@ export function assessNba(observation:QaTurnObservation):QaNbaEvaluation{
   const stageMismatch=Boolean(nba)&&((purchaseProgress&&!PURCHASE_NBAS.has(nba))||((stage==='CIERRE'||stage==='CIERRE_ASISTIDO')&&['ASK_MISSING_FACT','RECOMMEND','COMPARE','OFFER_ALTERNATIVE'].includes(nba)));
   const decisionPass=Boolean(nba)&&!stageMismatch&&(!n1Required||nba!=='ANSWER_ONLY');
   const repeatsKnown=nba==='ASK_MISSING_FACT'&&repeatsKnownQuestion(answer,state);
-  const n1Delivered=actionDelivered(nba,answer)&&!repeatsKnown;
+  const n1Delivered=actionDelivered(nba,answer,intent,debug)&&!repeatsKnown;
   const deliveryPass=n1Required?n1Delivered:Boolean(answer.trim());
   const actionabilityPass=!unsupportedCommercialAction(answer,nba);
   const continuityPass=assessCommercialContinuity(observation);
@@ -128,6 +143,7 @@ export function evaluateCommercial(observation:QaTurnObservation):QaFinding[]{
   const lengthGuidance=debug.intent==='COMPARE'?750:500;
   if(answer.length>lengthGuidance)findings.push({level:'YELLOW',code:'CHAT_TOO_LONG',message:`Respuesta de ${answer.length} caracteres; excesiva para chat comercial.`});
   if((answer.match(/^\s*[-*•]\s+/gm)??[]).length>4)findings.push({level:'YELLOW',code:'TOO_MANY_BULLETS',message:'Usa demasiados puntos/listas para una conversación.'});
+  if(internalMetadataLeak(answer))findings.push({level:'RED',code:'INTERNAL_METADATA_LEAK',message:'La respuesta expone etiquetas internas del sobre RAG o catálogo.',rootCause:'WRITER'});
   const internalLanguage=/como modelo de ia|según mi sistema interno|\bINTENT\b|queryTarget|\bRAG\b|\bUNKNOWN\b|\boracle\b|\bconfidence\b|\bscore\b|datos recuperados|ficha técnica|según (?:la )?fuente(?: consultada)?|fuente (?:consultada|disponible)|evidencia (?:disponible|recuperada|técnica)/i;
   if(internalLanguage.test(answer))findings.push({level:'YELLOW',code:'ROBOTIC_META_LANGUAGE',message:'Expone lenguaje técnico/meta o suena como sistema.'});
   const isPriceObjection=debug.priceObjection===true||debug.intent==='HANDLE_PRICE_OBJECTION';
