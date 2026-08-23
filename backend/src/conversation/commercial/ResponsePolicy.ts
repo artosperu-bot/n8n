@@ -48,21 +48,30 @@ function conciseVerifiedFact(fact:VerifiedFact|null|undefined):string|null{
   return first.length<=120?first:`${first.slice(0,117).trimEnd()}…`;
 }
 
+function semanticAttribute(move:CommercialMove):string{
+  return [move.attribute,...move.verifiedFacts.map(fact=>`${fact.key} ${fact.value}`)]
+    .filter(Boolean)
+    .join(' ')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'');
+}
+
 function attributeContextRelevant(move:CommercialMove):boolean{
-  const attr=String(move.attribute??move.verifiedFacts[0]?.key??'').toUpperCase();
+  const attr=semanticAttribute(move);
   const context=[move.relevantCustomerContext.useCase,move.relevantCustomerContext.problem,...move.relevantCustomerContext.priorities]
     .filter(Boolean).join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   if(!context)return false;
-  if(/RESIST|CAID|IP68|IP69|MIL/.test(attr))return /resisten|caida|golpe|campo|obra|construccion|durabilidad|proteccion/.test(context);
+  if(/RESIST|CAID|IMPACT|IP68|IP69|MIL/.test(attr))return /resisten|caida|golpe|campo|obra|construccion|durabilidad|proteccion/.test(context);
   if(/RAM|MEMORIA|RENDIMIENTO/.test(attr))return /whatsapp|llamada|app|aplicacion|multitarea|trabajo|juego|rendimiento|uso diario|simple/.test(context);
   if(/BATER/.test(attr))return /bateria|autonomia|jornada|trabajo|delivery|campo|uso diario/.test(context);
   if(/CAMARA/.test(attr))return /foto|camara|video|redes sociales|contenido/.test(context);
-  return true;
+  return false;
 }
 
 function neutralAttributeBenefit(move:CommercialMove,fact:string|null):string|null{
-  const attr=String(move.attribute??move.verifiedFacts[0]?.key??'').toUpperCase();
-  if(/RESIST|CAID|IP68|IP69|MIL/.test(attr))return fact?`Si también valoras resistencia, ${fact} es un dato útil para decidir.`:'Si también valoras resistencia, este dato puede ayudarte a decidir.';
+  const attr=semanticAttribute(move);
+  if(/RESIST|CAID|IMPACT|IP68|IP69|MIL/.test(attr))return fact?`Si también valoras resistencia, ${fact} es un dato útil para decidir.`:'Si también valoras resistencia, este dato puede ayudarte a decidir.';
   if(/RAM|MEMORIA|RENDIMIENTO/.test(attr))return fact?`Si también priorizas rendimiento y memoria, ${fact} es un dato útil para decidir.`:'Si también priorizas rendimiento y memoria, este dato puede ayudarte a decidir.';
   if(/BATER/.test(attr))return fact?`Si también priorizas batería, ${fact} es un dato útil para decidir.`:'Si también priorizas batería, este dato puede ayudarte a decidir.';
   if(/CAMARA/.test(attr))return fact?`Si también priorizas cámara, ${fact} es un dato útil para decidir.`:'Si también priorizas cámara, este dato puede ayudarte a decidir.';
