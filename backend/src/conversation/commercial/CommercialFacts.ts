@@ -30,6 +30,22 @@ function hasStrongPurchaseSignal(text: string): boolean {
     || /\b(?:hablemos|hablar)\s+(?:para|de)\s+compr/.test(text);
 }
 
+function isShortAffirmative(text:string):boolean {
+  const clean=fold(text).replace(/[.!¡¿?]+/g,'').replace(/\s+/g,' ').trim();
+  if(!clean||clean.split(' ').length>4)return false;
+  return /^(?:si|dale|ok|okay|claro|de acuerdo|vamos|avancemos|quiero|listo|hazlo|hagamoslo)$/.test(clean);
+}
+
+function confirmsPriorPurchaseStep(message:string,previous:ConversationState):boolean {
+  if(!isShortAffirmative(message))return false;
+  const lastIntent=String(previous.lastIntent??'').toUpperCase();
+  const lastNba=String(previous.lastNba??previous.pendingCommercialAction??'').toUpperCase();
+  if(lastIntent!=='STOCK'||lastNba!=='SOFT_CLOSE')return false;
+  const prompt=fold(previous.lastAssistantMessage??'');
+  return /\bquieres\b[^?]{0,70}\b(?:avanzar|seguir|continuar|comprar|reservar|separar)\b/.test(prompt)
+    || /\b(?:avanzamos|seguimos|continuamos)\b[^?]{0,45}\b(?:modelo|compra|reserva)?\b/.test(prompt);
+}
+
 function hasInterestSignal(text:string):boolean {
   return /\b(?:me\s+interesa|estoy\s+interesad[oa]|me\s+interesaria|podria\s+interesarme)\b/.test(text)
     || hasStrongPurchaseSignal(text);
@@ -66,10 +82,11 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
   const objection = /\b(muy\s+caro|esta\s+caro|se\s+me\s+hace\s+caro|sale\s+de\s+mi\s+presupuesto|mas\s+barato)\b/.test(t)
     ? 'precio'
     : (previous.objection ?? null);
-  const purchaseSignal = hasStrongPurchaseSignal(t)
+  const contextualPurchaseConfirmation=confirmsPriorPurchaseStep(message,previous);
+  const purchaseSignal = hasStrongPurchaseSignal(t) || contextualPurchaseConfirmation
     ? true
     : (previous.purchaseSignal ?? false);
-  const interestSignal = hasInterestSignal(t)
+  const interestSignal = hasInterestSignal(t) || contextualPurchaseConfirmation
     ? true
     : (previous.interestSignal ?? false);
 
