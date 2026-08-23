@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { safeWrite } from '../../src/conversation/writer/WriterGuard.ts';
 import { renderCommercialMove } from '../../src/conversation/commercial/ResponsePolicy.ts';
+import { normalizeEvidence } from '../../src/conversation/evidence/EvidenceNormalizer.ts';
+import { buildGroundedDirectAnswer } from '../../src/conversation/commercial/GroundedDirectAnswer.ts';
 import { N8nAutomationBus } from '../../src/adapters/n8n/N8nAutomationBus.ts';
 import type { LlmProvider } from '../../src/ports/LlmProvider.ts';
 
@@ -185,5 +187,39 @@ test('price objection stays consultative instead of dumping a mini catalog',asyn
   const result=await safeWrite(llm(verbose),input,'fallback');
   assert.ok(result.answer.length<=360,`objection response should be compact, got ${result.answer.length}`);
   assert.ok((result.answer.match(/^\s*-\s+/gm)??[]).length<=2,'objection should not dump three technical blocks');
+  assert.equal((result.answer.match(/\?/g)??[]).length,1);
+});
+
+test('resistance RAG is normalized into atomic facts instead of a customer-facing blob',()=>{
+  const facts=normalizeEvidence({
+    intent:'CAPABILITY',
+    rag:[{domain:'PRODUCT',section:'RESISTENCIA',productId:'P-X12',source:'TEST',text:'Características confirmadas de resistencia y certificaciones para Armor X12 Pro: - Certificación IP68: Sí. - Certificación IP69K: Sí. - MIL-STD-810H: Sí. - Resistencia a caídas: 1.5 m. - Profundidad IP68: 1.5 m. - Tiempo IP68: 30 min.'} as any],
+  });
+  assert.ok(facts.some(f=>f.key==='RESISTENCIA_CAIDAS'&&f.value==='1.5 m'));
+  assert.ok(facts.some(f=>f.key==='IP68'&&f.value==='Sí'));
+  assert.doesNotMatch(facts.find(f=>f.key==='RESISTENCIA_CAIDAS')?.value??'',/Características confirmadas|Certificación IP/i);
+});
+
+test('grounded fall answer uses the atomic resistance fact, never the full RAG row',()=>{
+  const verifiedFacts:any=[
+    {domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m',productId:'P-X12',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'IP68',value:'Sí',productId:'P-X12',source:'TEST'},
+  ];
+  const answer=buildGroundedDirectAnswer({message:'¿Aguanta caídas?',intent:'CAPABILITY',attribute:'RESISTENCIA',resolvedProduct:'Armor X12 Pro',verifiedFacts,rag:[]});
+  assert.equal(answer,'Armor X12 Pro tiene resistencia a caídas de 1.5 m.');
+});
+
+test('budget recommendation is compact even when writer returns network-band dump',async()=>{
+  const input:any={
+    commercialContractPrepared:true,message:'Tengo hasta 1000 soles',intent:'RECOMMEND_WITHIN_BUDGET',
+    state:{recommendedProduct:'Armor X12 Pro',budget:1000,useCase:'Uso cotidiano básico para mensajería por WhatsApp y llamadas'},
+    recommendedProduct:'Armor X12 Pro',budget:1000,nextBestAction:'SOFT_CLOSE',executableNba:'SOFT_CLOSE',finalExecutableNba:'SOFT_CLOSE',decision:{nextBestAction:'SOFT_CLOSE'},allowedProducts:['Armor X12 Pro'],
+  };
+  const verbose='Armor X12 Pro: confirma Dual 4G (2 Nano-SIM, 3 ranuras) y soporte 4G LTE con VoLTE; bandas 4G FDD-LTE: B1/B2/B3/B4/B5/B7/B8/B12/B17/B19/B20/B28A/B28B. Conectividad: NFC, Wi-Fi 802.11 a/ac/b/g/n, Bluetooth 5 y USB Type-C 2.0. ¿Quieres que revisemos disponibilidad para avanzar?';
+  const result=await safeWrite(llm(verbose),input,'fallback');
+  assert.ok(result.answer.length<=260,`recommendation should be concise, got ${result.answer.length}`);
+  assert.match(result.answer,/Armor X12 Pro/i);
+  assert.match(result.answer,/1000|presupuesto/i);
+  assert.doesNotMatch(result.answer,/B1\/B2|802\.11|USB Type-C|3 ranuras/i);
   assert.equal((result.answer.match(/\?/g)??[]).length,1);
 });
