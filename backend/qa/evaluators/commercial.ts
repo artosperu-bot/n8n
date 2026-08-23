@@ -86,7 +86,10 @@ export function assessNba(observation:QaTurnObservation):QaNbaEvaluation{
   const nba=String(state.lastNba??'').toUpperCase();const intent=String(debug.intent??state.lastIntent??'').toUpperCase();const stage=String(state.commercialStage??'').toUpperCase();
   const purchaseProgress=state.purchaseSignal===true||['PURCHASE','HUMAN'].includes(intent)||stage==='CIERRE'||stage==='CIERRE_ASISTIDO';
   const interestedProgress=state.interestSignal===true&&['PRICE','STOCK'].includes(intent);
-  const consultativeProgress=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent);
+  // A recommendation can itself be the complete N. Do not require a second CTA just
+  // because intent=RECOMMEND; require progression only for turns whose purpose is
+  // explicitly discovery/objection handling or when an executable NBA is declared.
+  const consultativeProgress=['EVALUATE_USE','HANDLE_PRICE_OBJECTION'].includes(intent);
   const n1Reason=purchaseProgress?'PURCHASE_REQUIRES_PROGRESSION':interestedProgress?'INTEREST_REQUIRES_PROGRESSION':consultativeProgress?'CONSULTATIVE_TURN_REQUIRES_PROGRESSION':PROGRESSION_NBAS.has(nba)?'DECLARED_ACTION_REQUIRES_DELIVERY':'ANSWER_ONLY_APPROPRIATE';
   const n1Required=n1Reason!=='ANSWER_ONLY_APPROPRIATE';
   const stageMismatch=Boolean(nba)&&((purchaseProgress&&!PURCHASE_NBAS.has(nba))||((stage==='CIERRE'||stage==='CIERRE_ASISTIDO')&&['ASK_MISSING_FACT','RECOMMEND','COMPARE','OFFER_ALTERNATIVE'].includes(nba)));
@@ -119,21 +122,25 @@ export function assessFabGrounding(observation:QaTurnObservation):boolean{
   const response=observation.response??{};const state=response.state??{};const debug=response.debug??{};const answer=String(response.answer??'');
   const attributes=Array.isArray(state.currentAttributes)?state.currentAttributes.map((x:unknown)=>String(x).toUpperCase()):[];
   const attributeText=attributes.join(' ');
-  const technicalAttribute=/RAM|MEMORIA|BATERIA|RESISTENCIA|CAIDA|DURABILIDAD|CAMARA|PANTALLA|NFC|CONECTIVIDAD|FISICO|PESO|DIMENSION|GROSOR/.test(attributeText);
+  const technicalAttribute=/RAM|MEMORIA|BATERIA|RESISTENCIA|CAIDA|DURABILIDAD|CAMARA|TERMICA|5G|PANTALLA|NFC|CONECTIVIDAD|FISICO|PESO|DIMENSION|GROSOR/.test(attributeText);
   const decisionContext=['COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(String(debug.intent??'').toUpperCase())||/^RAG_(?:COMPARISON|RECOMMENDATION)/.test(String(debug.route??''));
-  const commercialContext=Boolean(state.useCase||state.problem||(state.implications?.length??0)>0||(state.priorities?.length??0)>0||decisionContext);
-  if(!technicalAttribute||!commercialContext||Number(debug.ragCount??0)<=0||!/^RAG_(?:PRODUCT|COMPARISON|RECOMMENDATION)/.test(String(debug.route??'')))return true;
+  // A single inferred priority is not proof of customer context. Isolated factual
+  // questions may correctly answer only the fact; FAB becomes expected when the
+  // customer gave a real use/problem, multiple criteria, implications, or is deciding.
+  const genuineContext=Boolean(state.useCase||state.problem||(state.implications?.length??0)>0||(state.priorities?.length??0)>=2||decisionContext);
+  if(!technicalAttribute||!genuineContext||Number(debug.ragCount??0)<=0||!/^RAG_(?:PRODUCT|COMPARISON|RECOMMENDATION)/.test(String(debug.route??'')))return true;
   const feature=attributes.some((attribute:string)=>{
     if(/RAM|MEMORIA/.test(attribute))return /\bram\b|\bmemoria\b|\bgb\b/i.test(answer);
     if(/BATERIA/.test(attribute))return /bater[ií]a|carga|mah|\bw\b/i.test(answer);
-    if(/RESISTENCIA|CAIDA|DURABILIDAD|PROTECCION/.test(attribute))return /resisten|ip6[89]|ca[ií]da|golpe|impacto/i.test(answer);
+    if(/RESISTENCIA|CAIDA|DURABILIDAD|PROTECCION/.test(attribute))return /resisten|ip6[89]|mil.std|ca[ií]da|golpe|impacto/i.test(answer);
+    if(/TERMICA/.test(attribute))return /t[eé]rmic|temperatura|resoluci[oó]n t[eé]rmica/i.test(answer);
     if(/CAMARA/.test(attribute))return /c[aá]mara|sensor|\bmp\b|visi[oó]n nocturna/i.test(answer);
     if(/PANTALLA/.test(attribute))return /pantalla|pulgad|\bhz\b|resoluci[oó]n/i.test(answer);
     if(/FISICO|PESO|DIMENSION|GROSOR/.test(attribute))return /peso|pesa|gramos|\bg\b|dimensi|grosor/i.test(answer);
     return new RegExp(`\\b${attribute.replace(/[^A-Z0-9]/g,'')}\\b`,'i').test(answer);
   });
   const commercial=answer.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const benefit=/\b(?:te ayuda|te da|mas margen|mejor encaje|util|permite|facilita|reduce|conviene|ideal|encaja|adecuad[oa]|proteccion ante|mayor|superior|mas rapid[oa]|para (?:tu|ese|esa|trabajo|obra|construccion|uso|jornada)|si priorizas|si prefieres)\b/i.test(commercial);
+  const benefit=/\b(?:te ayuda|te da|mas margen|punto a favor|util|permite|facilita|reduce|conviene|ideal|encaja|adecuad[oa]|proteccion ante|mayor|superior|mas rapid[oa]|en tu caso|para (?:tu|ese|esa|trabajo|obra|construccion|uso|jornada)|si priorizas|si prefieres|para lo que)\b/i.test(commercial);
   return feature&&benefit;
 }
 
