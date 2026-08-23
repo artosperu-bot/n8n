@@ -1,5 +1,3 @@
-import type { Intent } from '../conversation/intent/IntentResolver.ts';
-
 export type CustomerType = 'PERSONAL' | 'BUSINESS';
 export type ReservationStage = 'NEED_DOCUMENT'|'NEED_NAME'|'NEED_ADDRESS'|'READY'|'CONFIRMED';
 
@@ -70,7 +68,7 @@ export type ConversationState = {
   queryTarget?: string|null;
   explicitSwitch?: boolean;
   budget?: number|null;
-  lastIntent?: Intent|string|null;
+  lastIntent?: string|null;
   secondaryIntents?: string[];
   lastRoute?: string|null;
   lastSqlTools?: string[];
