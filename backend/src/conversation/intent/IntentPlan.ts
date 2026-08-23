@@ -76,6 +76,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
     || has(/\b(?:el|la)\s+mas\s+(?:resistente|potente|economico|barato|rapido)\b/)
     || has(/\b(?:cual|que)\b[^?.!]{0,40}\b(?:mejor|mayor)\s+(?:bateria|camara|rendimiento|resistencia|pantalla|memoria)\b/)
     || has(/\b(?:cual|que)\b[^?.!]{0,30}\btiene\b[^?.!]{0,20}\b(?:la|el)\s+mejor\b/)
+    || has(/\b(?:cual|que)\b\s+si\s+(?:lo\s+)?(?:tiene|cumple|ofrece)\b/)
     || has(/\bhay\s+(?:uno|un|algo|alguno)\b[^?.!]{0,25}\bmas\s+barato\b/);
   if (recommendationLanguage) hits.push('RECOMMEND');
   if (has(/\b(quiero comprar|quiero comprarlo|quiero comprarla|comprarlo|comprarla|como compro|lo compro|la compro|me llevo (?:ese|esa|este|esta)|me quedo con|quiero (?:ese|esa|este|esta)|ya (?:ese|esa|este|esta) quiero|me decidi(?: por (?:ese|esa|este|esta))?|ya me decidi|lo quiero|la quiero|avanzar con la compra|quiero avanzar)\b/)
@@ -89,6 +90,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const attributes = unique(ATTRS.filter(([rx]) => rx.test(t)).map(([, name]) => name));
   const explicitProductInfo = has(/\b(info|informacion|caracteristicas|especificaciones|ficha|cuentame|hablame|dime\s+(?:del|de\s+la|sobre))\b/) && has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);
   const browsingProduct = has(/\b(estoy viendo|quiero ver|revisando|ahora si quiero ver|muestrame el)\b/) && has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);
+  const requirementFollowup = has(/\b(cumple|cumpliria|cumple\s+con\s+eso|tiene\s+eso)\b/);
   const productInfo = explicitProductInfo || browsingProduct;
   const directUse = has(/\b(trabajo|trabajar|construccion|campo|tecnico|juego|juegos|gaming|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para|delivery)\b/);
   const everydayNeed = has(/\b(uso simple|uso basico|whatsapp|llamadas?|mensajeria|comunicacion)\b/)
@@ -97,7 +99,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
 
   if (productInfo) hits.push('PRODUCT_INFO');
   if (use) hits.push('EVALUATE_USE');
-  if (attributes.length && !productInfo) hits.push('ATTRIBUTE');
+  if ((attributes.length || requirementFollowup) && !productInfo) hits.push('ATTRIBUTE');
   if (/^(hola|buenas|buenos dias|buenas tardes|buenas noches)[\s!.,¿?]*$/.test(t)) hits.push('GREETING');
 
   const intents = unique(hits);
