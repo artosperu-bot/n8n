@@ -75,12 +75,7 @@ function commercialGoal(action:string|null):string|null{
   }
 }
 
-function nextMissingFact(facts:{
-  useCase:string|null;
-  problem:string|null;
-  priorities:string[];
-  budget:number|null;
-},intent:string):string|null{
+function nextMissingFact(facts:{useCase:string|null;problem:string|null;priorities:string[];budget:number|null},intent:string):string|null{
   if(['HANDLE_PRICE_OBJECTION','OBJECTION','BUDGET_CONSTRAINT'].includes(intent)&&facts.budget==null)return 'presupuesto máximo';
   if(!facts.useCase)return 'uso principal';
   if(!facts.priorities.length)return 'prioridad principal';
@@ -89,35 +84,18 @@ function nextMissingFact(facts:{
   return null;
 }
 
-function isActuallyMissing(label:string,facts:{
-  useCase:string|null;
-  problem:string|null;
-  priorities:string[];
-  budget:number|null;
-  activeProduct:string|null;
-  selectedProduct:string|null;
-  recommendedProduct:string|null;
-}):boolean{
+function isActuallyMissing(label:string,facts:{useCase:string|null;problem:string|null;priorities:string[];budget:number|null;activeProduct:string|null;selectedProduct:string|null;recommendedProduct:string|null}):boolean{
   const value=fold(label);
   if(/uso/.test(value))return !facts.useCase;
   if(/problema/.test(value))return !facts.problem;
   if(/prioridad|criterio/.test(value))return facts.priorities.length===0;
   if(/presupuesto|tope/.test(value))return facts.budget==null;
   if(/modelo|producto/.test(value))return !facts.activeProduct&&!facts.selectedProduct&&!facts.recommendedProduct;
-  // Interest and purchase signals are observed state, never discovery questions.
   if(/interes|compra/.test(value))return false;
   return false;
 }
 
-function collectMissingFacts(facts:{
-  useCase:string|null;
-  problem:string|null;
-  priorities:string[];
-  budget:number|null;
-  activeProduct:string|null;
-  selectedProduct:string|null;
-  recommendedProduct:string|null;
-}):string[]{
+function collectMissingFacts(facts:{useCase:string|null;problem:string|null;priorities:string[];budget:number|null;activeProduct:string|null;selectedProduct:string|null;recommendedProduct:string|null}):string[]{
   const missing:string[]=[];
   if(!facts.useCase)missing.push('uso principal');
   if(!facts.problem)missing.push('problema principal');
@@ -127,6 +105,29 @@ function collectMissingFacts(facts:{
   return missing;
 }
 
+function capabilityFor(nba:string,missingFact:string|null):CommercialCapabilityAction|null{
+  if(nba==='ANSWER_ONLY')return 'ANSWER_ONLY';
+  if(nba==='RELATED_VALUE')return 'ADD_RELATED_VALUE';
+  if(nba==='ASK_MISSING_FACT')return missingFactCapability(missingFact);
+  if(nba==='RECOMMEND')return 'RECOMMEND_PRODUCT';
+  if(nba==='COMPARE')return 'COMPARE_PRODUCTS';
+  if(nba==='OFFER_ALTERNATIVE')return 'OFFER_ALTERNATIVE';
+  if(nba==='SOFT_CLOSE')return 'SOFT_CLOSE_TO_STOCK';
+  if(nba==='COLLECT_RESERVATION_DATA')return 'RESERVATION_DATA_COLLECTION';
+  if(nba==='ASSISTED_HANDOFF')return 'REQUEST_HUMAN_HANDOFF';
+  if(nba==='EXECUTE_RESERVATION')return 'EXECUTE_RESERVATION';
+  return null;
+}
+
+/**
+ * STECH-AUDIT:
+ * ROLE: materializes the one final executable commercial action after the direct answer is already grounded.
+ * INPUT AUTHORITY: candidate NBA + capabilities + explicit purchase/safety state.
+ * OUTPUT AUTHORITY: finalExecutableNba.
+ * MAY DECIDE: capability-safe degradation before writer execution.
+ * MUST NOT DECIDE: wording, factual truth, product identity or customer-facing direct answer.
+ * DOWNSTREAM CONSUMERS: writer, WriterGuard and persisted lastNba.
+ */
 export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const state:any=input.state??{};
   const useCase=normalizeGenuineUseCase(input.useCase??state.useCase??null);
@@ -155,12 +156,10 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const commercialMove=selectCommercialMove(input,verifiedFacts,verifiedFeatures,attribute,resolvedTurnProduct,moveContext,levelOfInterest);
   const allowedProducts=unique(input.allowedProducts??[]);
   const alternatives=unique(input.alternatives??[]).filter(product=>includesProduct(allowedProducts,product));
-  const knownFacts=input.knownFacts??{
-    useCase,problem,priorities,budget,objection,activeProduct,selectedProduct,recommendedProduct,
-    interestSignal,purchaseSignal,
-  };
+  const knownFacts=input.knownFacts??{useCase,problem,priorities,budget,objection,activeProduct,selectedProduct,recommendedProduct,interestSignal,purchaseSignal};
 
-  let nextBestAction=String(input.nextBestAction??input.decision?.nextBestAction??'ANSWER_ONLY').toUpperCase();
+  const candidateNba=String(input.candidateNba??input.finalExecutableNba??input.nextBestAction??input.decision?.nextBestAction??'ANSWER_ONLY').toUpperCase();
+  let finalExecutableNba=candidateNba;
   const proposedMissing=String(input.missingFact??'').trim();
   const missingFacts=collectMissingFacts({useCase,problem,priorities,budget,activeProduct,selectedProduct,recommendedProduct});
   let missingFact=proposedMissing&&isActuallyMissing(proposedMissing,{useCase,problem,priorities,budget,activeProduct,selectedProduct,recommendedProduct})
@@ -170,48 +169,49 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const capabilityInput={...input,allowedProducts,alternatives,verifiedFacts,verifiedFeatures,commercialMove,resolvedProduct:resolvedTurnProduct,interestSignal,purchaseSignal,activeProduct,selectedProduct,recommendedProduct,useCase,problem,priorities,budget,decisionImpact};
   const turnCapabilities=evaluateTurnCapabilities(capabilityInput);
   const unsupportedRequest=requestedUnsupportedCapability(input.message);
-  const actionFor=(nba:string):CommercialCapabilityAction|null=>{
-    if(nba==='ANSWER_ONLY')return 'ANSWER_ONLY';
-    if(nba==='RELATED_VALUE')return 'ADD_RELATED_VALUE';
-    if(nba==='ASK_MISSING_FACT')return missingFactCapability(missingFact);
-    if(nba==='RECOMMEND')return 'RECOMMEND_PRODUCT';
-    if(nba==='COMPARE')return 'COMPARE_PRODUCTS';
-    if(nba==='OFFER_ALTERNATIVE')return 'OFFER_ALTERNATIVE';
-    if(nba==='SOFT_CLOSE')return 'SOFT_CLOSE_TO_STOCK';
-    if(nba==='COLLECT_RESERVATION_DATA')return 'RESERVATION_DATA_COLLECTION';
-    if(nba==='ASSISTED_HANDOFF')return 'REQUEST_HUMAN_HANDOFF';
-    if(nba==='EXECUTE_RESERVATION')return 'EXECUTE_RESERVATION';
-    return null;
-  };
-  if(purchaseSignal&&['ASK_MISSING_FACT','COMPARE','RECOMMEND','OFFER_ALTERNATIVE'].includes(nextBestAction))nextBestAction='COLLECT_RESERVATION_DATA';
-  let capabilityAction=actionFor(nextBestAction);
+
+  if(purchaseSignal&&['ASK_MISSING_FACT','COMPARE','RECOMMEND','OFFER_ALTERNATIVE'].includes(finalExecutableNba))finalExecutableNba='COLLECT_RESERVATION_DATA';
+  let capabilityAction=capabilityFor(finalExecutableNba,missingFact);
   let executable=Boolean(capabilityAction&&canExecuteCapability(capabilityAction,turnCapabilities,decisionImpact));
-  if(!executable&&nextBestAction==='RECOMMEND'&&String(input.intent??'').toUpperCase()==='COMPARE'&&canExecuteCapability('COMPARE_PRODUCTS',turnCapabilities,decisionImpact)){
-    nextBestAction='COMPARE';capabilityAction='COMPARE_PRODUCTS';executable=true;
+
+  if(!executable&&finalExecutableNba==='RECOMMEND'&&String(input.intent??'').toUpperCase()==='COMPARE'&&canExecuteCapability('COMPARE_PRODUCTS',turnCapabilities,decisionImpact)){
+    finalExecutableNba='COMPARE';capabilityAction='COMPARE_PRODUCTS';executable=true;
   }
-  if(!executable&&nextBestAction==='OFFER_ALTERNATIVE'){
+  if(!executable&&finalExecutableNba==='OFFER_ALTERNATIVE'){
     const askAction=missingFactCapability(missingFact);
-    if(askAction&&canExecuteCapability(askAction,turnCapabilities,decisionImpact)){nextBestAction='ASK_MISSING_FACT';capabilityAction=askAction;executable=true;}
+    if(askAction&&canExecuteCapability(askAction,turnCapabilities,decisionImpact)){
+      finalExecutableNba='ASK_MISSING_FACT';capabilityAction=askAction;executable=true;
+    }
   }
-  if(unsupportedRequest){nextBestAction='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';executable=true;decisionImpact=false;missingFact=null;}
-  if(!executable){nextBestAction='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';decisionImpact=false;missingFact=null;}
-  if(nextBestAction!=='ASK_MISSING_FACT')missingFact=null;
+  if(unsupportedRequest){
+    finalExecutableNba='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';executable=true;decisionImpact=false;missingFact=null;
+  }
+  if(!executable){
+    // Failed RELATED_VALUE does not become discovery. The direct answer N survives independently.
+    finalExecutableNba='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';decisionImpact=false;missingFact=null;
+  }
+  if(finalExecutableNba!=='ASK_MISSING_FACT')missingFact=null;
+
   const resolvedProduct=resolvedTurnProduct;
-  const pendingQuestion=nextBestAction==='ASK_MISSING_FACT'?missingFact:null;
-  const pendingAction=nextBestAction;
+  const pendingQuestion=finalExecutableNba==='ASK_MISSING_FACT'?missingFact:null;
+  const pendingAction=finalExecutableNba;
   const commercialSignals={purchaseSignal,interestSignal,objection,selectedProduct,recommendedProduct,activeProduct,commercialStage:input.commercialStage??state.commercialStage??input.decision?.commercialStage??null,levelOfInterest,budget,problem,implications,priorities,attribute,useCase,pendingCommercialAction:previousPendingAction};
 
   return {
     ...input,
-    decision:input.decision?{...input.decision,nextBestAction}:input.decision,
+    decision:input.decision?{...input.decision,nextBestAction:finalExecutableNba}:input.decision,
     allowedProducts,alternatives,verifiedFacts,verifiedFeatures,commercialMove,directAnswer,
-    nextBestAction,commercialStage:input.commercialStage??state.commercialStage??input.decision?.commercialStage??null,
+    candidateNba,
+    finalExecutableNba,
+    nextBestAction:finalExecutableNba,
+    executableNba:finalExecutableNba,
+    commercialStage:input.commercialStage??state.commercialStage??input.decision?.commercialStage??null,
     knownFacts,missingFacts,missingFact,decisionImpact,interestSignal,purchaseSignal,objection,activeProduct,selectedProduct,recommendedProduct,
     useCase,problem,priorities,budget,
     customerContext:input.customerContext??{useCase,problem,priorities,budget,objection},
-    commercialGoal:input.commercialGoal??commercialGoal(nextBestAction),capabilityAction,turnCapabilities,
+    commercialGoal:commercialGoal(finalExecutableNba),capabilityAction,turnCapabilities,
     resolvedCurrentIntent:String(input.intent??'OTHER').toUpperCase(),commercialSignals,resolvedProduct,
-    supportedCapabilities:supportedCapabilityNames(turnCapabilities),executableNba:nextBestAction,
+    supportedCapabilities:supportedCapabilityNames(turnCapabilities),
     levelOfInterest,attribute,implications,pendingQuestion,pendingAction,
     commercialContractPrepared:true,
   };
