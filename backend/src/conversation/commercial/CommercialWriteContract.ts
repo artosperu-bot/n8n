@@ -18,7 +18,7 @@ function directAttributeFamily(attribute:string|null,fact:{key:string;value:stri
     memoria:['ram','memoria'],ram:['ram','memoria'],
     almacenamiento:['almacenamiento','rom','memoriainterna'],rom:['almacenamiento','rom','memoriainterna'],
     bateria:['bateria','autonomia','carga'],autonomia:['bateria','autonomia','carga'],
-    resistencia:['resistencia','caida','ip68','ip69'],camara:['camara','foto','video','mp'],
+    resistencia:['resistencia','caida','ip68','ip69','milstd'],camara:['camara','foto','video','mp'],
   };
   const tokens=families[requested]??[requested];
   return tokens.some(token=>content.includes(token));
@@ -119,15 +119,6 @@ function capabilityFor(nba:string,missingFact:string|null):CommercialCapabilityA
   return null;
 }
 
-/**
- * STECH-AUDIT:
- * ROLE: materializes the one final executable commercial action after the direct answer is already grounded.
- * INPUT AUTHORITY: candidate NBA + capabilities + explicit purchase/safety state.
- * OUTPUT AUTHORITY: finalExecutableNba.
- * MAY DECIDE: capability-safe degradation before writer execution.
- * MUST NOT DECIDE: wording, factual truth, product identity or customer-facing direct answer.
- * DOWNSTREAM CONSUMERS: writer, WriterGuard and persisted lastNba.
- */
 export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const state:any=input.state??{};
   const useCase=normalizeGenuineUseCase(input.useCase??state.useCase??null);
@@ -139,7 +130,8 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const activeProduct=input.activeProduct??state.activeProduct??null;
   const selectedProduct=input.selectedProduct??state.selectedProduct??input.decision?.selectedProduct??null;
   const recommendedProduct=input.recommendedProduct??state.recommendedProduct??null;
-  const factualIntent=new Set(['PRICE','PRICE_AVAILABILITY','STOCK','CAPABILITY','PRODUCT_INFO','ATTRIBUTE','WARRANTY','POLICY','ORDER_STATUS']).has(String(input.intent??'').toUpperCase());
+  const intentCode=String(input.intent??'').toUpperCase();
+  const factualIntent=new Set(['PRICE','PRICE_AVAILABILITY','STOCK','CAPABILITY','PRODUCT_INFO','ATTRIBUTE','WARRANTY','POLICY','ORDER_STATUS']).has(intentCode);
   const currentTurnProduct=input.resolvedProduct??input.quote?.shortName??input.quote?.product??input.decision?.targetProduct??null;
   const resolvedTurnProduct=factualIntent
     ?currentTurnProduct??selectedProduct??recommendedProduct??activeProduct
@@ -150,7 +142,9 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const implications=unique(input.implications??deriveCommercialImplications(problem,objection));
   const previousPendingAction=input.pendingAction??state.pendingCommercialAction??state.lastNba??null;
   const verifiedFacts=input.verifiedFacts??normalizeEvidence({intent:input.intent,quote:input.quote,rag:input.rag});
-  const verifiedFeatures=input.verifiedFeatures??verifiedFacts.filter(fact=>fact.domain==='PRODUCT_RAG');
+  const allVerifiedFeatures=input.verifiedFeatures??verifiedFacts.filter(fact=>fact.domain==='PRODUCT_RAG');
+  const attributeFeatures=attribute?allVerifiedFeatures.filter(fact=>directAttributeFamily(attribute,fact)):[];
+  const verifiedFeatures=['CAPABILITY','ATTRIBUTE'].includes(intentCode)&&attributeFeatures.length?attributeFeatures:allVerifiedFeatures;
   const directAnswer=input.directAnswer??buildGroundedDirectAnswer({message:input.message,intent:input.intent,attribute,resolvedProduct:resolvedTurnProduct,quote:input.quote,rag:input.rag,verifiedFacts});
   const moveContext={useCase,problem,priorities,budget,objection};
   const commercialMove=selectCommercialMove(input,verifiedFacts,verifiedFeatures,attribute,resolvedTurnProduct,moveContext,levelOfInterest);
@@ -164,7 +158,7 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const missingFacts=collectMissingFacts({useCase,problem,priorities,budget,activeProduct,selectedProduct,recommendedProduct});
   let missingFact=proposedMissing&&isActuallyMissing(proposedMissing,{useCase,problem,priorities,budget,activeProduct,selectedProduct,recommendedProduct})
     ?proposedMissing
-    :nextMissingFact({useCase,problem,priorities,budget},String(input.intent??'').toUpperCase());
+    :nextMissingFact({useCase,problem,priorities,budget},intentCode);
   let decisionImpact=input.decisionImpact??Boolean(missingFact&&missingFactCapability(missingFact));
   const capabilityInput={...input,allowedProducts,alternatives,verifiedFacts,verifiedFeatures,commercialMove,resolvedProduct:resolvedTurnProduct,interestSignal,purchaseSignal,activeProduct,selectedProduct,recommendedProduct,useCase,problem,priorities,budget,decisionImpact};
   const turnCapabilities=evaluateTurnCapabilities(capabilityInput);
@@ -174,7 +168,7 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   let capabilityAction=capabilityFor(finalExecutableNba,missingFact);
   let executable=Boolean(capabilityAction&&canExecuteCapability(capabilityAction,turnCapabilities,decisionImpact));
 
-  if(!executable&&finalExecutableNba==='RECOMMEND'&&String(input.intent??'').toUpperCase()==='COMPARE'&&canExecuteCapability('COMPARE_PRODUCTS',turnCapabilities,decisionImpact)){
+  if(!executable&&finalExecutableNba==='RECOMMEND'&&intentCode==='COMPARE'&&canExecuteCapability('COMPARE_PRODUCTS',turnCapabilities,decisionImpact)){
     finalExecutableNba='COMPARE';capabilityAction='COMPARE_PRODUCTS';executable=true;
   }
   if(!executable&&finalExecutableNba==='OFFER_ALTERNATIVE'){
@@ -187,7 +181,6 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
     finalExecutableNba='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';executable=true;decisionImpact=false;missingFact=null;
   }
   if(!executable){
-    // Failed RELATED_VALUE does not become discovery. The direct answer N survives independently.
     finalExecutableNba='ANSWER_ONLY';capabilityAction='ANSWER_ONLY';decisionImpact=false;missingFact=null;
   }
   if(finalExecutableNba!=='ASK_MISSING_FACT')missingFact=null;
@@ -210,7 +203,7 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
     useCase,problem,priorities,budget,
     customerContext:input.customerContext??{useCase,problem,priorities,budget,objection},
     commercialGoal:commercialGoal(finalExecutableNba),capabilityAction,turnCapabilities,
-    resolvedCurrentIntent:String(input.intent??'OTHER').toUpperCase(),commercialSignals,resolvedProduct,
+    resolvedCurrentIntent:intentCode||'OTHER',commercialSignals,resolvedProduct,
     supportedCapabilities:supportedCapabilityNames(turnCapabilities),
     levelOfInterest,attribute,implications,pendingQuestion,pendingAction,
     commercialContractPrepared:true,
