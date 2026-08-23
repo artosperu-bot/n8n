@@ -5,8 +5,11 @@ const root=process.cwd();
 const enginePath=resolve(root,'src/conversation/HybridConversationEngine.ts');
 const typesPath=resolve(root,'src/domain/types.ts');
 
-let engine=readFileSync(enginePath,'utf8');
-let types=readFileSync(typesPath,'utf8');
+// Repository files may contain mixed CRLF/LF after edits from Windows and
+// GitHub. Normalize before matching so this codemod validates code structure,
+// not the editor-specific newline representation.
+let engine=readFileSync(enginePath,'utf8').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+let types=readFileSync(typesPath,'utf8').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
 
 const importOld="import { rankRecommendations } from './recommendation/RecommendationPolicy.ts';";
 const importNew="import { rankRecommendations } from './recommendation/RecommendationPolicy.ts';\nimport { partitionRecommendationCandidates } from './recommendation/CandidatePool.ts';";
