@@ -38,7 +38,11 @@ export type LlmWriteInput = {
   allowedProducts?: string[];
   /** Canonical, verified products that may be offered as alternatives this turn. */
   alternatives?: string[];
-  /** Explicit commercial contract. These fields are derived once before the writer. */
+  /** Candidate proposed before capability/safety validation. It is trace-only after the contract is prepared. */
+  candidateNba?: string | null;
+  /** Single canonical action after capability/safety validation. Downstream presentation must not silently replace it. */
+  finalExecutableNba?: string | null;
+  /** Backward-compatible alias for finalExecutableNba. */
   nextBestAction?: string | null;
   commercialStage?: string | null;
   knownFacts?: Record<string, unknown>;
@@ -67,6 +71,7 @@ export type LlmWriteInput = {
   commercialSignals?: Record<string, unknown>;
   resolvedProduct?: string | null;
   supportedCapabilities?: string[];
+  /** Backward-compatible alias for finalExecutableNba. */
   executableNba?: string;
   levelOfInterest?: number;
   attribute?: string | null;
