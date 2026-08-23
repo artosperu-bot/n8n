@@ -17,14 +17,9 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'PRICE_AVAILABILITY':
     case 'PRICE':
     case 'STOCK':
-      // A cold factual lookup should end cleanly. Selection or expressed interest
-      // permits a bounded soft close without turning interest into a purchase.
       return state.selectedProduct || (state.interestSignal && state.activeProduct) ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
     case 'PRODUCT_INFO':
-      // A real product overview is useful only if it can progress toward a decision.
-      // Ask one missing decision criterion when no usable context exists; once the
-      // customer already gave use/problem/priorities, do not restart discovery.
       return state.useCase || state.problem || (state.priorities?.length ?? 0) > 0
         ? 'ANSWER_ONLY'
         : 'ASK_MISSING_FACT';
@@ -50,7 +45,11 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
 
     case 'RECOMMEND':
     case 'RECOMMEND_WITHIN_BUDGET':
-      return 'SOFT_CLOSE';
+      // The recommendation itself resolves the current consultative question.
+      // Do not automatically turn every documentary recommendation into a stock CTA.
+      // PostAnswerCommercialProgression may still promote a later step when real
+      // interest, purchase intent or mature decision context justifies it.
+      return 'ANSWER_ONLY';
 
     case 'COMPARE':
       return (state.priorities?.length ?? 0) > 0 ? 'RECOMMEND' : 'COMPARE';
