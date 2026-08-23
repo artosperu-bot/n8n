@@ -79,10 +79,19 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
       ?patchRecommendation
       :null
   );
+  const recommendationCanOwnActive=Boolean(
+    recommendationWinner
+    && (
+      !beforeProducts.activeProduct
+      || sameProduct(beforeProducts.activeProduct,recommendationWinner)
+      || canonicalPatch.explicitSwitch===true
+    )
+  );
   const recommendationFocus=Boolean(
     currentRoute==='RAG_RECOMMENDATION'
     && ['RECOMMEND','RECOMMEND_WITHIN_BUDGET','EVALUATE_USE','HANDLE_PRICE_OBJECTION'].includes(currentIntent)
     && recommendationWinner
+    && recommendationCanOwnActive
     && sameProduct(recommendationWinner,canonicalPatch.recommendedProduct)
     && !recommendationTopTie
   );
@@ -103,10 +112,21 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
     next.queryTarget=recommendationWinner;
     if(canonicalPatch.lastResolvedProductId)next.activeProductId=canonicalPatch.lastResolvedProductId;
     if(canonicalPatch.lastResolvedProductCode)next.activeProductCode=canonicalPatch.lastResolvedProductCode;
-  }else if(canonicalPatch.explicitSwitch&&canonicalPatch.selectedProduct){
-    productFlowReason='EXPLICIT_SELECTION_SWITCH';
+  }else if(canonicalPatch.explicitSwitch){
+    productFlowReason='EXPLICIT_PRODUCT_SWITCH';
+  }else if(recommendationWinner&&beforeProducts.activeProduct&&!sameProduct(beforeProducts.activeProduct,recommendationWinner)){
+    productFlowReason='RECOMMENDATION_PRESERVE_ACTIVE';
+    next.activeProduct=beforeProducts.activeProduct;
+    next.activeProductId=beforeProducts.activeProductId;
+    next.activeProductCode=beforeProducts.activeProductCode;
   }else if(recommendationTopTie&&currentRoute==='RAG_RECOMMENDATION'){
     productFlowReason='RECOMMENDATION_TIE_PRESERVE_FOCUS';
+  }
+
+  // A conversational topic switch changes the active product, not the customer's purchase selection.
+  // Purchase/selection language remains authoritative for selectedProduct.
+  if(String(trace?.referenceType??'').toUpperCase()==='EXPLICIT_PRODUCT_SWITCH'&&currentIntent!=='PURCHASE'){
+    next.selectedProduct=previous.selectedProduct??null;
   }
 
   if(productContinuityBlocked){
