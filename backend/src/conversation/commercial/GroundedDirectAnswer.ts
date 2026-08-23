@@ -25,8 +25,15 @@ function compact(value:string,max=420):string{
 function attributePattern(attribute:string|null):RegExp|null{
   const normalized=fold(attribute??'');
   const aliases:Record<string,RegExp>={
-    fisico:/peso|dimension|grosor|fisico/,memoria:/ram|memoria|almacen/,ram:/ram|memoria/,
-    bateria:/bateria|autonomia|carga/,resistencia:/resisten|caida|ip68|ip69|mil/,camara:/camara|foto|video|mp/,
+    fisico:/peso|dimension|grosor|fisico/,
+    memoria:/ram|memoria|almacen/,
+    ram:/ram|memoria/,
+    bateria:/bateria|autonomia|carga/,
+    resistencia:/resisten|caida|ip68|ip69|mil/,
+    camara:/camara|foto|video|mp|vision nocturna|nocturna/,
+    conectividad:/nfc|wifi|wi-fi|bluetooth|usb|otg|infrarrojo|conectividad/,
+    redes:/5g|4g|lte|redes?|volte|bandas/,
+    termica:/termic|temperatura|camara termica|resolucion termica/,
   };
   if(aliases[normalized])return aliases[normalized];
   if(!normalized)return null;
@@ -73,6 +80,21 @@ function sameAttributeSupport(input:GroundedDirectAnswerInput,excludeKeys:string
     .slice(0,3);
 }
 
+function naturalFactLabel(key:string):string{
+  const labels:Record<string,string>={
+    NFC:'NFC',
+    '5G':'5G',
+    '4G_LTE':'4G LTE',
+    VISION_NOCTURNA:'visión nocturna',
+    CAMARA_TERMICA:'cámara térmica',
+    BATERIA_MAH:'batería',
+    CARGA_W:'carga',
+    CAMARA_NOCTURNA_MP:'cámara nocturna',
+    RESOLUCION_TERMICA:'resolución térmica',
+  };
+  return labels[key.toUpperCase()]??key.toLocaleLowerCase('es').replace(/[_-]+/g,' ');
+}
+
 export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):string|null{
   const intent=String(input.intent??'').toUpperCase();
   const factual=new Set(['PRICE','PRICE_AVAILABILITY','STOCK','CAPABILITY','PRODUCT_INFO','ATTRIBUTE','WARRANTY','POLICY','ORDER_STATUS']);
@@ -110,18 +132,23 @@ export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):strin
 
   // Raw RAG is evidence, not presentation text. Only normalized PRODUCT_RAG facts may
   // become the generic direct answer when no exact extractor above applies.
-  const display=customerDisplayFact(input)?.value??'';
+  const displayFact=customerDisplayFact(input);
+  if(!displayFact)return null;
+  const display=String(displayFact.value??'').trim();
   if(!display)return null;
+  const label=naturalFactLabel(String(displayFact.key??'EVIDENCIA'));
 
-  const labelled=display.trim().match(/^([^:\n]{2,80})\s*:\s*([^\n]+?)\s*\.?$/);
-  if(labelled){
-    const label=labelled[1].trim();
-    const value=labelled[2].trim().replace(/[.!?]+$/,'');
-    const naturalLabel=/^[A-Z0-9]{2,}$/.test(label)?label:label.toLocaleLowerCase('es');
-    if(/^(?:s[ií]|no)$/i.test(value))return /^s/i.test(value)?`Sí, tiene ${naturalLabel}.`:`No, no tiene ${naturalLabel}.`;
-    if(/ram\s+f[ií]sica/i.test(label))return `Tiene ${value} de RAM física.`;
-    return `${label}: ${value}.`;
+  if(/^(?:s[ií]|no)$/i.test(display)){
+    return /^s/i.test(display)?`Sí, tiene ${label}.`:`No, no tiene ${label}.`;
   }
 
-  return compact(display);
+  const labelled=display.match(/^([^:\n]{2,80})\s*:\s*([^\n]+?)\s*\.?$/);
+  if(labelled){
+    const naturalLabel=labelled[1].trim();
+    const value=labelled[2].trim().replace(/[.!?]+$/,'');
+    if(/ram\s+f[ií]sica/i.test(naturalLabel))return `Tiene ${value} de RAM física.`;
+    return `${naturalLabel}: ${value}.`;
+  }
+
+  return `${label.charAt(0).toUpperCase()+label.slice(1)}: ${display.replace(/[.!?]+$/,'')}.`;
 }
