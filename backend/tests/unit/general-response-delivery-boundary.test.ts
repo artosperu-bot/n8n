@@ -42,6 +42,33 @@ test('missing RELATED_VALUE is repaired deterministically with the authorized co
   assert.equal(result.fallback.error,undefined);
 });
 
+test('context and feature co-occurrence alone does not count as a delivered contextual benefit',async()=>{
+  const input:any={
+    commercialContractPrepared:true,
+    message:'aguanta caidas?',
+    intent:'CAPABILITY',
+    state:{activeProduct:'Armor X13',useCase:'Protección contra caídas frecuentes en uso cotidiano y en entornos exigentes',problem:'caidas_frecuentes',priorities:['resistencia']},
+    directAnswer:'Armor X13 tiene resistencia a caídas de 1.5 m.',
+    nextBestAction:'RELATED_VALUE',
+    executableNba:'RELATED_VALUE',
+    finalExecutableNba:'RELATED_VALUE',
+    decision:{nextBestAction:'RELATED_VALUE'},
+    allowedProducts:['Armor X13'],
+    verifiedFacts:[{domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m',productId:'P-ARMOR-X13',source:'TEST'}],
+    commercialMove:{
+      action:'RELATED_VALUE',kind:'CONTEXTUAL_BENEFIT',targetProduct:'Armor X13',intensity:'LIGHT',reason:'VERIFIED_FEATURE_WITH_CUSTOMER_CONTEXT',basis:['VERIFIED_PRODUCT_FEATURE','CUSTOMER_CONTEXT'],attribute:'RESISTENCIA_CAIDAS',
+      verifiedFacts:[{domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m',productId:'P-ARMOR-X13',source:'TEST'}],
+      relevantCustomerContext:{useCase:'Protección contra caídas frecuentes en uso cotidiano y en entornos exigentes',problem:'caidas_frecuentes',priorities:['resistencia'],budget:null,objection:null},
+    },
+  };
+  const onlyFeatureAndContext='Armor X13 tiene resistencia a caídas de 1.5 m para caídas frecuentes en uso cotidiano y entornos exigentes.';
+  const result=await safeWrite(llm(onlyFeatureAndContext),input,'fallback');
+  assert.match(result.answer,/\badem[aá]s\b/i,'the guard must append the authorized benefit when the writer only co-locates fact and context');
+  assert.match(result.answer,/(?:útil|ayuda|sirve|encaja|conviene)/i);
+  assert.equal(result.fallback.delivered,true);
+  assert.equal(result.fallback.error,undefined);
+});
+
 test('comparison presentation is structurally compact even when the writer is verbose',async()=>{
   const verbose=[
     'Armor X13 vs Armor 22.',
