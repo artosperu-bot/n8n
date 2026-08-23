@@ -298,7 +298,8 @@ function commercialMoveDelivered(input:LlmWriteInput,answer:string):boolean{
     const contextGroups=unique([context.useCase,context.problem,...context.priorities,context.objection]).map(value=>fold(value).replace(/[_-]+/g,' ').split(/\s+/).filter(token=>token.length>=4&&!['para','principal'].includes(token))).filter(tokens=>tokens.length);
     if(!contextGroups.some(tokens=>tokens.every(token=>text.includes(token))))return false;
     const factTokens=move.verifiedFacts.flatMap(fact=>fold(fact.value).split(/[^a-z0-9.,]+/)).filter(token=>token.length>=3||/\d/.test(token));
-    return factTokens.some(token=>text.includes(token));
+    if(!factTokens.some(token=>text.includes(token)))return false;
+    return /\b(?:util|ayuda|sirve|conviene|encaja|adecuad[oa]|ideal|permite|facilita|reduce|protege|proteccion|te da|da mas margen)\b/.test(text);
   }
   if(move.kind==='RELATED_VERIFIED_FACT'&&move.verifiedFacts[0]?.key==='PRECIO'&&String(input.intent).toUpperCase()==='STOCK')return /\bprecio\b/.test(text);
   return move.verifiedFacts.some(fact=>fold(answer).includes(fold(fact.value)));
