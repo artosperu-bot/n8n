@@ -1,26 +1,23 @@
 import type { LlmWriteInput, RagPresentationMode, ProductHighlight } from '../../ports/LlmProvider.ts';
 import { selectProductHighlights } from './ProductHighlightSelector.ts';
 
-function byFamily(highlights:ProductHighlight[],family:ProductHighlight['family']):ProductHighlight|null{
-  return highlights.find(item=>item.family===family)??null;
-}
-function sentence(label:string,highlight:ProductHighlight|null):string|null{
-  if(!highlight?.summary)return null;
-  const lead=label==='Memoria'?'En memoria':label==='Batería'?'En batería':label==='Resistencia'?'En resistencia':label==='Cámara'?'En cámara':label==='Pantalla'?'La pantalla':label;
-  return label==='Pantalla'?`${lead} viene con ${highlight.summary}`:`${lead}, ${highlight.summary}`;
-}
+function byFamily(highlights:ProductHighlight[],family:ProductHighlight['family']):ProductHighlight|null{return highlights.find(item=>item.family===family)??null;}
 function overviewAnswer(product:string,highlights:NonNullable<LlmWriteInput['productHighlights']>):string|null{
-  if(highlights.length<1)return null;
-  const memory=sentence('Memoria',byFamily(highlights,'MEMORY'));
-  const battery=sentence('Batería',byFamily(highlights,'BATTERY'));
-  const resistance=sentence('Resistencia',byFamily(highlights,'RESISTANCE'));
-  const camera=sentence('Cámara',byFamily(highlights,'CAMERA'));
-  const display=sentence('Pantalla',byFamily(highlights,'DISPLAY'));
-  const first=[memory,battery].filter(Boolean).join('. ');
-  const second=[resistance,camera].filter(Boolean).join('. ');
-  const third=display;
-  const body=[first,second,third].filter(Boolean).map(x=>`${x}.`).join(' ');
-  return `${product} es un equipo bien completo. ${body}`.replace(/\s+/g,' ').trim();
+  if(!highlights.length)return null;
+  const memory=byFamily(highlights,'MEMORY')?.summary;
+  const battery=byFamily(highlights,'BATTERY')?.summary;
+  const resistance=byFamily(highlights,'RESISTANCE')?.summary;
+  const camera=byFamily(highlights,'CAMERA')?.summary;
+  const display=byFamily(highlights,'DISPLAY')?.summary;
+  const sentences:string[]=[];
+  if(memory)sentences.push(`En memoria viene con ${memory}`);
+  if(battery)sentences.push(`En autonomía equipa ${battery}`);
+  if(resistance)sentences.push(`En resistencia destaca por ${resistance}`);
+  if(camera)sentences.push(`En cámaras ofrece ${camera}`);
+  if(display)sentences.push(`La pantalla es de ${display}`);
+  if(!sentences.length)return null;
+  const body=sentences.map((s,i)=>`${i===0?`${product}: `:''}${s.charAt(0).toLocaleLowerCase('es')+s.slice(1)}.`).join(' ');
+  return body.replace(/\s+/g,' ').trim();
 }
 function mode(input:LlmWriteInput):RagPresentationMode{
   const intent=String(input.intent??'').toUpperCase();
@@ -35,8 +32,7 @@ export function applyFullRagWritePolicy(input:LlmWriteInput):LlmWriteInput{
   let directAnswer=input.directAnswer??null;
   if(presentationMode==='PRODUCT_OVERVIEW'){
     const product=String(input.resolvedProduct??input.activeProduct??input.quote?.shortName??input.quote?.product??'Este equipo').trim();
-    const overview=overviewAnswer(product,productHighlights);
-    if(overview)directAnswer=overview;
+    const overview=overviewAnswer(product,productHighlights);if(overview)directAnswer=overview;
   }
   return{...input,presentationMode,productHighlights,directAnswer};
 }
