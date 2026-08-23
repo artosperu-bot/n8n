@@ -62,6 +62,13 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
     return{level:'MEDIUM',candidateNba:'OFFER_ALTERNATIVE',reason:'OBJECTION_WITH_VERIFIED_ALTERNATIVE'};
   }
 
+  // A generic product overview has already delivered several verified facts.
+  // If we still do not know the customer's use/problem/priority, one useful
+  // question is more valuable than appending another arbitrary spec.
+  if(intent==='PRODUCT_INFO'&&current==='ASK_MISSING_FACT'&&!hasDecisionContext(state)){
+    return{level:'LOW',candidateNba:'ASK_MISSING_FACT',reason:'OVERVIEW_NEEDS_ONE_DECISION_CRITERION'};
+  }
+
   // While the customer is still exploring product facts, prefer one useful
   // related continuation over repeatedly pushing a stock/close CTA.
   if(input.verifiedCurrentAnswer&&input.resolvedProduct&&input.relatedValueAvailable&&EXPLORATORY_FACTUAL_INTENTS.has(intent)){
