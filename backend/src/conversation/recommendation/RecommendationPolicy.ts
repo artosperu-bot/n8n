@@ -1,6 +1,6 @@
 import type { ProductQuote, RagEvidence } from '../../domain/types.ts';
 import { fold } from '../../shared/text.ts';
-import { satisfiesAllHardRequirements } from './HardRequirementPolicy.ts';
+import { hardRequirementsFromPriorities, satisfiesAllHardRequirements } from './HardRequirementPolicy.ts';
 
 export type RecommendationCandidate={quote:ProductQuote;evidence:RagEvidence[]};
 export type RecommendationContext={
@@ -92,15 +92,9 @@ function metricsFor(rows:RagEvidence[],criterion:string):Metrics{
     resY:numberAfter(text,/resolucion\s+termica\s+vertical/,/px/)??0,
     maxC:numberAfter(text,/temperatura\s+maxima\s+termica/,/(?:°?c|c)/)??0,
   };
-  if(criterion==='PANTALLA')return{
-    hz:numberAfter(text,/frecuencia|refresco|pantalla/,/hz/)??0,
-  };
-  if(criterion==='FISICO')return{
-    weightG:numberAfter(text,/peso/,/g/)??0,
-  };
-  if(criterion==='POSICIONAMIENTO')return{
-    systems:['gps','glonass','galileo','beidou','qzss'].reduce((n,key)=>n+(new RegExp(`\\b${key}\\b`).test(text)?1:0),0),
-  };
+  if(criterion==='PANTALLA')return{hz:numberAfter(text,/frecuencia|refresco|pantalla/,/hz/)??0};
+  if(criterion==='FISICO')return{weightG:numberAfter(text,/peso/,/g/)??0};
+  if(criterion==='POSICIONAMIENTO')return{systems:['gps','glonass','galileo','beidou','qzss'].reduce((n,key)=>n+(new RegExp(`\\b${key}\\b`).test(text)?1:0),0)};
   if(criterion==='REDES'||criterion==='CONECTIVIDAD')return{
     fiveG:yes(text,/\b5g\b[^\n.]{0,25}\bsi\b|conectividad\s+5g[^\n.]{0,20}\bsi\b/),
     fourG:yes(text,/\b4g\b|\blte\b/),
@@ -121,7 +115,7 @@ function criteriaFrom(context:RecommendationContext):string[]{
   if(/caida|durabilidad|golpe/.test(problem))inferred.push('RESISTENCIA');
   if(/autonomia|bateria/.test(problem))inferred.push('BATERIA');
   if(/foto|fotografia|camara|video|redes sociales|subir.*red/.test(combined))inferred.push('CAMARA','MEMORIA','CONECTIVIDAD');
-  if(/termic|temperatura|calor|inspeccion/.test(combined)&&/temperatura|termic|calor/.test(combined))inferred.push('TERMICA','RESISTENCIA');
+  if(/termic|temperatura|calor/.test(combined))inferred.push('TERMICA','RESISTENCIA');
   const result=unique([...explicit,...inferred]).filter(x=>x!=='PRECIO');
   return result.length?result:['RESISTENCIA','BATERIA'];
 }
@@ -152,12 +146,17 @@ function explain(criterion:string,metrics:Metrics):string|null{
 }
 
 export function rankRecommendations(candidates:RecommendationCandidate[],context:RecommendationContext={}):RankedRecommendation[]{
+  const hardRequirementSignals=unique([...(context.priorities??[]),context.useCase??'',context.problem??'']);
+  const hardRequirements=hardRequirementsFromPriorities(hardRequirementSignals);
   const businessEligible=candidates.filter(c=>{
     if(context.maxBudget!=null&&c.quote.price!=null&&c.quote.price>context.maxBudget)return false;
-    if(c.quote.stock!=null&&c.quote.stock<=0)return false;
+    // Availability is a commercial fact, not technical truth. For an explicit hard
+    // technical requirement, first identify the model that actually satisfies it;
+    // stock may be communicated afterwards by SQL, but must never substitute another model.
+    if(!hardRequirements.length&&c.quote.stock!=null&&c.quote.stock<=0)return false;
     return true;
   });
-  const filtered=businessEligible.filter(candidate=>satisfiesAllHardRequirements(candidate.evidence,context.priorities??[]));
+  const filtered=businessEligible.filter(candidate=>satisfiesAllHardRequirements(candidate.evidence,hardRequirementSignals));
   if(!filtered.length)return[];
   const criteria=criteriaFrom(context);
   const rows=filtered.map((candidate,index)=>({
@@ -186,16 +185,7 @@ export function rankRecommendations(candidates:RecommendationCandidate[],context
       const reason=explain(criterion,row.metrics[criterion]);if(reason)reasons.push(reason);
     }
     const score=criteria.length?total/criteria.length:0;
-    return {
-      ...row.candidate,
-      score,
-      criteria,
-      criterionScores,
-      reasons,
-      tradeoffs:[],
-      confidence:criteria.length?covered/criteria.length:0,
-      __index:row.index,
-    };
+    return {...row.candidate,score,criteria,criterionScores,reasons,tradeoffs:[],confidence:criteria.length?covered/criteria.length:0,__index:row.index};
   });
 
   const priceIsCriterion=context.priceIsCriterion===true||(context.priorities??[]).some(p=>criterionForPriority(p)==='PRECIO');
