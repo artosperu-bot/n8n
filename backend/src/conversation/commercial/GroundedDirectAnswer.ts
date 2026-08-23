@@ -48,6 +48,31 @@ function customerDisplayFact(input:GroundedDirectAnswerInput):VerifiedFact|null{
   return facts.find(fact=>pattern.test(fold(`${fact.key} ${fact.value}`)))??null;
 }
 
+function positive(value:string):boolean{
+  return /^(?:s[ií]|si|true|yes|1)$/i.test(String(value??'').trim());
+}
+
+function supportLabel(fact:VerifiedFact):string|null{
+  const key=String(fact.key??'').toUpperCase();
+  if(key==='IP68'&&positive(fact.value))return 'IP68';
+  if(key==='IP69K'&&positive(fact.value))return 'IP69K';
+  if(key==='MIL_STD_810H'&&positive(fact.value))return 'MIL-STD-810H';
+  return null;
+}
+
+function sameAttributeSupport(input:GroundedDirectAnswerInput,excludeKeys:string[]=[]):string[]{
+  const pattern=attributePattern(input.attribute);
+  if(!pattern)return [];
+  const excluded=new Set(excludeKeys.map(key=>key.toUpperCase()));
+  return (input.verifiedFacts??[])
+    .filter(fact=>fact.domain==='PRODUCT_RAG'&&!excluded.has(String(fact.key).toUpperCase()))
+    .filter(fact=>pattern.test(fold(`${fact.key} ${fact.value}`)))
+    .map(supportLabel)
+    .filter((value):value is string=>Boolean(value))
+    .filter((value,index,all)=>all.indexOf(value)===index)
+    .slice(0,3);
+}
+
 export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):string|null{
   const intent=String(input.intent??'').toUpperCase();
   const factual=new Set(['PRICE','PRICE_AVAILABILITY','STOCK','CAPABILITY','PRODUCT_INFO','ATTRIBUTE','WARRANTY','POLICY','ORDER_STATUS']);
@@ -76,7 +101,11 @@ export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):strin
 
   if(/caida|caidas|golpe|golpes/.test(requested)){
     const fall=(input.verifiedFacts??[]).find(fact=>fact.key==='RESISTENCIA_CAIDAS')?.value;
-    if(fall)return `${productName(input)} tiene resistencia a caídas de ${fall}.`;
+    if(fall){
+      const support=sameAttributeSupport(input,['RESISTENCIA_CAIDAS']);
+      const certifications=support.length?` También cuenta con ${support.join(', ').replace(/, ([^,]+)$/,' y $1')}.`:'';
+      return `${productName(input)} tiene resistencia a caídas de ${fall}.${certifications}`;
+    }
   }
 
   // Raw RAG is evidence, not presentation text. Only normalized PRODUCT_RAG facts may
