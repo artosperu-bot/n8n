@@ -1,12 +1,12 @@
 import type { LlmDecisionInput, LlmDecisionResult, LlmProvider, LlmResult, LlmWriteInput } from '../../ports/LlmProvider.ts';
 import { applyFullRagWritePolicy } from './FullRagWritePolicy.ts';
 
-function hasCustomerContext(input:LlmWriteInput):boolean{
+function meaningfulCustomerContext(input:LlmWriteInput):boolean{
   const state:any=input.state??{};
   const useCase=String(input.useCase??state.useCase??'').trim();
   const problem=String(input.problem??state.problem??'').trim();
-  const priorities=input.priorities??state.priorities??[];
-  return Boolean(useCase||problem||priorities.length);
+  const priorities=(input.priorities??state.priorities??[]).map(x=>String(x).trim()).filter(Boolean);
+  return Boolean(useCase||problem||new Set(priorities.map(x=>x.toLocaleLowerCase('es'))).size>=2);
 }
 function usesDocumentaryRag(input:LlmWriteInput):boolean{
   return Boolean(input.verifiedFacts?.some(fact=>fact.domain==='PRODUCT_RAG'||fact.domain==='INSTITUTIONAL_RAG'));
@@ -15,16 +15,25 @@ function naturalSalesPlan(input:LlmWriteInput):string{
   const original=String(input.deterministicAnswer??'').trim();
   const style=[
     'FULL_RAG_STYLE:',
-    'Habla como un vendedor que conoce el producto, no como una ficha técnica ni un evaluador.',
-    'Orden: responde -> explica qué significa para este cliente cuando haya contexto -> toma postura si la evidencia permite decidir -> ejecuta solo el N+1 autorizado.',
-    'No repitas la misma especificación en introducción y viñetas.',
-    'No uses frases como "ese dato te ayuda a decidir", "ese dato pesa en la decisión", "alineado con tus criterios", "cumple tus prioridades", "criterios ya confirmados" ni "según los datos verificados".',
-    'Prefiere lenguaje natural como "para tu caso", "acá yo me fijaría en", "entre esos dos me iría por", "lo más importante para tu uso es".',
-    'FAB: traduce solo 1 o 2 hechos importantes a valor práctico; no conviertas cada especificación en un beneficio.',
-    'Si no hay contexto suficiente para un beneficio real, responde el dato y termina; no rellenes con una frase comercial genérica.',
-    'En comparación/recomendación, si hay evidencia suficiente, da una elección clara y explica 1 o 2 razones ligadas al uso conocido.',
+    'Habla como asesor comercial humano, no como ficha técnica ni evaluador.',
+    'La respuesta factual canónica ya viene en directAnswer: no cambies sus hechos, no contradigas sus sí/no y no sustituyas el atributo por otro relacionado.',
+    'Orden: responde -> si existe contexto real, explica una sola consecuencia práctica -> toma postura solo si la evidencia permite decidir -> ejecuta únicamente el N+1 autorizado.',
+    'FAB: usa máximo 1 beneficio contextual y no repitas la misma especificación.',
+    'Sin contexto real, responde el dato y termina. No ofrezcas verificar algo que el RAG ya resolvió y no inventes acciones futuras.',
+    'Nunca escribas etiquetas internas como Ejecutar:, N+1:, NBA:, FULL_RAG_STYLE:, ANSWER_ONLY, RELATED_VALUE, COMPARE o RECOMMEND.',
+    'No uses frases robóticas como "ese dato te ayuda a decidir", "ese dato pesa en la decisión", "alineado con tus criterios", "cumple tus prioridades", "criterios ya confirmados" o "según los datos verificados".',
   ].join(' ');
   return [original,style].filter(Boolean).join('\n');
+}
+function sanitize(text:string):string{
+  return String(text??'')
+    .replace(/(?:^|\n)\s*(?:Ejecutar|N\+1|NBA|FULL_RAG_STYLE)\s*:\s*[A-Z_ -]+\.?\s*/gi,'\n')
+    .replace(/\b(?:ANSWER_ONLY|RELATED_VALUE|ASK_MISSING_FACT|SOFT_CLOSE|OFFER_ALTERNATIVE|COLLECT_RESERVATION_DATA|EXECUTE_RESERVATION)\b[.!]?/g,'')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+}
+function deterministicResult(text:string,model:string):LlmResult{
+  return{text,model,usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},durationMs:0};
 }
 
 export class FullRagLlmProvider implements LlmProvider{
@@ -39,20 +48,15 @@ export class FullRagLlmProvider implements LlmProvider{
     if(usesDocumentaryRag(enriched))enriched.deterministicAnswer=naturalSalesPlan(enriched);
     Object.assign(input,enriched);
 
-    // A cold product overview already has a grounded 5–6 family summary. Sending
-    // it back through the writer caused duplicated fichas and extra filler. Keep
-    // it deterministic; WriterGuard will still execute the single authorized N+1.
-    if(enriched.presentationMode==='PRODUCT_OVERVIEW'&&!hasCustomerContext(enriched)&&enriched.directAnswer){
-      return{
-        text:enriched.directAnswer,
-        model:'full-rag-overview-v1',
-        usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},
-        durationMs:0,
-      };
-    }
+    // Cold overview and focused factual attributes are already composed from
+    // normalized/RAG evidence. Keep them deterministic unless real customer
+    // context exists and FAB can add value without changing factual authority.
+    if(enriched.directAnswer&&(
+      (enriched.presentationMode==='PRODUCT_OVERVIEW'&&!meaningfulCustomerContext(enriched))||
+      (enriched.presentationMode==='ATTRIBUTE'&&!meaningfulCustomerContext(enriched))
+    ))return deterministicResult(enriched.directAnswer,enriched.presentationMode==='ATTRIBUTE'?'full-rag-attribute-v2':'full-rag-overview-v2');
 
-    // Contextual RAG turns still go through the LLM so FAB can translate verified
-    // features into customer value without changing factual authority.
-    return this.#delegate.write(enriched);
+    const result=await this.#delegate.write(enriched);
+    return{...result,text:sanitize(result.text)};
   }
 }
