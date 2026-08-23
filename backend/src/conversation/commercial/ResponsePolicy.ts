@@ -57,11 +57,10 @@ function semanticAttribute(move:CommercialMove):string{
     .replace(/[\u0300-\u036f]/g,'');
 }
 
-function attributeContextRelevant(move:CommercialMove):boolean{
-  const attr=semanticAttribute(move);
-  const context=[move.relevantCustomerContext.useCase,move.relevantCustomerContext.problem,...move.relevantCustomerContext.priorities]
-    .filter(Boolean).join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+function contextMatchesAttribute(move:CommercialMove,value:string|null|undefined):boolean{
+  const context=String(value??'').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   if(!context)return false;
+  const attr=semanticAttribute(move);
   if(/RESIST|CAID|IMPACT|IP68|IP69|MIL/.test(attr))return /resisten|caida|golpe|campo|obra|construccion|durabilidad|proteccion/.test(context);
   if(/RAM|MEMORIA|RENDIMIENTO/.test(attr))return /whatsapp|llamada|app|aplicacion|multitarea|trabajo|juego|rendimiento|uso diario|simple/.test(context);
   if(/BATER/.test(attr))return /bateria|autonomia|jornada|trabajo|delivery|campo|uso diario/.test(context);
@@ -81,20 +80,21 @@ function neutralAttributeBenefit(move:CommercialMove,fact:string|null):string|nu
 function contextualBenefit(move:CommercialMove):string|null {
   const context=move.relevantCustomerContext;
   const useCase=customerLanguage(context.useCase);
-  const priority=customerLanguage(context.priorities[0]);
-  const problem=customerLanguage(context.problem);
   const fact=conciseVerifiedFact(move.verifiedFacts[0]);
+  const relevantPriority=context.priorities.find(priority=>contextMatchesAttribute(move,priority))??null;
+  const priority=customerLanguage(relevantPriority);
+  const problem=contextMatchesAttribute(move,context.problem)?customerLanguage(context.problem):null;
+  const relevantUseCase=contextMatchesAttribute(move,context.useCase)?useCase:null;
 
-  if(!attributeContextRelevant(move))return neutralAttributeBenefit(move,fact);
-  if(useCase)return fact
-    ?`Para ${useCase}, ${fact} es un dato útil al elegir el equipo.`
-    :`Para ${useCase}, este dato puede ayudarte a elegir mejor.`;
-  if(priority)return fact
-    ?`Si priorizas ${priority}, ${fact} es un dato útil al elegir el equipo.`
-    :`Si priorizas ${priority}, este dato puede ayudarte a elegir mejor.`;
+  if(relevantUseCase)return fact
+    ?`Para ${relevantUseCase}, ${fact} es un dato útil al elegir el equipo.`
+    :`Para ${relevantUseCase}, este dato puede ayudarte a elegir mejor.`;
   if(problem)return fact
     ?`Si te preocupa ${problem}, ${fact} es un dato útil al elegir el equipo.`
     :`Si te preocupa ${problem}, este dato puede ayudarte a elegir mejor.`;
+  if(priority)return fact
+    ?`Si priorizas ${priority}, ${fact} es un dato útil al elegir el equipo.`
+    :`Si priorizas ${priority}, este dato puede ayudarte a elegir mejor.`;
   if(context.objection)return 'Si ese punto es importante para ti, este dato puede ayudarte a decidir.';
   return neutralAttributeBenefit(move,fact);
 }
