@@ -37,7 +37,7 @@ test('missing RELATED_VALUE is repaired deterministically with the authorized co
   const result=await safeWrite(llm('Tiene 8 GB de RAM física + hasta 8 GB de RAM virtual.'),input,'fallback');
   assert.match(result.answer,/8 GB de RAM física/i);
   assert.match(result.answer,/\badem[aá]s\b/i,'the repaired +1 must be visibly separate from N');
-  assert.match(result.answer,/\b(?:útil|ayuda|sirve|encaja|conviene)\b/i);
+  assert.match(result.answer,/(?:útil|ayuda|sirve|encaja|conviene)/i);
   assert.equal(result.fallback.delivered,true,'a deterministic repair should be considered delivered');
   assert.equal(result.fallback.error,undefined);
 });
