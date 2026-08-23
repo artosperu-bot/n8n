@@ -46,7 +46,12 @@ function inferredSections(state:ConversationState):string[]{
 
 export function productEvidenceSections(intent: IntentLike, state: ConversationState): string[] {
   if (intent.primary === 'PRODUCT_INFO') return [...FICHA];
-  if (intent.primary === 'ATTRIBUTE' && intent.attributes?.length) return unique(intent.attributes.flatMap(sectionsForAttribute)).slice(0,5);
+  if (intent.primary === 'ATTRIBUTE') {
+    const explicit=unique((intent.attributes??[]).flatMap(sectionsForAttribute));
+    if(explicit.length)return explicit.slice(0,5);
+    const inherited=unique([...(state.currentAttributes??[]),...(state.priorities??[])].flatMap(sectionsForPriority));
+    return inherited.slice(0,5);
+  }
   if (intent.primary === 'COMPARE') {
     const explicit=unique((intent.attributes??[]).flatMap(sectionsForAttribute));
     if(explicit.length)return explicit.slice(0,5);
