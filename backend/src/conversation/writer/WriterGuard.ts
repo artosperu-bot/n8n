@@ -75,12 +75,14 @@ function acknowledgeKnownContext(input:LlmWriteInput,answer:string):string{
     .flatMap(value=>fold(humanizeCommercialFact(value)).split(/\s+/))
     .filter(token=>token.length>=5&&!['principal','frecuentes'].includes(token));
   if(knownTokens.some(token=>beforeQuestion.includes(token)))return answer;
-  const acknowledgement=priorities[0]
-    ?`Para ese uso, tomo en cuenta ${humanizeCommercialFact(priorities[0])}.`
+  const acknowledgement=useCase
+    ?`Entiendo, lo buscas para ${humanizeCommercialFact(useCase)}.`
     :problem
-      ?`Tomo en cuenta ${humanizeCommercialFact(problem)} para orientar la recomendación.`
-      :`Tomo en cuenta que lo necesitas para ${humanizeCommercialFact(useCase)}.`;
-  return `${acknowledgement} ${answer}`.trim();
+      ?`Entiendo, quieres resolver ${humanizeCommercialFact(problem)}.`
+      :priorities[0]
+        ?`Entiendo, priorizas ${humanizeCommercialFact(priorities[0])}.`
+        :'';
+  return acknowledgement?`${acknowledgement} ${answer}`.trim():answer;
 }
 function executeNba(input:LlmWriteInput,answer:string):string {
   const action=String(input.nextBestAction??input.decision?.nextBestAction??'').toUpperCase();
