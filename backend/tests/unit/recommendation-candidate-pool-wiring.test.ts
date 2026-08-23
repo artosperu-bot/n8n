@@ -4,14 +4,24 @@ import { readFileSync } from 'node:fs';
 
 const source=readFileSync(new URL('../../src/conversation/HybridConversationEngine.ts',import.meta.url),'utf8');
 
+function rankCandidatesSource():string{
+  const start=source.indexOf('async #rankCandidates(');
+  const end=source.indexOf('\n  async #recordUsage(',start);
+  assert.ok(start>=0,'#rankCandidates boundary must exist');
+  assert.ok(end>start,'#rankCandidates end boundary must exist');
+  return source.slice(start,end);
+}
+
 test('hybrid recommendation path loads the full catalog before availability and eligibility filters',()=>{
-  assert.match(source,/partitionRecommendationCandidates/);
-  assert.match(source,/listCatalog\(\{onlyWithStock:false\}\)/);
-  assert.doesNotMatch(source,/listCatalog\(\{onlyWithStock:true\}\)/);
+  const rankSource=rankCandidatesSource();
+  assert.match(rankSource,/partitionRecommendationCandidates/);
+  assert.match(rankSource,/listCatalog\(\{onlyWithStock:false\}\)/);
+  assert.doesNotMatch(rankSource,/listCatalog\(\{onlyWithStock:true\}\)/);
 });
 
 test('recommendation trace exposes catalog, available and eligible candidate layers',()=>{
-  assert.match(source,/availableCandidates/);
-  assert.match(source,/pool\.available/);
-  assert.match(source,/pool\.eligible/);
+  const rankSource=rankCandidatesSource();
+  assert.match(rankSource,/availableCandidates/);
+  assert.match(rankSource,/pool\.available/);
+  assert.match(rankSource,/pool\.eligible/);
 });
