@@ -45,6 +45,24 @@ function memoryFacts(text:string,row:RagEvidence):VerifiedFact[] {
   return facts;
 }
 
+function resistanceFacts(text:string,row:RagEvidence):VerifiedFact[]{
+  const facts:VerifiedFact[]=[];
+  const base={domain:'PRODUCT_RAG' as const,productId:row.productId??null,source:row.source};
+  const fall=text.match(/\bresistencia\s+a\s+ca[ií]das?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*m\b/i);
+  const depth=text.match(/\bprofundidad\s+IP68\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*m\b/i);
+  const time=text.match(/\btiempo\s+IP68\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*min(?:utos?)?\b/i);
+  const ip68=text.match(/\bcertificaci[oó]n\s+IP68\s*[:=]?\s*(s[ií]|no)\b/i);
+  const ip69=text.match(/\bcertificaci[oó]n\s+IP69K?\s*[:=]?\s*(s[ií]|no)\b/i);
+  const mil=text.match(/\bMIL-STD-810H\s*[:=]?\s*(s[ií]|no)\b/i);
+  if(fall)facts.push({...base,key:'RESISTENCIA_CAIDAS',value:`${fall[1].replace(',','.')} m`});
+  if(ip68)facts.push({...base,key:'IP68',value:/^s/i.test(ip68[1])?'Sí':'No'});
+  if(ip69)facts.push({...base,key:'IP69K',value:/^s/i.test(ip69[1])?'Sí':'No'});
+  if(mil)facts.push({...base,key:'MIL_STD_810H',value:/^s/i.test(mil[1])?'Sí':'No'});
+  if(depth)facts.push({...base,key:'PROFUNDIDAD_IP68',value:`${depth[1].replace(',','.')} m`});
+  if(time)facts.push({...base,key:'TIEMPO_IP68',value:`${time[1].replace(',','.')} min`});
+  return facts;
+}
+
 export function normalizeEvidence(input:{
   intent:string;
   quote?:ProductQuote|null;
@@ -66,6 +84,7 @@ export function normalizeEvidence(input:{
   for(const row of input.rag??[]){
     const raw=String(row.text??'');
     if(String(row.section??'').toUpperCase()==='MEMORIA'||/\bRAM\b/i.test(raw))facts.push(...memoryFacts(raw,row));
+    if(/\b(?:resistencia\s+a\s+ca[ií]das?|IP68|IP69K?|MIL-STD-810H)\b/i.test(raw))facts.push(...resistanceFacts(raw,row));
     const value=displayText(raw);
     if(!value)continue;
     const domain=row.domain==='INSTITUTIONAL'||row.source.startsWith('SUPABASE_INSTITUCIONAL')?'INSTITUTIONAL_RAG':'PRODUCT_RAG';
