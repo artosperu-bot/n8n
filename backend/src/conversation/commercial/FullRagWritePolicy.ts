@@ -4,8 +4,8 @@ import { selectProductHighlights } from './ProductHighlightSelector.ts';
 function overviewAnswer(product:string,highlights:NonNullable<LlmWriteInput['productHighlights']>):string|null{
   if(highlights.length<1)return null;
   const shown=highlights.slice(0,6);
-  const lines=shown.map(item=>`- ${item.label}: ${item.summary}.`);
-  return [`${product} destaca por:`,...lines].join('\n');
+  const body=shown.map(item=>`${item.label}: ${item.summary}`).join('; ');
+  return `${product} destaca por ${body}.`;
 }
 function mode(input:LlmWriteInput):RagPresentationMode{
   const intent=String(input.intent??'').toUpperCase();
