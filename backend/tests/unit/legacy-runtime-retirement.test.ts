@@ -17,3 +17,10 @@ test('domain state types do not depend on legacy IntentResolver',()=>{
   assert.doesNotMatch(types,/Intent\s*\|\s*string|string\s*\|\s*Intent/);
   assert.match(types,/lastIntent\?:\s*string\s*\|\s*null/);
 });
+
+test('standalone legacy intent and route layers are retired',()=>{
+  assert.equal(existsSync(new URL('../../src/conversation/intent/IntentResolver.ts',import.meta.url)),false);
+  assert.equal(existsSync(new URL('../../src/conversation/router/RoutePlanner.ts',import.meta.url)),false);
+  assert.equal(existsSync(new URL('./intent-resolver.test.ts',import.meta.url)),false);
+  assert.equal(existsSync(new URL('./route-planner-v04.test.ts',import.meta.url)),false);
+});
