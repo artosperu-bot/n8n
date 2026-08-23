@@ -16,7 +16,10 @@ function validAddress(value:string):string|null{
 
 export function extractReservationBundle(message:string):ReservationBundle{
   const result:ReservationBundle={document:null,name:null,address:null};
-  const segments=message.split(/[|;\n]+/).map(clean).filter(Boolean);
+  const segments=message
+    .split(/\s*(?:\||;|\n|,(?=\s*(?:dni|ce|carn[eé]|documento|nombre|direcci[oó]n|domicilio)\b))\s*/iu)
+    .map(clean)
+    .filter(Boolean);
   for(const segment of segments){
     let match=segment.match(/^(?:dni|ce|carn[eé]\s*de\s*extranjer[ií]a|documento)\s*[:#=-]?\s*(.+)$/iu);
     if(match){result.document=normalizedDocument(match[1]);continue;}
@@ -52,10 +55,12 @@ export function reservationBundleStage(data:Partial<ReservationBundle>):'NEED_DO
 }
 
 export function reservationBundlePrompt(product:string):string{
-  return `Perfecto. Para iniciar la reserva de ${product}, envíame en un solo mensaje: DNI o Carné de Extranjería, nombres y apellidos, y dirección completa. Ejemplo: DNI: 12345678 | Nombre: Juan Perez Lopez | Dirección: Av. Arequipa 1234, Lima.`;
+  return `Perfecto. Para iniciar la reserva de ${product}, envíame en un solo mensaje: DNI o Carné de Extranjería, nombres y apellidos, y dirección completa. Ejemplo: DNI: 12345678, Nombre: Juan Perez Lopez, Dirección: Av. Arequipa 1234, Lima.`;
 }
 
 export function reservationMissingPrompt(missing:string[]):string{
   if(!missing.length)return 'Ya tengo todos los datos necesarios para continuar.';
-  return `Me falta ${missing.join(missing.length===2?' y ':', ')}. Envíame solo ${missing.length===1?'ese dato':'esos datos'} para continuar.`;
+  if(missing.length===1)return `Me falta ${missing[0]}. Envíame solo ese dato para continuar.`;
+  if(missing.length===2)return `Me faltan ${missing[0]} y ${missing[1]}. Envíame solo esos datos para continuar.`;
+  return `Me faltan ${missing.slice(0,-1).join(', ')} y ${missing.at(-1)}. Envíame esos datos para continuar.`;
 }
