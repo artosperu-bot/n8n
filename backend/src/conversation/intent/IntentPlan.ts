@@ -15,7 +15,7 @@ export type IntentPlan = {
 };
 
 const ATTRS: Array<[RegExp, string]> = [
-  [/\b(bateria|autonomia|carga|cargador|cargar)\b/, 'BATERIA'],
+  [/\b(bateria|autonomia|carga|cargador|cargar)\b|\bdur(?:e|ar|acion)\b[^.!?]{0,25}\btodo\s+el\s+dia\b/, 'BATERIA'],
   [/\b(camara|foto|fotos|video|vision nocturna)\b/, 'CAMARA'],
   [/\b(resistente|resistencia|ip68|ip69k|mil(?:-std)?|caida|caidas|golpe|golpes|agua|polvo)\b/, 'RESISTENCIA'],
   [/\b(nfc|wifi|wi fi|bluetooth|usb|otg|infrarrojo)\b/, 'CONECTIVIDAD'],
@@ -92,7 +92,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const browsingProduct = has(/\b(estoy viendo|quiero ver|revisando|ahora si quiero ver|muestrame el)\b/) && has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);
   const requirementFollowup = has(/\b(cumple|cumpliria|cumple\s+con\s+eso|tiene\s+eso)\b/);
   const productInfo = explicitProductInfo || browsingProduct;
-  const directUse = has(/\b(trabajo|trabajar|construccion|campo|tecnico|juego|juegos|gaming|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para|delivery)\b/);
+  const directUse = has(/\b(trabajo|trabajar|trabajando|construccion|campo|tecnico|juego|juegos|gaming|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para|delivery)\b/);
   const everydayNeed = has(/\b(uso simple|uso basico|whatsapp|llamadas?|mensajeria|comunicacion)\b/)
     && has(/\b(quiero un|quiero una|busco|necesito|para usar|para uso|lo quiero para|la quiero para)\b/);
   const use = directUse || everydayNeed;
