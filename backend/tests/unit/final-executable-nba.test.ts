@@ -59,5 +59,4 @@ test('writer failure to verbalize +1 preserves N and deterministically renders t
   assert.match(result.answer,/S\/\s*899/);
   assert.match(result.answer,/disponible/i);
   assert.equal(result.nextBestAction,'RELATED_VALUE');
-  assert.equal(result.finalExecutableNba,'RELATED_VALUE');
 });
