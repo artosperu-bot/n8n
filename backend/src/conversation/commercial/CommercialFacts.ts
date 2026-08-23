@@ -51,6 +51,12 @@ function hasInterestSignal(text:string):boolean {
     || hasStrongPurchaseSignal(text);
 }
 
+function explicitBudgetRecommendation(text:string):boolean {
+  const asksRecommendation=/\b(?:que|cual)\s+me\s+(?:recomiendas?|conviene)|\brecomiend(?:a|ame|as|an)\b/.test(text);
+  const hasBudget=/\b(?:presupuesto|maximo|tope|hasta|menos\s+de|no\s+mas\s+de)\b[^.!?]{0,30}(?:s\s*\/\s*)?\d|(?:s\s*\/\s*)?\d[^.!?]{0,30}\b(?:maximo|tope|presupuesto)\b/.test(text);
+  return asksRecommendation&&hasBudget;
+}
+
 export function extractCommercialFacts(message: string, previous: ConversationState): CommercialFacts {
   const t = fold(message);
   const business = /\b(empresa|corporativo|institucion|negocio|ruc|factura|tecnicos|personal|equipo\s+de\s+trabajo)\b/.test(t);
@@ -77,7 +83,7 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
   else if (/\bbateria\b[^.!?]{0,50}\b(se\s+acaba|no\s+aguanta|dura\s+poco)\b|\bcasi\s+no\s+tengo\s+donde\s+cargar/.test(t)) problem = 'autonomia_insuficiente';
   else if (/\bse\s+rompe[n]?\b|\bfragil/.test(t)) problem = 'durabilidad';
 
-  const priorities = unique([...(previous.priorities ?? []), ...PRIORITIES.filter(([, rx]) => rx.test(t)).map(([key]) => key)]);
+  const priorities = unique([...(previous.priorities ?? []), ...PRIORITIES.filter(([, rx]) => rx.test(t)).map(([key]) => key), ...(explicitBudgetRecommendation(t)?['precio']:[])]);
   const invoiceRequired = /\bfactura\b|\bruc\b/.test(t) ? true : (previous.invoiceRequired ?? null);
   const objection = /\b(muy\s+caro|esta\s+caro|se\s+me\s+hace\s+caro|sale\s+de\s+mi\s+presupuesto|mas\s+barato)\b/.test(t)
     ? 'precio'
