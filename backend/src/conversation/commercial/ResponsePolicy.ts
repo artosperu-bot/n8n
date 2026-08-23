@@ -68,35 +68,28 @@ function contextMatchesAttribute(move:CommercialMove,value:string|null|undefined
   return false;
 }
 
-function neutralAttributeBenefit(move:CommercialMove,fact:string|null):string|null{
+function neutralAttributeBenefit(move:CommercialMove):string|null{
   const attr=semanticAttribute(move);
-  if(/RESIST|CAID|IMPACT|IP68|IP69|MIL/.test(attr))return fact?`Si también valoras resistencia, ${fact} es un dato útil para decidir.`:'Si también valoras resistencia, este dato puede ayudarte a decidir.';
-  if(/RAM|MEMORIA|RENDIMIENTO/.test(attr))return fact?`Si también priorizas rendimiento y memoria, ${fact} es un dato útil para decidir.`:'Si también priorizas rendimiento y memoria, este dato puede ayudarte a decidir.';
-  if(/BATER/.test(attr))return fact?`Si también priorizas batería, ${fact} es un dato útil para decidir.`:'Si también priorizas batería, este dato puede ayudarte a decidir.';
-  if(/CAMARA/.test(attr))return fact?`Si también priorizas cámara, ${fact} es un dato útil para decidir.`:'Si también priorizas cámara, este dato puede ayudarte a decidir.';
-  return fact?`${fact} es un dato útil al elegir el equipo.`:'Este dato puede ayudarte a elegir mejor.';
+  if(/RESIST|CAID|IMPACT|IP68|IP69|MIL/.test(attr))return 'Si también valoras resistencia, ese dato sí pesa en la decisión.';
+  if(/RAM|MEMORIA|RENDIMIENTO/.test(attr))return 'Si también priorizas memoria y rendimiento, ese dato es relevante para comparar opciones.';
+  if(/BATER/.test(attr))return 'Si también priorizas batería, ese dato es relevante para comparar opciones.';
+  if(/CAMARA/.test(attr))return 'Si también priorizas cámara, ese dato es relevante para comparar opciones.';
+  return 'Ese dato puede ayudarte a decidir entre alternativas.';
 }
 
 function contextualBenefit(move:CommercialMove):string|null {
   const context=move.relevantCustomerContext;
   const useCase=customerLanguage(context.useCase);
-  const fact=conciseVerifiedFact(move.verifiedFacts[0]);
   const relevantPriority=context.priorities.find(priority=>contextMatchesAttribute(move,priority))??null;
   const priority=customerLanguage(relevantPriority);
   const problem=contextMatchesAttribute(move,context.problem)?customerLanguage(context.problem):null;
   const relevantUseCase=contextMatchesAttribute(move,context.useCase)?useCase:null;
 
-  if(relevantUseCase)return fact
-    ?`Para ${relevantUseCase}, ${fact} es un dato útil al elegir el equipo.`
-    :`Para ${relevantUseCase}, este dato puede ayudarte a elegir mejor.`;
-  if(problem)return fact
-    ?`Si te preocupa ${problem}, ${fact} es un dato útil al elegir el equipo.`
-    :`Si te preocupa ${problem}, este dato puede ayudarte a elegir mejor.`;
-  if(priority)return fact
-    ?`Si priorizas ${priority}, ${fact} es un dato útil al elegir el equipo.`
-    :`Si priorizas ${priority}, este dato puede ayudarte a elegir mejor.`;
+  if(relevantUseCase)return `Para ${relevantUseCase}, ese dato es relevante para el uso que buscas.`;
+  if(problem)return `Si te preocupa ${problem}, ese dato es especialmente relevante para tu decisión.`;
+  if(priority)return `Si priorizas ${priority}, ese dato sí pesa en la decisión.`;
   if(context.objection)return 'Si ese punto es importante para ti, este dato puede ayudarte a decidir.';
-  return neutralAttributeBenefit(move,fact);
+  return neutralAttributeBenefit(move);
 }
 
 export function renderCommercialMove(move:CommercialMove|null,intent:string=''):string|null{
@@ -115,7 +108,8 @@ export function renderCommercialMove(move:CommercialMove|null,intent:string=''):
   const benefit=contextualBenefit(move);
   if(benefit)return benefit;
   if(!fact)return null;
-  return `Además, ${String(fact.value).trim().replace(/[.!?]+$/,'')}.`;
+  const concise=conciseVerifiedFact(fact);
+  return concise?`Además, ${concise}.`:null;
 }
 
 export function renderVerifiedFact(fact:VerifiedFact|null|undefined):string|null{
