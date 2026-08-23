@@ -126,6 +126,8 @@ export function renderVerifiedFact(fact:VerifiedFact|null|undefined):string|null
 export function priceResponse(quote: ProductQuote | null, softClose = false, commercialMove:CommercialMove|null=null): string {
   if (!quote || quote.price == null) return 'El precio no está disponible en este momento.';
   const fact=`${shortProduct(quote.shortName ?? quote.product)} está a S/ ${quote.price}.`;
+  const availability=quote.stock==null?null:(quote.stock>0?'También está disponible.':'Por ahora no está disponible.');
+  if(availability)return `${fact} ${availability}`;
   const continuation=renderCommercialMove(commercialMove,'PRICE');
   return softClose?`${fact} Si te cuadra, puedo revisar stock para avanzar.`:continuation?`${fact} ${continuation}`:fact;
 }
