@@ -191,14 +191,23 @@ function moneySupported(input:LlmWriteInput,answer:string,domain?:'INSTITUTIONAL
   const supported=new Set(monetaryValues(`${rag}\n${facts}\n${quote}`));
   return values.every(v=>supported.has(v));
 }
+function normalizeAvailabilityPresentation(answer:string):string{
+  return answer
+    .replace(/\b(?:adem[aá]s|tambi[eé]n)\s*:\s*DISPONIBLE\b\.?/gi,'También está disponible.')
+    .replace(/\b(?:adem[aá]s|tambi[eé]n)\s*:\s*NO_DISPONIBLE\b\.?/gi,'No está disponible.')
+    .replace(/(?:También est[aá] disponible\.\s*){2,}/gi,'También está disponible. ')
+    .replace(/(?:No est[aá] disponible\.\s*){2,}/gi,'No está disponible. ')
+    .replace(/[ \t]{2,}/g,' ')
+    .trim();
+}
 function cleanPresentation(answer:string):string {
   let bulletCount=0;
-  return answer
+  const cleaned=answer
     .split('\n')
     .map(line=>{
-      const cleaned=line.replace(/^\s*(?:[-*]\s*)?\*{0,2}(?:Conclusi[oó]n|Datos clave|Consecuencia pr[aá]ctica|Recomendaci[oó]n|Postura|Trade-?off)\*{0,2}\s*:\s*/i,'');
-      const bullet=cleaned.match(/^\s*[-*•]\s+(.+)$/);
-      if(!bullet)return cleaned.replace(/\*\*/g,'');
+      const normalized=line.replace(/^\s*(?:[-*]\s*)?\*{0,2}(?:Conclusi[oó]n|Datos clave|Consecuencia pr[aá]ctica|Recomendaci[oó]n|Postura|Trade-?off)\*{0,2}\s*:\s*/i,'');
+      const bullet=normalized.match(/^\s*[-*•]\s+(.+)$/);
+      if(!bullet)return normalized.replace(/\*\*/g,'');
       bulletCount+=1;
       return bulletCount<=3?`- ${bullet[1].replace(/\*\*/g,'')}`:'';
     })
@@ -206,6 +215,7 @@ function cleanPresentation(answer:string):string {
     .join('\n')
     .replace(/\n{3,}/g,'\n\n')
     .trim();
+  return normalizeAvailabilityPresentation(cleaned);
 }
 function compactComparisonPresentation(input:LlmWriteInput,answer:string):string{
   if(String(input.intent??'').toUpperCase()!=='COMPARE'||answer.length<=750)return answer;
