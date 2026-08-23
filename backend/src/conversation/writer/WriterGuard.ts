@@ -281,7 +281,10 @@ function guardGeneratedAnswer(input:LlmWriteInput,answer:string):string|null {
   if(mentionsProductOutsideAllowlist(answer,allowedProducts))return 'PRODUCT_OUTSIDE_ALLOWLIST';
   const recommendationCta=/\b(?:te\s+)?recomiendo\b|\bmi\s+recomendaci[oó]n\s+es\b/i.test(answer);
   const alternativeCta=/\b(?:otra|una)\s+(?:alternativa|opci[oó]n)\s+(?:es|ser[ií]a)\b|\bpuedo\s+ofrecerte\b/i.test(answer);
-  if(recommendationCta&&executableNba!=='RECOMMEND')return 'UNAUTHORIZED_COMMERCIAL_ACTION';
+  const recommendedProduct=String(input.recommendedProduct??state.recommendedProduct??'').trim();
+  const verifiedRecommendation=Boolean(recommendedProduct&&allowedProducts.some(product=>sameFold(product,recommendedProduct)));
+  const recommendationAuthorized=executableNba==='RECOMMEND'||(['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent)&&verifiedRecommendation);
+  if(recommendationCta&&!recommendationAuthorized)return 'UNAUTHORIZED_COMMERCIAL_ACTION';
   if(alternativeCta&&executableNba!=='OFFER_ALTERNATIVE')return 'UNAUTHORIZED_COMMERCIAL_ACTION';
   if(hasQuestion&&executableNba==='ASK_MISSING_FACT'){if(!questionConsumesMissingFact(input,answer))return 'UNPROCESSABLE_QUESTION';}
   else if(hasQuestion&&executableNba!=='ANSWER_ONLY'&&!['SOFT_CLOSE','COLLECT_RESERVATION_DATA'].includes(executableNba))return 'UNAUTHORIZED_CTA';
