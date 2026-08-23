@@ -7,6 +7,31 @@ function shortProduct(value: string | null | undefined): string {
   return raw || 'el producto';
 }
 
+function customerLanguage(value:string|null|undefined):string|null {
+  const clean=String(value??'')
+    .replace(/[_-]+/g,' ')
+    .replace(/\s+/g,' ')
+    .replace(/^\s*(?:uso|uso principal|caso de uso)\s+(?:en|para)\s+/i,'')
+    .replace(/^\s*(?:dispositivo|equipo|celular)\s+que\s+/i,'')
+    .split(/[;|]/,1)[0]
+    .trim()
+    .replace(/[.!?]+$/,'');
+  return clean||null;
+}
+
+function contextualBenefit(move:CommercialMove):string|null {
+  const context=move.relevantCustomerContext;
+  const priority=customerLanguage(context.priorities[0]);
+  if(priority)return `Si priorizas ${priority}, este dato puede ayudarte a elegir mejor.`;
+  const problem=customerLanguage(context.problem);
+  if(problem)return `Si te preocupa ${problem}, este dato puede ayudarte a elegir mejor.`;
+  const useCase=customerLanguage(context.useCase);
+  if(useCase)return `Para ${useCase}, este dato puede ayudarte a elegir mejor.`;
+  const objection=customerLanguage(context.objection);
+  if(objection)return `Si ese punto es importante para ti, este dato puede ayudarte a decidir.`;
+  return null;
+}
+
 export function renderCommercialMove(move:CommercialMove|null,intent:string=''):string|null{
   if(!move)return null;
   if(move.kind==='STOCK_STATUS'){
@@ -20,9 +45,8 @@ export function renderCommercialMove(move:CommercialMove|null,intent:string=''):
     const rendered=renderVerifiedFact(fact);
     return rendered?`Además, ${rendered}`:null;
   }
-  const context=move.relevantCustomerContext;
-  const use=context.useCase??context.problem??context.priorities[0]??context.objection;
-  if(use)return `Para ${String(use).replace(/[_-]+/g,' ')}, este dato puede ser útil al elegir el equipo.`;
+  const benefit=contextualBenefit(move);
+  if(benefit)return benefit;
   if(!fact)return null;
   return `Además, ${String(fact.value).trim().replace(/[.!?]+$/,'')}.`;
 }
