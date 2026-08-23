@@ -16,6 +16,7 @@ import { SupabaseRagRepository } from './adapters/supabase/SupabaseRagRepository
 import { SupabaseTelemetryRepository } from './adapters/supabase/SupabaseTelemetryRepository.ts';
 import { HybridConversationEngine } from './conversation/HybridConversationEngine.ts';
 import { RecentHistoryLlmProvider } from './conversation/history/RecentHistoryLlmProvider.ts';
+import { FullRagLlmProvider } from './conversation/commercial/FullRagLlmProvider.ts';
 
 function need(value: string | undefined, name: string): string {
   if (!value || value.startsWith('REEMPLAZAR')) throw new Error(`${name} is required for selected adapter`);
@@ -62,10 +63,7 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
       : new FakeErpRepository();
 
   const embeddingProvider = config.ragMode === 'supabase'
-    ? new OpenAIEmbeddingProvider({
-        apiKey: need(config.openAiApiKey,'OPENAI_API_KEY'),
-        model: config.openAiEmbeddingModel,
-      })
+    ? new OpenAIEmbeddingProvider({apiKey: need(config.openAiApiKey,'OPENAI_API_KEY'),model: config.openAiEmbeddingModel})
     : null;
 
   const rag = config.ragMode === 'supabase'
@@ -80,22 +78,16 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
   const baseLlm = config.llmMode === 'openai'
     ? new OpenAIProvider({ apiKey: need(config.openAiApiKey,'OPENAI_API_KEY'), model: need(config.openAiModel,'OPENAI_MODEL') })
     : new FakeLlmProvider();
-  const llm = config.llmMode === 'openai'
+  const historyAwareLlm = config.llmMode === 'openai'
     ? new RecentHistoryLlmProvider(baseLlm, conversations, 4)
     : baseLlm;
+  const llm = config.llmMode === 'openai'
+    ? new FullRagLlmProvider(historyAwareLlm)
+    : historyAwareLlm;
 
   const automation = config.automationMode === 'n8n'
     ? new N8nAutomationBus({ url: need(config.n8nWebhookUrl,'N8N_WEBHOOK_URL'), token: config.n8nWebhookToken, strict: config.n8nStrict })
     : new NoopAutomationBus();
 
-  return {
-    config,
-    conversations,
-    telemetry,
-    erp,
-    rag,
-    llm,
-    automation,
-    engine: new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation }),
-  };
+  return {config,conversations,telemetry,erp,rag,llm,automation,engine: new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation })};
 }
