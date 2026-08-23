@@ -21,11 +21,11 @@ const ATTRS: Array<[RegExp, string]> = [
   [/\b(bateria|autonomia|carga|cargador|cargar)\b|\bdur(?:e|ar|acion)\b[^.!?]{0,25}\btodo\s+el\s+dia\b/, 'BATERIA'],
   [/\b(camara|camaras|foto|fotos|video|vision nocturna)\b/, 'CAMARA'],
   [/\b(resistente|resistencia|ip68|ip69k|mil(?:-std)?|caida|caidas|golpe|golpes|agua|polvo)\b/, 'RESISTENCIA'],
-  [/\b(wifi|wi fi|bluetooth|usb|otg|infrarrojo)\b/, 'CONECTIVIDAD'],
+  [/\b(wifi|wi fi|bluetooth|usb|otg|infrarrojo|google pay|audifono|audifonos|jack|3[.,]5 mm)\b/, 'CONECTIVIDAD'],
   [/\b(4g|lte|red|redes|bandas|volte)\b/, 'REDES'],
   [/\b(sim|dual sim|nano sim|esim)\b/, 'SIM'],
   [/\b(ram|memoria|almacenamiento|espacio|microsd|micro sd|rom)\b/, 'MEMORIA'],
-  [/\b(procesador|rendimiento|cpu|gpu|rapido|velocidad)\b/, 'RENDIMIENTO'],
+  [/\b(procesador|rendimiento|cpu|gpu|rapido|velocidad|gaming|jugar|juego|juegos|free fire|pubg|cod mobile|call of duty)\b/, 'RENDIMIENTO'],
   [/\b(pantalla|display|hz|resolucion|pulgadas)\b/, 'PANTALLA'],
   [/\b(huella|biometria|biometrico|desbloqueo facial|reconocimiento facial)\b/, 'SEGURIDAD'],
   [/\b(peso|pesa|pesan|grosor|grueso|dimensiones|dimension|tamano|medidas|altura|ancho|anchura|espesor|color)\b/, 'FISICO'],
@@ -71,7 +71,8 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(catalogo|que productos|que equipos|que modelos tienen|muestrame)\b/)) hits.push('CATALOG');
   const explicitComparison = has(/\b(compara|comparame|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)
     || hasDirectModelChoice(t)
-    || hasComparativePriceQuestion(t);
+    || hasComparativePriceQuestion(t)
+    || has(/\bentre\b[^?.!]{0,90}\by\b[^?.!]{0,90}\b(?:cual|que)\b[^?.!]{0,45}\b(?:mejor|mayor|mas)\b/);
   if (explicitComparison) hits.push('COMPARE');
   const hardTechnicalNeed=has(/\b(necesito|requiero|busco)\b[^.!?]{0,45}\b(nfc|5g|camara termica|termica|thermal|flir)\b/);
   const recommendationLanguage = has(/\b(recomienda|recomiendas|recomiendan|recomendar|recomendacion|cual me conviene|que modelo me conviene|que modelo entra|q modelo entra|que modelo cumple|cual modelo cumple|otra opcion|otra alternativa|opcion mas economica|alternativa mas economica|cual parecido|que parecido|cual similar|que similar)\b/)
@@ -93,11 +94,13 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(tienda fisica|direccion|ubicacion|horario|recojo|envio|envios|provincia|lima|contraentrega|forma de pago|medios? de pago|yape|plin|transferencia|tarjeta|boleta|factura|cambio|devolucion|reembolso)\b/)) hits.push('POLICY');
 
   const attributes = unique(ATTRS.filter(([rx]) => rx.test(t)).map(([, name]) => name));
-  const explicitProductInfo = has(/\b(info|informacion|caracteristicas|especificaciones|ficha|cuentame|hablame|dime\s+(?:del|de\s+la|sobre))\b/) && has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);
-  const browsingProduct = has(/\b(estoy viendo|quiero ver|revisando|ahora si quiero ver|muestrame el)\b/) && has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);
+  const hasProductLike=has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);
+  const explicitProductInfo = (has(/\b(info|informacion|caracteristicas|especificaciones|ficha|cuentame|hablame|dime\s+(?:del|de\s+la|sobre))\b/) && hasProductLike)
+    || (has(/\b(que\s+tal\s+es|como\s+es|que\s+tal\s+esta)\b/) && hasProductLike);
+  const browsingProduct = has(/\b(estoy viendo|quiero ver|revisando|ahora si quiero ver|muestrame el)\b/) && hasProductLike;
   const requirementFollowup = has(/\b(cumple|cumpliria|cumple\s+con\s+eso|tiene\s+eso)\b/);
   const productInfo = explicitProductInfo || browsingProduct;
-  const directUse = has(/\b(trabajo|trabajar|trabajando|construccion|campo|tecnico|juego|juegos|gaming|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para|delivery)\b/);
+  const directUse = has(/\b(trabajo|trabajar|trabajando|construccion|campo|tecnico|juego|juegos|jugar|gaming|free fire|pubg|cod mobile|call of duty|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para|delivery)\b/);
   const everydayNeed = has(/\b(uso simple|uso basico|whatsapp|llamadas?|mensajeria|comunicacion)\b/)
     && has(/\b(quiero un|quiero una|busco|necesito|para usar|para uso|lo quiero para|la quiero para)\b/);
   const use = directUse || everydayNeed;
