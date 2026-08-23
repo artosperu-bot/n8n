@@ -20,6 +20,7 @@ type ProgressionResult={
 
 const CLOSING_ACTIONS=new Set(['COLLECT_RESERVATION_DATA','ASSISTED_HANDOFF','EXECUTE_RESERVATION']);
 const PROGRESSABLE_ANSWERS=new Set(['PRICE','PRICE_AVAILABILITY','STOCK','CAPABILITY','ATTRIBUTE','PRODUCT_INFO','EVALUATE_USE']);
+const EXPLORATORY_FACTUAL_INTENTS=new Set(['CAPABILITY','ATTRIBUTE','PRODUCT_INFO','EVALUATE_USE']);
 
 function hasDecisionContext(state:ConversationState):boolean{
   return Boolean(state.useCase||state.problem||(state.priorities?.length??0)>0);
@@ -59,6 +60,12 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
 
   if(state.objection&&(input.verifiedAlternatives??0)>0){
     return{level:'MEDIUM',candidateNba:'OFFER_ALTERNATIVE',reason:'OBJECTION_WITH_VERIFIED_ALTERNATIVE'};
+  }
+
+  // While the customer is still exploring product facts, prefer one useful
+  // related continuation over repeatedly pushing a stock/close CTA.
+  if(input.verifiedCurrentAnswer&&input.resolvedProduct&&input.relatedValueAvailable&&EXPLORATORY_FACTUAL_INTENTS.has(intent)){
+    return{level:'LOW',candidateNba:'RELATED_VALUE',reason:'EXPLORATORY_VERIFIED_CONTINUATION'};
   }
 
   const score=Math.max(0,Math.min(100,Number(state.levelOfInterest??0)));
