@@ -46,20 +46,20 @@ export const fullRag50Scenarios:QaScenario[]=[
   {id:'FR50-24-NIGHT-22',family:'FULL_RAG',title:'Night vision Armor 22',turns:[{message:'El Armor 22 tiene cámara nocturna?',expected:{queryTarget:'Armor 22'}}]},
   {id:'FR50-25-SENSOR-22',family:'FULL_RAG',title:'Main camera sensor',turns:[{message:'Qué sensor usa la cámara principal del Armor 22?',expected:{queryTarget:'Armor 22'}}]},
   {id:'FR50-26-VIDEO-22',family:'FULL_RAG',title:'Video recording',turns:[{message:'Hasta qué resolución graba video el Armor 22?',expected:{queryTarget:'Armor 22'}}]},
-  {id:'FR50-27-SELFIE-X13',family:'FULL_RAG',title:'Front camera X13',turns:[{message:'De cuántos megapíxeles es la cámara frontal del X13?',expected:{queryTarget:'Armor X13'}}]},
+  {id:'FR50-27-GAMING-22',family:'FULL_RAG',title:'Real gaming suitability question',turns:[{message:'Con el Armor 22 puedo jugar Free Fire?',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}}]},
 
   {id:'FR50-28-RESISTANCE-22',family:'FULL_RAG',title:'Resistance Armor 22',turns:[{message:'Qué tan resistente es el Armor 22?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}}]},
   {id:'FR50-29-IP68-X13',family:'FULL_RAG',title:'IP68 X13',turns:[{message:'El X13 es IP68?',expected:{queryTarget:'Armor X13'}}]},
-  {id:'FR50-30-DROPS-X12',family:'FULL_RAG',title:'Drop resistance X12 Pro',turns:[{message:'Desde qué altura aguanta caídas el X12 Pro?',expected:{queryTarget:'Armor X12 Pro'}}]},
+  {id:'FR50-30-DELIVERY-X13',family:'FULL_RAG',title:'Delivery suitability from product facts',turns:[{message:'El Armor X13 me sirve para delivery todo el día?',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}}]},
   {id:'FR50-31-CONSTRUCTION-22',family:'FULL_RAG',title:'Construction then resistance',turns:[
     {message:'Lo quiero para trabajar en construcción.'},
     {message:'El Armor 22 aguanta bien golpes y agua?',expected:{queryTarget:'Armor 22'}},
   ]},
 
   {id:'FR50-32-5G-X13',family:'FULL_RAG',title:'5G X13',turns:[{message:'El Armor X13 es 5G?',expected:{intent:'CAPABILITY',queryTarget:'Armor X13'}}]},
-  {id:'FR50-33-5G-25T',family:'FULL_RAG',title:'5G 25T Pro',turns:[{message:'El 25T Pro sí tiene 5G?',expected:{queryTarget:'Armor 25T Pro'}}]},
+  {id:'FR50-33-WORK-X13',family:'FULL_RAG',title:'Work multitasking suitability',turns:[{message:'Para WhatsApp, correo y varias apps de trabajo, qué tal el Armor X13?',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}}]},
   {id:'FR50-34-4G-22',family:'FULL_RAG',title:'4G Armor 22',turns:[{message:'El Armor 22 trabaja con 4G LTE?',expected:{queryTarget:'Armor 22'}}]},
-  {id:'FR50-35-4G-X12',family:'FULL_RAG',title:'4G X12 Pro',turns:[{message:'El X12 Pro funciona con 4G?',expected:{queryTarget:'Armor X12 Pro'}}]},
+  {id:'FR50-35-COMPARE-GAMING',family:'FULL_RAG',title:'Gaming comparison by relevant specs',turns:[{message:'Entre el X13 y el Armor 22 cuál conviene más para jugar Free Fire?',expected:{intent:'COMPARE'}}]},
 
   {id:'FR50-36-THERMAL-RECOMMEND',family:'FULL_RAG',title:'Customer asks for thermal phone',turns:[{message:'Necesito un celular con cámara térmica, cuál tienen?'}]},
   {id:'FR50-37-THERMAL-25T',family:'FULL_RAG',title:'Thermal 25T Pro',turns:[{message:'El Armor 25T Pro tiene cámara térmica?',expected:{queryTarget:'Armor 25T Pro'}}]},
