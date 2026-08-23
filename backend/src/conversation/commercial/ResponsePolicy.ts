@@ -8,14 +8,28 @@ function shortProduct(value: string | null | undefined): string {
 }
 
 function customerLanguage(value:string|null|undefined):string|null {
-  const clean=String(value??'')
+  let clean=String(value??'')
     .replace(/[_-]+/g,' ')
     .replace(/\s+/g,' ')
-    .replace(/^\s*(?:uso|uso principal|caso de uso)\s+(?:en|para)\s+/i,'')
-    .replace(/^\s*(?:dispositivo|equipo|celular)\s+que\s+/i,'')
-    .split(/[;|]/,1)[0]
     .trim()
     .replace(/[.!?]+$/,'');
+  if(!clean)return null;
+  clean=clean
+    .replace(/^\s*(?:uso(?:\s+cotidiano|\s+diario|\s+b[aá]sico|\s+principal)*|caso\s+de\s+uso)\s+(?:en|para)\s+/i,'')
+    .replace(/^\s*(?:usar|utilizar)\s+(?:el\s+)?(?:celular|equipo|tel[eé]fono)\s+(?:principalmente\s+)?para\s+/i,'')
+    .replace(/^\s*(?:tel[eé]fono|celular|equipo)\s+para\s+/i,'')
+    .replace(/^\s*mensajer[ií]a\s+(?:por\s+)?/i,'')
+    .replace(/\brealizar\s*\/\s*recibir\s+llamadas\b/ig,'llamadas')
+    .replace(/\brealizar\s+y\s+recibir\s+llamadas\b/ig,'llamadas')
+    .replace(/\bmensajer[ií]a\s+(?:por\s+)?WhatsApp\b/ig,'WhatsApp')
+    .replace(/\s+/g,' ')
+    .split(/[;|]/,1)[0]
+    .trim();
+  if(/whatsapp/i.test(clean)&&/llamadas?/i.test(clean))return 'WhatsApp y llamadas';
+  if(clean.length>70){
+    const short=clean.split(/[,.;]/,1)[0].trim();
+    clean=short||clean.slice(0,70).trim();
+  }
   return clean||null;
 }
 
@@ -23,8 +37,13 @@ function conciseVerifiedFact(fact:VerifiedFact|null|undefined):string|null{
   if(!fact)return null;
   const value=String(fact.value??'').replace(/\s+/g,' ').trim();
   if(!value)return null;
+  const key=String(fact.key??'').toUpperCase();
+  if(key==='RESISTENCIA_CAIDAS')return `Resistencia a caídas: ${value}`;
+  if(key==='RAM_FISICA')return `RAM física: ${value}`;
+  if(key==='RAM_VIRTUAL')return `RAM virtual: ${value}`;
+  if(key==='IP68'||key==='IP69K'||key==='MIL_STD_810H')return `${key.replace(/_/g,'-')}: ${value}`;
   const keyed=value.match(/(?:resistencia\s+a\s+ca[ií]das?|ram\s+(?:f[ií]sica|virtual)|bater[ií]a|peso|pantalla|c[aá]mara)\s*:\s*([^.;|]+)/i);
-  if(keyed)return `${String(fact.key??'').toUpperCase().includes('CAID')?'Resistencia a caídas':String(fact.key??'').replace(/[_-]+/g,' ').toLocaleLowerCase('es')}: ${keyed[1].trim()}`;
+  if(keyed)return `${key.includes('CAID')?'Resistencia a caídas':key.replace(/[_-]+/g,' ').toLocaleLowerCase('es')}: ${keyed[1].trim()}`;
   const first=value.split(/(?<=[.!?])\s+|[;|]/,1)[0]?.trim()??value;
   return first.length<=120?first:`${first.slice(0,117).trimEnd()}…`;
 }
@@ -34,7 +53,7 @@ function attributeContextRelevant(move:CommercialMove):boolean{
   const context=[move.relevantCustomerContext.useCase,move.relevantCustomerContext.problem,...move.relevantCustomerContext.priorities]
     .filter(Boolean).join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   if(!context)return false;
-  if(/RESIST|CAID|IP68|IP69|MIL/.test(attr))return /resisten|caida|golpe|trabajo|campo|obra|construccion|durabilidad|proteccion/.test(context);
+  if(/RESIST|CAID|IP68|IP69|MIL/.test(attr))return /resisten|caida|golpe|campo|obra|construccion|durabilidad|proteccion/.test(context);
   if(/RAM|MEMORIA|RENDIMIENTO/.test(attr))return /whatsapp|llamada|app|aplicacion|multitarea|trabajo|juego|rendimiento|uso diario|simple/.test(context);
   if(/BATER/.test(attr))return /bateria|autonomia|jornada|trabajo|delivery|campo|uso diario/.test(context);
   if(/CAMARA/.test(attr))return /foto|camara|video|redes sociales|contenido/.test(context);
@@ -52,14 +71,13 @@ function neutralAttributeBenefit(move:CommercialMove,fact:string|null):string|nu
 
 function contextualBenefit(move:CommercialMove):string|null {
   const context=move.relevantCustomerContext;
-  const rawUseCase=String(context.useCase??'').trim();
   const useCase=customerLanguage(context.useCase);
   const priority=customerLanguage(context.priorities[0]);
   const problem=customerLanguage(context.problem);
   const fact=conciseVerifiedFact(move.verifiedFacts[0]);
 
   if(!attributeContextRelevant(move))return neutralAttributeBenefit(move,fact);
-  if(useCase&&rawUseCase.length<=80&&!/[;|]/.test(rawUseCase))return fact
+  if(useCase)return fact
     ?`Para ${useCase}, ${fact} es un dato útil al elegir el equipo.`
     :`Para ${useCase}, este dato puede ayudarte a elegir mejor.`;
   if(priority)return fact
@@ -68,9 +86,6 @@ function contextualBenefit(move:CommercialMove):string|null {
   if(problem)return fact
     ?`Si te preocupa ${problem}, ${fact} es un dato útil al elegir el equipo.`
     :`Si te preocupa ${problem}, este dato puede ayudarte a elegir mejor.`;
-  if(useCase)return fact
-    ?`Para ${useCase}, ${fact} es un dato útil al elegir el equipo.`
-    :`Para ${useCase}, este dato puede ayudarte a elegir mejor.`;
   if(context.objection)return 'Si ese punto es importante para ti, este dato puede ayudarte a decidir.';
   return neutralAttributeBenefit(move,fact);
 }
@@ -99,6 +114,7 @@ export function renderVerifiedFact(fact:VerifiedFact|null|undefined):string|null
   const value=String(fact.value).trim().replace(/[.!?]+$/,'');
   if(!value)return null;
   if(fact.key==='DISPONIBILIDAD')return fact.value==='DISPONIBLE'?'Está disponible.':fact.value==='NO_DISPONIBLE'?'No está disponible.':null;
+  if(fact.key==='RESISTENCIA_CAIDAS')return `Resistencia a caídas: ${value}.`;
   const normalizedValue=value.charAt(0).toUpperCase()+value.slice(1);
   const label=fact.key.toLocaleLowerCase('es').replace(/[_-]+/g,' ');
   return value.includes(':')?`${normalizedValue}.`:`${label.charAt(0).toUpperCase()+label.slice(1)}: ${value}.`;
