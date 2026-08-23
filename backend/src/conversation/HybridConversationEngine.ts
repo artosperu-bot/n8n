@@ -12,6 +12,7 @@ import { prepareCommercialWriteInput } from './commercial/CommercialWriteContrac
 import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from './commercial/UseCaseNormalizer.ts';
 import { productEvidenceSections } from './commercial/ProductEvidencePolicy.ts';
 import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, stockResponse } from './commercial/ResponsePolicy.ts';
+import { extractReservationBundle, mergeReservationBundle, reservationBundleMissing, reservationBundlePrompt, reservationBundleStage, reservationMissingPrompt } from './commercial/ReservationData.ts';
 import { validateTurnDecision } from './decision/DecisionValidator.ts';
 import { resolveInstitutionalTopic } from './institutional/InstitutionalTopicResolver.ts';
 import { resolveIntentPlan } from './intent/IntentPlan.ts';
@@ -220,6 +221,8 @@ function isExplicitReservationOperation(message:string):boolean{
     || /\b(?:reserva|separacion)\b[^.!?]{0,45}\b(?:continu|seguir|retom|avanz)\w*\b/.test(text);
 }
 function reservationFieldCompatible(stage:ConversationState['reservationStage'],message:string):boolean{
+  const bundle=extractReservationBundle(message);
+  if(bundle.document||bundle.name||bundle.address)return true;
   const raw=message.trim();
   if(stage==='NEED_DOCUMENT'){
     const value=raw.replace(/[\s.-]/g,'').toUpperCase();
@@ -232,6 +235,8 @@ function reservationFieldCompatible(stage:ConversationState['reservationStage'],
 function reservationOwnsTurn(state:ConversationState,message:string):boolean{
   if(!state.reservationStage)return false;
   if(isReservationAbandonment(message)||isExplicitReservationOperation(message))return true;
+  const bundle=extractReservationBundle(message);
+  if(bundle.document||bundle.name||bundle.address)return true;
   if(!reservationFieldCompatible(state.reservationStage,message))return false;
   if(state.reservationStage==='NEED_ADDRESS'&&!/[?¿]/.test(message)&&/\b(?:av|avenida|jr|jiron|calle|mz|manzana|lote|urbanizacion|distrito)\b/i.test(fold(message)))return true;
   return fallbackDecision(message,state).primaryIntent==='OTHER';
@@ -241,15 +246,29 @@ function reservationAdvance(state:ConversationState,message:string):ReservationA
   if(!stage)return null;
   const raw=message.trim();
   if(isReservationAbandonment(message))return{stage:null,document:null,name:null,address:null,cancelled:true,answer:'Entendido, detuve la captura de datos para la reserva. La reserva no llegó a confirmarse.',nba:'ANSWER_ONLY',route:'RESERVATION_CANCELLED'};
+
+  const incoming=extractReservationBundle(raw);
+  if(incoming.document||incoming.name||incoming.address){
+    const merged=mergeReservationBundle({document:state.reservationDocument??null,name:state.reservationCustomerName??null,address:state.reservationAddress??null},incoming);
+    const missing=reservationBundleMissing(merged);
+    const nextStage=reservationBundleStage(merged);
+    if(missing.length)return{stage:nextStage,document:merged.document,name:merged.name,address:merged.address,answer:reservationMissingPrompt(missing),nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
+    return{stage:'READY',document:merged.document,name:merged.name,address:merged.address,answer:'Ya tengo los datos necesarios. La reserva todavía no está confirmada; falta registrar la operación autorizada.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};
+  }
+
   if(stage==='NEED_DOCUMENT'){
     const value=raw.replace(/[\s.-]/g,'').toUpperCase();
     if(!/^[A-Z0-9]{8,12}$/.test(value)||!/[0-9]{6}/.test(value))return{stage,answer:'Necesito un DNI o Carné de Extranjería válido para continuar la reserva.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
-    return{stage:'NEED_NAME',document:value,answer:'Gracias. Ahora indícame tus nombres y apellidos.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
+    const merged=mergeReservationBundle({document:value,name:state.reservationCustomerName??null,address:state.reservationAddress??null},{});
+    const missing=reservationBundleMissing(merged);
+    return{stage:reservationBundleStage(merged),document:value,answer:reservationMissingPrompt(missing),nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
   }
   if(stage==='NEED_NAME'){
     const words=raw.split(/\s+/).filter(Boolean);
     if(words.length<2||raw.length<5||!/^[\p{L}\s.'-]+$/u.test(raw))return{stage,answer:'Indícame tus nombres y apellidos completos para continuar.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
-    return{stage:'NEED_ADDRESS',name:raw,answer:'Perfecto. Finalmente, indícame la dirección para la reserva.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
+    const merged=mergeReservationBundle({document:state.reservationDocument??null,name:raw,address:state.reservationAddress??null},{});
+    const missing=reservationBundleMissing(merged);
+    return{stage:reservationBundleStage(merged),name:raw,answer:reservationMissingPrompt(missing),nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
   }
   if(stage==='NEED_ADDRESS'){
     if(raw.length<6||!/\p{L}|\d/u.test(raw))return{stage,answer:'Necesito una dirección válida para continuar.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
@@ -526,7 +545,7 @@ export class HybridConversationEngine {
         if((commercialState.quantity??1)>=2){answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:selected,recommendedProduct},quote);handoff=true;handoffReason='CONTINUAR_VENTA';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';}
         else if(!selected){answer='Claro. ¿Qué modelo quieres comprar?';handoff=false;handoffReason=null;nba='ASK_MISSING_FACT';route='CLARIFICATION';}
         else if(quote?.stock!=null&&quote.stock<=0){answer=`Ahora ${selected} no está disponible. Puedo ayudarte a revisar una alternativa disponible.`;handoff=false;handoffReason=null;nba='OFFER_ALTERNATIVE';route='PURCHASE_NO_STOCK';}
-        else{answer=`Perfecto. Para iniciar la reserva de ${selected}, envíame tu DNI o Carné de Extranjería.`;handoff=false;handoffReason=null;nba='COLLECT_RESERVATION_DATA';route='RESERVATION_DATA';reservationStage='NEED_DOCUMENT';}
+        else{answer=reservationBundlePrompt(selected);handoff=false;handoffReason=null;nba='COLLECT_RESERVATION_DATA';route='RESERVATION_DATA';reservationStage='NEED_DOCUMENT';}
       }else if(intent==='HUMAN'){
         const selected=decision.selectedProduct??commercialState.selectedProduct??null;const handoffFocus=selected??decision.targetProduct??recommendedProduct??commercialState.activeProduct??null;quote=await this.#quote(handoffFocus,initialCandidates);answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:handoffFocus,recommendedProduct},quote);handoff=true;handoffReason='SOLICITUD_HUMANO';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';
       }else if(intent==='QUOTE'){
