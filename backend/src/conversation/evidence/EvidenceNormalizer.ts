@@ -10,7 +10,7 @@ function productName(q:ProductQuote):string {
 }
 
 const RAG_ENVELOPE_KEYS=new Set([
-  'producto','producto id','codigo','sku','seccion','grupo tecnico','titulo','contenido',
+  'producto','producto id','codigo','sku','seccion','grupo tecnico','titulo','contenido','palabras clave',
 ]);
 function envelopeLabel(line:string):string|null {
   const match=line.match(/^([^:\n]{2,40})\s*:\s*/);
