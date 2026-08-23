@@ -99,7 +99,8 @@ export function resolveReference(message: string, state: ReferenceState, options
   const universe = productUniverse(state, options);
   const directProducts = directNamedProducts(message, universe);
   const recommendedRef = /\b(el\s+)?recomendad[oa]\b|\bel\s+que\s+me\s+recomendaste\b/.test(t);
-  const selectionRef = /\b(me\s+quedo\s+con\s+ese|quiero\s+ese|ya\s+ese\s+quiero|elijo\s+ese|me\s+quedo\s+con\s+el\s+que\s+me\s+recomendaste)\b/.test(t);
+  const activeRef = /\bel\s+mio\b|\bel\s+que\s+(?:estaba|estabamos|veniamos)\s+(?:viendo|revisando)\b|\bel\s+que\s+estabamos\s+viendo\b/.test(t);
+  const selectionRef = /\b(me\s+quedo\s+con\s+ese|quiero\s+ese|ya\s+ese\s+quiero|elijo\s+ese|me\s+quedo\s+con\s+el\s+que\s+me\s+recomendaste|quiero\s+comprar(?:lo|la)?|comprar(?:lo|la)|lo\s+quiero|la\s+quiero|lo\s+compro|la\s+compro)\b/.test(t);
   const otherRef = /\bel\s+otro\b/.test(t);
   const recommended = canonicalProductName(state.customerVisibleRecommendedProduct??state.recommendedProduct, universe);
 
@@ -113,13 +114,15 @@ export function resolveReference(message: string, state: ReferenceState, options
   const visibleRecommendation=state.customerVisibleRecommendedProduct??state.recommendedProduct??null;
   const hiddenRecommendation=Boolean(state.recommendedProduct&&visibleRecommendation&&!sameProductName(state.recommendedProduct,visibleRecommendation));
   const recentSelection = state.selectedProduct ?? (!hiddenRecommendation?state.salientProduct:null) ?? visibleRecommendation ?? state.salientProduct ?? null;
-  const referentialTarget = selectionRef
-    ? recentSelection ?? recommended ?? state.activeProduct ?? null
-    : recommendedRef
-      ? recommended
-      : otherRef
-        ? comparisonAlternative(state)
-        : null;
+  const referentialTarget = activeRef
+    ? state.activeProduct??null
+    : selectionRef
+      ? recentSelection ?? recommended ?? state.activeProduct ?? null
+      : recommendedRef
+        ? recommended
+        : otherRef
+          ? comparisonAlternative(state)
+          : null;
 
   const product = named ?? referentialTarget;
   const namedAliases=named?unique([fold(named),...aliasesForProduct(named)]):[];
@@ -127,8 +130,12 @@ export function resolveReference(message: string, state: ReferenceState, options
     const escaped=alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     return new RegExp(`\\b(?:prefiero|elijo)\\s+(?:el\\s+)?${escaped}\\b|\\bquiero\\s+(?:el\\s+)?${escaped}\\b|\\bya\\s+(?:el\\s+)?${escaped}\\s+quiero\\b|\\bme\\s+quedo\\s+con\\s+(?:el\\s+)?${escaped}\\b`,'i').test(t);
   });
+  const namedTopicSwitch=Boolean(named)&&namedAliases.some(alias=>{
+    const escaped=alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    return new RegExp(`\\b(?:mejor\\s+)?(?:hablemos|hablame|pasemos|cambiemos)\\s+(?:ahora\\s+)?(?:del?|al|a)\\s+(?:el\\s+)?${escaped}\\b`,'i').test(t);
+  });
   const attributePreference = Boolean(named) && /\bprefiero\s+(?:la|el)\s+/.test(t) && !namedSelection;
-  const namedSwitch = Boolean(namedSelection && !attributePreference && fold(named!) !== fold(state.activeProduct ?? ''));
+  const namedSwitch = Boolean((namedSelection||namedTopicSwitch) && !attributePreference && fold(named!) !== fold(state.activeProduct ?? ''));
   const selectionSwitch = Boolean(selectionRef && product && fold(product) !== fold(state.activeProduct ?? ''));
   const explicitSwitch = namedSwitch || selectionSwitch;
 
@@ -138,19 +145,23 @@ export function resolveReference(message: string, state: ReferenceState, options
 
   const selectedProduct = namedSelection && named
     ? named
-    : explicitSwitch && queryTarget
-      ? queryTarget
-      : selectionRef && queryTarget
+    : namedTopicSwitch
+      ? state.selectedProduct??null
+      : explicitSwitch && queryTarget
         ? queryTarget
-        : state.selectedProduct ?? null;
+        : selectionRef && queryTarget
+          ? queryTarget
+          : state.selectedProduct ?? null;
 
   let reason = 'ACTIVE_PRODUCT_FALLBACK';
   if (unknownNamedProduct) reason = 'UNKNOWN_PRODUCT_MENTION';
+  else if (namedTopicSwitch) reason = 'EXPLICIT_PRODUCT_SWITCH';
   else if (namedSelection) reason = explicitSwitch ? 'EXPLICIT_PRODUCT_SWITCH' : 'SELECTION_REFERENT';
   else if (named) reason = mentionedProducts.length > 1 ? 'MULTI_PRODUCT_MENTION' : 'NAMED_QUERY_TARGET';
   else if (selectionRef) reason = 'SELECTION_REFERENT';
   else if (recommendedRef) reason = 'RECOMMENDED_REFERENT';
   else if (otherRef) reason = 'COMPARISON_ALTERNATIVE';
+  else if (activeRef) reason = 'ACTIVE_PRODUCT_FALLBACK';
   else if (!state.activeProduct && recommended) reason = 'RECOMMENDED_FALLBACK';
 
   return { queryTarget, explicitSwitch, nextActiveProduct, selectedProduct, reason, mentionedProducts, unknownNamedProduct };
