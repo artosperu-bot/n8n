@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { safeWrite } from '../../src/conversation/writer/WriterGuard.ts';
+import { renderCommercialMove } from '../../src/conversation/commercial/ResponsePolicy.ts';
 import { N8nAutomationBus } from '../../src/adapters/n8n/N8nAutomationBus.ts';
 import type { LlmProvider } from '../../src/ports/LlmProvider.ts';
 
@@ -128,4 +129,61 @@ test('n8n automation failure exposes a bounded response body for diagnosis',asyn
   assert.equal(result.delivered,false);
   assert.match(String(result.error),/HTTP 500/i);
   assert.match(String(result.error),/WORKFLOW_NOT_ACTIVE/i,'error body must survive in sanitized bounded diagnostics');
+});
+
+test('contextual benefit never verbalizes internal use-case prose literally',()=>{
+  const text=renderCommercialMove({
+    action:'RELATED_VALUE',kind:'CONTEXTUAL_BENEFIT',targetProduct:'Armor X13',intensity:'LIGHT',reason:'VERIFIED_FEATURE_WITH_CUSTOMER_CONTEXT',basis:['VERIFIED_PRODUCT_FEATURE','CUSTOMER_CONTEXT'],attribute:'RESISTENCIA_CAIDAS',
+    verifiedFacts:[{domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m',productId:'P-ARMOR-X13',source:'TEST'}],
+    relevantCustomerContext:{useCase:'Uso en entornos con caídas frecuentes; dispositivo que resista impactos por caídas de hasta ~1.5 m',problem:'caidas_frecuentes',priorities:['resistencia'],budget:null,objection:null},
+  } as any,'CAPABILITY')??'';
+  assert.doesNotMatch(text,/Uso en entornos|dispositivo que|;/i);
+  assert.ok(text.length<=150,`benefit must stay conversational, got ${text.length}`);
+  assert.match(text,/ca[ií]d|resisten|prote/i);
+});
+
+test('RELATED_VALUE keeps one useful continuation instead of stacking extra mini-catalog blocks',async()=>{
+  const input:any={
+    commercialContractPrepared:true,message:'¿Cuánta RAM física y RAM virtual tiene el Armor 22?',intent:'CAPABILITY',
+    state:{activeProduct:'Armor 22',useCase:'WhatsApp y llamadas'},directAnswer:'Tiene 8 GB de RAM física + hasta 8 GB de RAM virtual.',
+    nextBestAction:'RELATED_VALUE',executableNba:'RELATED_VALUE',finalExecutableNba:'RELATED_VALUE',decision:{nextBestAction:'RELATED_VALUE'},allowedProducts:['Armor 22'],
+    verifiedFacts:[{domain:'PRODUCT_RAG',key:'RAM_FISICA',value:'8 GB',productId:'P-ARMOR-22-256G',source:'TEST'}],
+    commercialMove:{action:'RELATED_VALUE',kind:'CONTEXTUAL_BENEFIT',targetProduct:'Armor 22',intensity:'LIGHT',reason:'VERIFIED_FEATURE_WITH_CUSTOMER_CONTEXT',basis:['VERIFIED_PRODUCT_FEATURE','CUSTOMER_CONTEXT'],attribute:'RAM_FISICA',verifiedFacts:[{domain:'PRODUCT_RAG',key:'RAM_FISICA',value:'8 GB',productId:'P-ARMOR-22-256G',source:'TEST'}],relevantCustomerContext:{useCase:'WhatsApp y llamadas',problem:null,priorities:['simplicidad'],budget:null,objection:null}},
+  };
+  const verbose='Tiene 8 GB de RAM física + hasta 8 GB de RAM virtual.\n- Contexto útil: almacenamiento interno 256 GB y microSD dedicada hasta 512 GB, conveniente si quieres respaldo o apps. Además, para WhatsApp y llamadas, este dato puede ser útil al elegir el equipo.';
+  const result=await safeWrite(llm(verbose),input,'fallback');
+  assert.doesNotMatch(result.answer,/Contexto útil|microSD|512 GB/i);
+  assert.match(result.answer,/8 GB de RAM física/i);
+  assert.match(result.answer,/WhatsApp|llamadas/i);
+  assert.ok(result.answer.length<=260,`N+1 should stay compact, got ${result.answer.length}`);
+});
+
+test('SPIN acknowledgement uses customer language instead of internal priority labels',async()=>{
+  const input:any={
+    commercialContractPrepared:true,message:'Quiero un celular para uso simple, WhatsApp y llamadas.',intent:'OTHER',
+    state:{useCase:'uso simple, WhatsApp y llamadas',priorities:['simplicidad','comunicaciones (WhatsApp y llamadas)']},
+    useCase:'uso simple, WhatsApp y llamadas',priorities:['simplicidad','comunicaciones (WhatsApp y llamadas)'],
+    decisionImpact:true,missingFact:'presupuesto máximo',nextBestAction:'ASK_MISSING_FACT',executableNba:'ASK_MISSING_FACT',finalExecutableNba:'ASK_MISSING_FACT',decision:{nextBestAction:'ASK_MISSING_FACT'},allowedProducts:[],
+  };
+  const result=await safeWrite(llm('¿Cuál es tu presupuesto máximo para el celular?'),input,'fallback');
+  assert.doesNotMatch(result.answer,/tomo en cuenta simplicidad/i);
+  assert.match(result.answer,/WhatsApp|llamadas|uso simple/i);
+  assert.match(result.answer,/presupuesto/i);
+});
+
+test('price objection stays consultative instead of dumping a mini catalog',async()=>{
+  const input:any={
+    commercialContractPrepared:true,message:'Está muy caro, ¿qué alternativa tienes?',intent:'HANDLE_PRICE_OBJECTION',
+    state:{activeProduct:'Armor X12 Pro',problem:'precio alto',objection:'precio'},problem:'precio alto',objection:'precio',
+    nextBestAction:'ASK_MISSING_FACT',executableNba:'ASK_MISSING_FACT',finalExecutableNba:'ASK_MISSING_FACT',missingFact:'presupuesto máximo',decision:{nextBestAction:'ASK_MISSING_FACT'},allowedProducts:['Armor X12 Pro'],
+    verifiedFacts:[
+      {domain:'PRODUCT_RAG',key:'RAM_FISICA',value:'4 GB',productId:'P-X12',source:'TEST'},
+      {domain:'PRODUCT_RAG',key:'BATERIA',value:'4860 mAh',productId:'P-X12',source:'TEST'},
+    ],
+  };
+  const verbose='Entiendo la objeción; una alternativa recomendada: Armor X12 Pro.\n- Memoria: 4 GB de RAM física + hasta 4 GB de RAM virtual; 64 GB de almacenamiento interno y microSD dedicada.\n- Conectividad: NFC, Wi-Fi, Bluetooth 5, Dual SIM, USB Type-C 2.0.\n- Otros: Procesador MediaTek Helio G36; Android 15; peso 257 g; grosor 14.34 mm.\n¿Cuál es tu presupuesto máximo?';
+  const result=await safeWrite(llm(verbose),input,'fallback');
+  assert.ok(result.answer.length<=360,`objection response should be compact, got ${result.answer.length}`);
+  assert.ok((result.answer.match(/^\s*-\s+/gm)??[]).length<=2,'objection should not dump three technical blocks');
+  assert.equal((result.answer.match(/\?/g)??[]).length,1);
 });
