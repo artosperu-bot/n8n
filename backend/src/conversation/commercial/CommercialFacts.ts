@@ -7,10 +7,15 @@ export type CommercialFacts = Pick<ConversationState,
 >;
 
 const PRIORITIES: Array<[string, RegExp]> = [
+  // Preserve explicit hard requirements in addition to their broad family.
+  ['termica', /\b(camara\s+termica|camara\s+termal|termica|thermal|flir)\b/],
+  ['vision_nocturna', /\b(vision\s+nocturna|camara\s+nocturna)\b/],
+  ['nfc', /\bnfc\b/],
+  ['5g', /\b5g\b/],
   ['resistencia', /\b(resistente|resistencia|caida|caidas|golpe|golpes|ip68|ip69k|rugged)\b/],
   ['bateria', /\b(bateria|autonomia|cargar|carga)\b/],
   ['camara', /\b(camara|foto|fotos|video|vision\s+nocturna)\b/],
-  ['rendimiento', /\b(rapido|rendimiento|procesador|ram|multitarea)\b/],
+  ['rendimiento', /\b(rapido|rendimiento|procesador|ram|multitarea|gaming|juego|jugar|free\s*fire|pubg|cod\s*mobile)\b/],
   ['conectividad', /\b(nfc|5g|4g|wifi|bluetooth|gps|datos)\b/],
   ['precio', /\b(precio|presupuesto|economico|barato|caro)\b/],
 ];
@@ -69,11 +74,12 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
   if (/\bconstruccion\b/.test(t)) sector = 'construccion';
   else if (/\b(mineria|minero)\b/.test(t)) sector = 'mineria';
   else if (/\b(logistica|almacen|reparto|delivery)\b/.test(t)) sector = 'logistica';
-  else if (/\b(seguridad|vigilancia)\b/.test(t)) sector = 'seguridad';
+  else if (/\bseguridad|vigilancia\b/.test(t)) sector = 'seguridad';
   else if (/\bcampo\b/.test(t)) sector = 'trabajo_campo';
 
   let useCase = normalizeGenuineUseCase(previous.useCase);
-  if (/\bdelivery\b|\brepart(?:o|idor|iendo)\b/.test(t)) useCase = 'delivery';
+  if (/\b(free\s*fire|pubg|cod\s*mobile|call\s+of\s+duty|gaming|jugar|juegos?)\b/.test(t)) useCase = 'gaming';
+  else if (/\bdelivery\b|\brepart(?:o|idor|iendo)\b/.test(t)) useCase = 'delivery';
   else if (/\btrabaj(?:o|an|amos)\s+en\s+campo\b/.test(t)) useCase = 'trabajo_en_campo';
   else if (/\buso\s+diario\b/.test(t)) useCase = 'uso_diario';
   else if (/\btrabajo\b/.test(t)) useCase = 'trabajo';
