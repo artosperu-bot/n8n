@@ -80,17 +80,29 @@ function sameAttributeSupport(input:GroundedDirectAnswerInput,excludeKeys:string
     .slice(0,3);
 }
 
+function verifiedValue(input:GroundedDirectAnswerInput,key:string):string|null{
+  const value=(input.verifiedFacts??[]).find(fact=>fact.domain==='PRODUCT_RAG'&&String(fact.key).toUpperCase()===key.toUpperCase())?.value;
+  return String(value??'').trim()||null;
+}
+
+function fullResistanceAnswer(input:GroundedDirectAnswerInput):string|null{
+  const fall=verifiedValue(input,'RESISTENCIA_CAIDAS');
+  const depth=verifiedValue(input,'PROFUNDIDAD_IP68');
+  const time=verifiedValue(input,'TIEMPO_IP68');
+  const certifications=(input.verifiedFacts??[]).map(supportLabel).filter((x):x is string=>Boolean(x)).filter((x,i,a)=>a.indexOf(x)===i);
+  if(!fall&&!depth&&!time&&!certifications.length)return null;
+  const pieces:string[]=[];
+  if(certifications.length)pieces.push(`cuenta con ${certifications.join(', ').replace(/, ([^,]+)$/,' y $1')}`);
+  if(fall)pieces.push(`resistencia a caídas de ${fall}`);
+  if(depth&&time)pieces.push(`protección IP68 documentada hasta ${depth} durante ${time}`);
+  else if(depth)pieces.push(`protección IP68 documentada hasta ${depth}`);
+  return `${productName(input)} ${pieces.join('; ')}.`;
+}
+
 function naturalFactLabel(key:string):string{
   const labels:Record<string,string>={
-    NFC:'NFC',
-    '5G':'5G',
-    '4G_LTE':'4G LTE',
-    VISION_NOCTURNA:'visión nocturna',
-    CAMARA_TERMICA:'cámara térmica',
-    BATERIA_MAH:'batería',
-    CARGA_W:'carga',
-    CAMARA_NOCTURNA_MP:'cámara nocturna',
-    RESOLUCION_TERMICA:'resolución térmica',
+    NFC:'NFC','5G':'5G','4G_LTE':'4G LTE',VISION_NOCTURNA:'visión nocturna',CAMARA_TERMICA:'cámara térmica',
+    BATERIA_MAH:'batería',CARGA_W:'carga',CAMARA_NOCTURNA_MP:'cámara nocturna',RESOLUCION_TERMICA:'resolución térmica',
   };
   return labels[key.toUpperCase()]??key.toLocaleLowerCase('es').replace(/[_-]+/g,' ');
 }
@@ -116,13 +128,18 @@ export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):strin
   }
 
   if(/\bram\b|memoria/.test(requested)){
-    const physical=(input.verifiedFacts??[]).find(fact=>fact.key==='RAM_FISICA')?.value;
-    const virtual=(input.verifiedFacts??[]).find(fact=>fact.key==='RAM_VIRTUAL')?.value;
-    if(physical&&virtual)return `Tiene ${physical} de RAM física + ${virtual} de RAM virtual.`;
+    const physical=verifiedValue(input,'RAM_FISICA');
+    const virtual=verifiedValue(input,'RAM_VIRTUAL');
+    if(physical&&virtual)return `Tiene ${physical} de RAM física + hasta ${virtual} de RAM virtual.`;
+  }
+
+  if(/resisten|rugged|proteccion|durab/.test(requested)&&!/solo\s+caida/.test(requested)){
+    const full=fullResistanceAnswer(input);
+    if(full)return full;
   }
 
   if(/caida|caidas|golpe|golpes/.test(requested)){
-    const fall=(input.verifiedFacts??[]).find(fact=>fact.key==='RESISTENCIA_CAIDAS')?.value;
+    const fall=verifiedValue(input,'RESISTENCIA_CAIDAS');
     if(fall){
       const support=sameAttributeSupport(input,['RESISTENCIA_CAIDAS']);
       const certifications=support.length?` También cuenta con ${support.join(', ').replace(/, ([^,]+)$/,' y $1')}.`:'';
@@ -130,18 +147,13 @@ export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):strin
     }
   }
 
-  // Raw RAG is evidence, not presentation text. Only normalized PRODUCT_RAG facts may
-  // become the generic direct answer when no exact extractor above applies.
   const displayFact=customerDisplayFact(input);
   if(!displayFact)return null;
   const display=String(displayFact.value??'').trim();
   if(!display)return null;
   const label=naturalFactLabel(String(displayFact.key??'EVIDENCIA'));
 
-  if(/^(?:s[ií]|no)$/i.test(display)){
-    return /^s/i.test(display)?`Sí, tiene ${label}.`:`No, no tiene ${label}.`;
-  }
-
+  if(/^(?:s[ií]|no)$/i.test(display))return /^s/i.test(display)?`Sí, tiene ${label}.`:`No, no tiene ${label}.`;
   const labelled=display.match(/^([^:\n]{2,80})\s*:\s*([^\n]+?)\s*\.?$/);
   if(labelled){
     const naturalLabel=labelled[1].trim();
@@ -149,6 +161,5 @@ export function buildGroundedDirectAnswer(input:GroundedDirectAnswerInput):strin
     if(/ram\s+f[ií]sica/i.test(naturalLabel))return `Tiene ${value} de RAM física.`;
     return `${naturalLabel}: ${value}.`;
   }
-
   return `${label.charAt(0).toUpperCase()+label.slice(1)}: ${display.replace(/[.!?]+$/,'')}.`;
 }
