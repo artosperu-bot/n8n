@@ -117,22 +117,32 @@ export function renderVerifiedFact(fact:VerifiedFact|null|undefined):string|null
 }
 export function priceResponse(quote:ProductQuote|null,softClose=false,commercialMove:CommercialMove|null=null):string{
   if(!quote||quote.price==null)return'El precio no está disponible en este momento.';
-  const fact=`${shortProduct(quote.shortName??quote.product)} está a S/ ${quote.price}.`;
-  const availability=quote.stock==null?null:(quote.stock>0?'También está disponible.':'Por ahora no está disponible.');
-  if(availability)return`${fact} ${availability}`;
+  const product=shortProduct(quote.shortName??quote.product);
+  const fact=`${product} está a S/ ${quote.price}.`;
+  if(quote.stock!=null){
+    const availability=quote.stock>0?'Sí está disponible.':'Por ahora no está disponible.';
+    const fulfillment=softClose&&quote.stock>0?' ¿Prefieres envío o recogerlo en nuestro local?':'';
+    return`${fact} ${availability}${fulfillment}`;
+  }
   const continuation=renderCommercialMove(commercialMove,'PRICE');
-  return softClose?`${fact} Si te cuadra, puedo revisar stock para avanzar.`:continuation?`${fact} ${continuation}`:fact;
+  return continuation?`${fact} ${continuation}`:fact;
 }
 export function stockResponse(quote:ProductQuote|null,requestedQuantity?:number|null,softClose=false,commercialMove:CommercialMove|null=null):string{
   if(!quote||quote.stock==null)return'La disponibilidad está pendiente de actualización.';
+  const product=shortProduct(quote.shortName??quote.product);
   if(requestedQuantity!=null&&requestedQuantity>1){
     const direct=quote.stock>=requestedQuantity?'Sí, está disponible para esa cantidad.':'Para esa cantidad necesito validar disponibilidad.';
-    const continuation=renderCommercialMove(commercialMove,'STOCK');
-    return continuation?`${direct} ${continuation}`:direct;
+    const price=quote.price!=null?` ${product} está a S/ ${quote.price}.`:'';
+    const fulfillment=softClose&&quote.stock>=requestedQuantity?' ¿Prefieres envío o recogerlo en nuestro local?':'';
+    return`${direct}${price}${fulfillment}`;
   }
   if(quote.stock<=0)return'Ahora no está disponible.';
+  if(softClose){
+    const price=quote.price!=null?`${product} está a S/ ${quote.price} y sí está disponible.`:'Sí, está disponible.';
+    return`${price} ¿Prefieres envío o recogerlo en nuestro local?`;
+  }
   const continuation=renderCommercialMove(commercialMove,'STOCK');
-  return softClose?'Sí, está disponible. ¿Quieres avanzar con ese modelo?':continuation?`Sí, está disponible. ${continuation}`:'Sí, está disponible.';
+  return continuation?`Sí, está disponible. ${continuation}`:'Sí, está disponible.';
 }
 export function imageResponse(images:ProductImage[]):string{return images.map(x=>x.url).filter(x=>/^https?:\/\//i.test(x)).join('\n');}
 export function institutionalResponse(evidence:RagEvidence[]):string|null{
