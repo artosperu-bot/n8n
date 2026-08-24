@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderCommercialMove } from '../../src/conversation/commercial/ResponsePolicy.ts';
 import { buildColdRagComparison } from '../../src/conversation/commercial/FullRagComparison.ts';
-import { buildFullRagAnswer } from '../../src/conversation/commercial/FullRagAnswerKernel.ts';
+import { applyFullRagWritePolicy } from '../../src/conversation/commercial/FullRagWritePolicy.ts';
 import { evaluatePostAnswerCommercialProgression } from '../../src/conversation/nba/PostAnswerCommercialProgression.ts';
 import type { CommercialMove } from '../../src/ports/LlmProvider.ts';
 
@@ -23,20 +23,25 @@ test('isolated capability question remains factual without artificial discovery'
 });
 
 test('broad product overview is a concise commercial summary instead of a six-section ficha dump',()=>{
-  const rag:any[]=[
-    {domain:'PRODUCT',section:'RENDIMIENTO',source:'TEST',productId:'P-22',text:'Producto: Armor 22\nProcesador: MediaTek Helio G96.\nGPU: Arm Mali-G57 MC2.'},
-    {domain:'PRODUCT',section:'MEMORIA',source:'TEST',productId:'P-22',text:'Producto: Armor 22\nRAM física: 8 GB.\nRAM virtual máxima: 8 GB.\nAlmacenamiento interno: 256 GB.\nMicroSD máxima: 512 GB.'},
-    {domain:'PRODUCT',section:'BATERIA',source:'TEST',productId:'P-22',text:'Producto: Armor 22\nCapacidad de batería: 6600 mAh.\nCarga cableada: 33 W.'},
-    {domain:'PRODUCT',section:'RESISTENCIA',source:'TEST',productId:'P-22',text:'Producto: Armor 22\nCertificación IP68: Sí.\nCertificación IP69K: Sí.\nMIL-STD-810H: Sí.\nResistencia a caídas: 1.5 m.'},
-    {domain:'PRODUCT',section:'CAMARA',source:'TEST',productId:'P-22',text:'Producto: Armor 22\nCámara principal: 64 MP.\nCámara frontal: 8 MP.'},
-    {domain:'PRODUCT',section:'PANTALLA',source:'TEST',productId:'P-22',text:'Producto: Armor 22\nTamaño de pantalla: 6.58 pulgadas.\nFrecuencia de refresco: 120 Hz.'},
+  const facts:any[]=[
+    {domain:'PRODUCT_RAG',key:'RAM_FISICA',value:'8 GB',productId:'P-22',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'RAM_VIRTUAL',value:'8 GB',productId:'P-22',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'ALMACENAMIENTO',value:'256 GB',productId:'P-22',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'BATERIA_MAH',value:'6600 mAh',productId:'P-22',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'CARGA_W',value:'33 W',productId:'P-22',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'IP68',value:'Sí',productId:'P-22',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'IP69K',value:'Sí',productId:'P-22',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'MIL_STD_810H',value:'Sí',productId:'P-22',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m',productId:'P-22',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'CAMARA_PRINCIPAL_MP',value:'64 MP',productId:'P-22',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'PANTALLA_HZ',value:'120 Hz',productId:'P-22',source:'TEST'},
   ];
-  const result=buildFullRagAnswer({message:'Hola, estoy viendo el Armor 22, qué tal es?',intent:'PRODUCT_INFO',state:{activeProduct:'Armor 22'},activeProduct:'Armor 22',resolvedProduct:'Armor 22',rag} as any);
-  const answer=result?.answer??'';
+  const prepared=applyFullRagWritePolicy({message:'Hola, estoy viendo el Armor 22, qué tal es?',intent:'PRODUCT_INFO',state:{activeProduct:'Armor 22'},activeProduct:'Armor 22',resolvedProduct:'Armor 22',verifiedFacts:facts} as any);
+  const answer=prepared.directAnswer??'';
   assert.match(answer,/Armor 22/i);
-  assert.match(answer,/Helio G96|6600 mAh|IP68/i);
-  assert.doesNotMatch(answer,/\n4\.|\n5\.|\n6\./);
-  assert.doesNotMatch(answer,/Cámaras:.*Pantalla:/is);
+  assert.match(answer,/8 GB|6600 mAh|IP68/i);
+  assert.doesNotMatch(answer,/cámaras ofrece|pantalla es/i);
+  assert.ok(answer.length<500,`overview demasiado largo: ${answer.length}`);
 });
 
 test('cold comparison is composed from RAG facts instead of an empty fallback',()=>{
