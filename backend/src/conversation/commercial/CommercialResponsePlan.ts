@@ -74,9 +74,23 @@ export function buildCommercialResponsePlan(input: LlmWriteInput, factualCore: s
   };
 }
 
+function authorizedActionInstruction(exactNba: string): string {
+  if (exactNba === 'ANSWER_ONLY') return 'termina después de responder';
+  if (exactNba === 'RELATED_VALUE') return 'añade solo el valor relacionado ya autorizado, sin CTA adicional';
+  if (exactNba === 'ASK_MISSING_FACT') return 'formula solo la pregunta faltante autorizada';
+  if (exactNba === 'OFFER_ALTERNATIVE') return 'ofrece solo la alternativa ya autorizada';
+  if (exactNba === 'COMPARE') return 'presenta solo la comparación autorizada';
+  if (exactNba === 'RECOMMEND') return 'verbaliza únicamente la recomendación ya autorizada';
+  if (exactNba === 'SOFT_CLOSE') return 'realiza solo el cierre suave autorizado';
+  if (exactNba === 'COLLECT_RESERVATION_DATA') return 'solicita únicamente el dato de reserva que falta';
+  if (exactNba === 'EXECUTE_RESERVATION') return 'continúa únicamente con el paso de reserva autorizado, sin afirmar éxito antes de confirmación';
+  if (exactNba === 'ASSISTED_HANDOFF') return 'ofrece solo la derivación humana autorizada';
+  return 'realiza únicamente la acción ya autorizada';
+}
+
 export function buildCommercialResponseInstruction(plan: CommercialResponsePlan): string {
   const context = plan.contextFocus.length ? plan.contextFocus.join('; ') : 'sin contexto adicional';
-  const action = plan.exactNba === 'ANSWER_ONLY' ? 'termina después de responder' : `ejecuta únicamente ${plan.exactNba}`;
+  const action = authorizedActionInstruction(plan.exactNba);
   const safety = 'No inventes escasez, urgencia, popularidad, prueba social, rendimiento, precio, stock ni capacidades.';
 
   if (plan.mode === 'DISCOVERY_SPIN') {
