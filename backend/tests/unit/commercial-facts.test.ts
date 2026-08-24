@@ -35,7 +35,7 @@ test('recognizes strong purchase signals without returning to discovery', () => 
   }
 });
 
-test('delivery is persisted as a use case so recommendation can infer battery resistance and connectivity needs',()=>{
+test('delivery is persisted as a use case so explicit repeated-use criteria can become priorities',()=>{
   const f=extractCommercialFacts('hago delivery todo el dia, quiero algo q aguante golpes',{});
   assert.equal(f.useCase,'delivery');
   assert.ok(f.priorities?.includes('resistencia'));
@@ -57,11 +57,26 @@ test('an isolated durability question does not fabricate a customer problem or p
   assert.equal(f.spinFacts?.some(value=>/problema:|prioridad:resistencia/i.test(value)),false);
 });
 
-test('a declared recurring drop problem still becomes problem and resistance priority',()=>{
+test('a recurring drop statement is a SPIN problem, not automatically a need-payoff',()=>{
+  const f=extractCommercialFacts('Se me cae seguido el celular.',{useCase:'trabajo_construccion'});
+  assert.equal(f.problem,'caidas_frecuentes');
+  assert.deepEqual(f.priorities,[]);
+  assert.ok(f.spinFacts?.includes('problema:caidas_frecuentes'));
+  assert.equal(f.spinFacts?.some(value=>/^prioridad:/i.test(value)),false);
+});
+
+test('a declared implication is stored separately from problem and need',()=>{
+  const f=extractCommercialFacts('Cuando pasa pierdo tiempo y tengo que parar el trabajo.',{useCase:'trabajo_construccion',problem:'caidas_frecuentes',spinFacts:['uso:trabajo_construccion','problema:caidas_frecuentes']});
+  assert.ok(f.spinFacts?.includes('implicacion:perdida_tiempo_interrupcion'));
+  assert.deepEqual(f.priorities,[]);
+});
+
+test('a recurring drop plus explicit resistance requirement becomes both problem and need',()=>{
   const f=extractCommercialFacts('Se me cae seguido el celular y necesito que sea resistente.',{});
   assert.equal(f.problem,'caidas_frecuentes');
   assert.ok(f.priorities?.includes('resistencia'));
   assert.ok(f.spinFacts?.includes('problema:caidas_frecuentes'));
+  assert.ok(f.spinFacts?.includes('prioridad:resistencia'));
 });
 
 test('an explicit hard requirement still becomes a priority',()=>{
