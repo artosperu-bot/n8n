@@ -38,7 +38,7 @@ test('contextual FULL RAG reaches the commercial writer with immutable factual c
   assert.match(String(spy.received()?.directAnswer),/1[.,]5\s*m/i);
   assert.equal(spy.received()?.commercialResponsePlan?.mode,'CONTEXTUAL_FAB');
   assert.match(String(spy.received()?.deterministicAnswer),/contexto|necesidad|criterio/i);
-  assert.doesNotMatch(String(spy.received()?.deterministicAnswer),/CONTEXTUAL_FAB|FAKE_SCARCITY|FAKE_URGENCY/i);
+  assert.doesNotMatch(String(spy.received()?.deterministicAnswer),/CONTEXTUAL_FAB|FAKE_SCARCITY|FAKE_URGENCY|RELATED_VALUE|SOFT_CLOSE|ANSWER_ONLY/i);
   assert.match(result.text,/construcción/i);
 });
 
