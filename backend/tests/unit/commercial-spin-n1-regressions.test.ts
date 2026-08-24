@@ -32,7 +32,7 @@ test('SPIN exposes the next missing conversational fact in order without making 
   assert.equal(situation.stage,'PROBLEM');
 
   const problem=evaluateSpinReadiness({useCase:'trabajo_construccion',problem:'caidas_frecuentes'});
-  assert.equal(problem.nextMissingFact,'impacto del problema');
+  assert.equal(problem.nextMissingFact,'impacto');
   assert.equal(problem.stage,'IMPLICATION');
 
   const implication=evaluateSpinReadiness({useCase:'trabajo_construccion',problem:'caidas_frecuentes',spinFacts:['implicacion:me hace perder tiempo en obra']});
@@ -117,7 +117,7 @@ test('construction problem does not jump to budget as the next SPIN question',()
     allowedProducts:[],
   });
   assert.notEqual(prepared.missingFact,'presupuesto máximo');
-  assert.equal(prepared.missingFact,'impacto del problema');
+  assert.equal(prepared.missingFact,'impacto');
 });
 
 test('writer contract uses only explicit customer implications, never ones derived from a problem label',()=>{
@@ -144,7 +144,7 @@ test('writer executes the authorized implication question and only one question'
   });
   const result=await safeWrite(echoWriter,prepared,'Tomo ese dato como contexto.');
   assert.equal(result.nextBestAction,'ASK_MISSING_FACT');
-  assert.equal(result.missingFact,'impacto del problema');
+  assert.equal(result.missingFact,'impacto');
   assert.match(result.answer,/genera|interrupciones|p[eé]rdida de tiempo/i);
   assert.equal((result.answer.match(/\?/g)??[]).length,1);
 });
@@ -194,6 +194,8 @@ test('neutral OTHER turns cannot fabricate SPIN memory unless answering a pendin
   assert.equal(neutral.spinContribution,null);
   assert.deepEqual(neutral.priorities,[]);
 
+  // Keep one legacy-state assertion: old persisted sessions may still carry the
+  // previous label and must remain understandable while new turns use "impacto".
   const pending=validateTurnDecision(decision({...planner,spinContribution:'IMPLICACION'}),{activeProduct:'Armor 22',useCase:'trabajo',problem:'caidas',pendingMissingFact:'impacto del problema'},['Armor 22'],deterministic);
   assert.equal(pending.spinContribution,'IMPLICACION');
 });
