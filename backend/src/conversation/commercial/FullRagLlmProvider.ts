@@ -31,6 +31,9 @@ function humanizeKernel(text:string,input:LlmWriteInput,includeCommercialContinu
   return clean.trim();
 }
 function deterministicResult(text:string,model:string):LlmResult{return{text,model,usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},durationMs:0};}
+function factualDecision(result:LlmDecisionResult,primaryIntent:'PRODUCT_INFO'|'CAPABILITY',attributes?:string[]):LlmDecisionResult{
+  return{...result,decision:{...result.decision,primaryIntent,attributes:attributes??result.decision.attributes,customerNeed:null,customerProblem:null,priorities:[],spinContribution:null}};
+}
 
 export class FullRagLlmProvider implements LlmProvider{
   readonly #delegate:LlmProvider;
@@ -39,8 +42,8 @@ export class FullRagLlmProvider implements LlmProvider{
     if(!this.#delegate.decide)throw new Error('Wrapped LLM does not implement decide');
     const result=await this.#delegate.decide(input);const intent=String(result.decision.primaryIntent).toUpperCase();
     if(isExplicitUseCase(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY','PRICE','STOCK'].includes(intent))return{...result,decision:{...result.decision,primaryIntent:'EVALUATE_USE'}};
-    if(isBroadProductInfo(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY'].includes(intent))return{...result,decision:{...result.decision,primaryIntent:'PRODUCT_INFO',attributes:[]}};
-    if(isDirectTechnicalCapability(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY','PRICE','STOCK'].includes(intent))return{...result,decision:{...result.decision,primaryIntent:'CAPABILITY'}};
+    if(isBroadProductInfo(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY'].includes(intent))return factualDecision(result,'PRODUCT_INFO',[]);
+    if(isDirectTechnicalCapability(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY','PRICE','STOCK'].includes(intent))return factualDecision(result,'CAPABILITY');
     if(isBroadComparison(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY'].includes(intent))return{...result,decision:{...result.decision,primaryIntent:'COMPARE',attributes:[]}};
     return result;
   }
