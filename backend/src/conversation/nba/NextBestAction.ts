@@ -29,8 +29,6 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'PRICE_AVAILABILITY':
     case 'PRICE':
     case 'STOCK':
-      // SQL resolves price + availability together. Once a product is known,
-      // the useful +1 is fulfillment (delivery vs pickup), not asking stock again.
       return resolvedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
     case 'PRODUCT_INFO': {
@@ -46,17 +44,15 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'ORDER_STATUS':
       return 'ANSWER_ONLY';
 
+    case 'FULFILLMENT_SELECTION':
+      return resolvedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
+
     case 'POLICY':
-      // If the previous turn already offered delivery/pickup, a policy answer
-      // such as "envío a Ate" or "prefiero recojo" should move one step to reservation.
       return state.activeProduct && String(state.pendingCommercialAction??state.lastNba??'').toUpperCase()==='SOFT_CLOSE'
         ? 'SOFT_CLOSE'
         : 'ANSWER_ONLY';
 
     case 'EVALUATE_USE': {
-      // SPIN remains useful context, but it must not become a form the customer
-      // has to complete. Once use + pain/need + product fit are already known,
-      // move to the next commercial result: offer price + availability.
       if(resolvedProduct&&actionableFit)return'SOFT_CLOSE';
       const spin=evaluateSpinReadiness(state);
       if(spin.nextMissingFact)return'ASK_MISSING_FACT';
@@ -71,8 +67,6 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
 
     case 'RECOMMEND':
     case 'RECOMMEND_WITHIN_BUDGET': {
-      // If a recommendation is already grounded and we have enough context to
-      // explain why it fits, do not reopen SPIN merely to fill missing boxes.
       if(resolvedProduct&&actionableFit)return'SOFT_CLOSE';
       const spin=evaluateSpinReadiness(state);
       return spin.nextMissingFact ? 'ASK_MISSING_FACT' : 'ANSWER_ONLY';
