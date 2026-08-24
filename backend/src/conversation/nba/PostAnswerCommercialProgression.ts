@@ -15,13 +15,13 @@ type ProgressionInput={
 type ProgressionResult={level:ProgressionLevel;candidateNba:string;reason:string;};
 
 const CLOSING_ACTIONS=new Set(['COLLECT_RESERVATION_DATA','ASSISTED_HANDOFF','EXECUTE_RESERVATION']);
-const PROGRESSABLE_ANSWERS=new Set(['PRICE','PRICE_AVAILABILITY','STOCK','CAPABILITY','ATTRIBUTE','PRODUCT_INFO','EVALUATE_USE']);
-const EXPLORATORY_FACTUAL_INTENTS=new Set(['CAPABILITY','ATTRIBUTE','PRODUCT_INFO','EVALUATE_USE']);
+const PROGRESSABLE_ANSWERS=new Set(['PRICE','PRICE_AVAILABILITY','STOCK','EVALUATE_USE']);
+const EXPLORATORY_FACTUAL_INTENTS=new Set(['EVALUATE_USE']);
 
 function hasDecisionContext(state:ConversationState):boolean{
   // A single inferred attribute priority (e.g. CAMARA from "¿tiene visión nocturna?")
   // is not enough to fabricate commercial context. Real use/problem or multiple
-  // explicit criteria are required before translating a fact into FAB/N+1.
+  // explicit criteria are required before translating a fact into consultative progression.
   return Boolean(state.useCase||state.problem||(state.priorities?.length??0)>=2);
 }
 
@@ -38,14 +38,15 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
   if(state.purchaseSignal||intent==='PURCHASE'||CLOSING_ACTIONS.has(current))return{level:'HIGH',candidateNba:CLOSING_ACTIONS.has(current)?current:'COLLECT_RESERVATION_DATA',reason:'PURCHASE_CONTINUITY'};
   if(/^CIERRE/.test(String(state.commercialStage??'').toUpperCase())&&current==='ASK_MISSING_FACT')return{level:'HIGH',candidateNba:'ANSWER_ONLY',reason:'CLOSING_STAGE_BLOCKS_DISCOVERY'};
 
+  // FAB belongs to the current factual answer. Browsing a product or asking a
+  // focused capability must not become a synthetic RELATED_VALUE / CTA merely
+  // because context exists. A real purchase signal above remains authoritative.
+  if(['PRODUCT_INFO','CAPABILITY','ATTRIBUTE'].includes(intent))return{level:'LOW',candidateNba:'ANSWER_ONLY',reason:'FACTUAL_ANSWER_COMPLETE'};
+
   const explicitInterest=Boolean(state.interestSignal||state.selectedProduct);
   if(explicitInterest&&input.resolvedProduct&&PROGRESSABLE_ANSWERS.has(intent))return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'EXPLICIT_INTEREST'};
   if(!['ANSWER_ONLY','ASK_MISSING_FACT'].includes(current))return{level:'MEDIUM',candidateNba:current,reason:'EXISTING_HIGHER_VALUE_ACTION'};
   if(state.objection&&(input.verifiedAlternatives??0)>0)return{level:'MEDIUM',candidateNba:'OFFER_ALTERNATIVE',reason:'OBJECTION_WITH_VERIFIED_ALTERNATIVE'};
-
-  if(intent==='PRODUCT_INFO'&&current==='ASK_MISSING_FACT'&&!hasDecisionContext(state))return{level:'LOW',candidateNba:'ASK_MISSING_FACT',reason:'OVERVIEW_NEEDS_ONE_DECISION_CRITERION'};
-
-  if(['CAPABILITY','ATTRIBUTE'].includes(intent)&&!hasDecisionContext(state))return{level:'LOW',candidateNba:'ANSWER_ONLY',reason:'FOCUSED_FACT_NO_CONTEXT'};
 
   if(input.verifiedCurrentAnswer&&input.resolvedProduct&&input.relatedValueAvailable&&hasDecisionContext(state)&&EXPLORATORY_FACTUAL_INTENTS.has(intent))return{level:'LOW',candidateNba:'RELATED_VALUE',reason:'CONTEXTUAL_VERIFIED_CONTINUATION'};
 
