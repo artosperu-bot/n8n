@@ -42,6 +42,11 @@ function sanitize(text:string,input:LlmWriteInput):string{
   if(['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent)&&nba==='ANSWER_ONLY')clean=clean.replace(/^\s*Te recomiendo\s+([^.:\n]+)(\s*[:.]?)/i,(_m,product)=>`Para lo que buscas, me iría por ${String(product).trim()}.`);
   return clean;
 }
+function softCloseQuestion(input:LlmWriteInput):string{
+  return input.commercialResponsePlan?.closePurpose==='RESERVATION'
+    ?'¿Quieres que te lo reserve?'
+    :'¿Prefieres envío o recogerlo en nuestro local?';
+}
 function humanizeKernel(text:string,input:LlmWriteInput,includeCommercialContinuation=true):string{
   let clean=String(text??'')
     .replace(/protecci[oó]n\s+IP68\s+hasta\s+([^,.;\n]+)\s+durante\s+([^,.;\n]+)/gi,'protección frente al agua con IP68 hasta $1 de profundidad durante $2')
@@ -52,7 +57,7 @@ function humanizeKernel(text:string,input:LlmWriteInput,includeCommercialContinu
     clean=clean.replace(/^Para lo que buscas, me iría por /,`Dentro de tu presupuesto de S/ ${budget}, me iría por `);
   }
   const nba=String(input.nextBestAction??input.finalExecutableNba??input.decision?.nextBestAction??'').toUpperCase();
-  if(includeCommercialContinuation&&nba==='SOFT_CLOSE'&&!/[¿?]/.test(clean))clean=`${clean.trim()} ¿Quieres que te revise disponibilidad?`;
+  if(includeCommercialContinuation&&nba==='SOFT_CLOSE'&&!/[¿?]/.test(clean))clean=`${clean.trim()} ${softCloseQuestion(input)}`;
   return clean.trim();
 }
 function deterministicResult(text:string,model:string):LlmResult{return{text,model,usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},durationMs:0};}
