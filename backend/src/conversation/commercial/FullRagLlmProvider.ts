@@ -13,6 +13,12 @@ function isExplicitUseCase(message:string):boolean{
     || /\b(?:para|uso para)\b[^.!?]{0,55}\b(?:trabajo|construccion|campo|mineria|delivery|reparto|whatsapp|correo|multitarea|varias apps|free fire|pubg|cod mobile|gaming|jugar)\b/.test(t)
     || /\b(?:trabajo en campo|trabajo en construccion|uso diario)\b/.test(t);
 }
+function isExplicitDiscoveryFact(message:string):boolean{
+  if(/[¿?]/.test(message))return false;
+  const t=fold(message);
+  return /\b(?:se me cae|se me rompe|se me malogra|me falla|me dura poco|me quedo sin|pierdo tiempo|perdemos tiempo|tengo que parar|tengo que detener|me interrumpe|me hace perder)\b/.test(t)
+    || /\b(?:lo mas importante|mi prioridad|priorizo|me importa|necesito que|quiero que sea|busco que sea)\b/.test(t);
+}
 function isDirectTechnicalCapability(message:string):boolean{const t=fold(message);const feature=/\b(nfc|google pay|wifi|wi fi|bluetooth|infrarrojo|5g|4g|lte|dual sim|sim|audifono|audifonos|jack|ip68|ip69k|vision nocturna|camara nocturna|camara termica)\b/.test(t);const form=/\b(tiene|trae|soporta|funciona con|trabaja con|agarra|es|sirve para)\b/.test(t);return feature&&form&&!/\b(cual|que)\b[^?.!]{0,45}\b(recomiend|conviene|mejor)\b/.test(t);}
 function isBroadComparison(message:string):boolean{const t=fold(message);const compare=/\b(compara|comparame|comparar|comparacion|diferencia|vs|versus)\b/.test(t);const criterion=/\b(bateria|autonomia|carga|resistencia|resistente|caida|golpe|camara|foto|video|ram|memoria|almacenamiento|procesador|rendimiento|gaming|jugar|free fire|pantalla|hz|nfc|5g|termica|peso|tamano)\b/.test(t);return compare&&!criterion;}
 function isTradeoffComparisonFollowup(message:string,state:LlmDecisionInput['state']):boolean{
@@ -61,6 +67,7 @@ export class FullRagLlmProvider implements LlmProvider{
     if(!this.#delegate.decide)throw new Error('Wrapped LLM does not implement decide');
     const result=await this.#delegate.decide(input);const intent=String(result.decision.primaryIntent).toUpperCase();
     if(isExplicitUseCase(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY','PRICE','STOCK'].includes(intent))return{...result,decision:{...result.decision,primaryIntent:'EVALUATE_USE'}};
+    if(isExplicitDiscoveryFact(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY','PRICE','STOCK'].includes(intent))return{...result,decision:{...result.decision,primaryIntent:'EVALUATE_USE'}};
     if(isBudgetRecommendationFollowup(input.message,input.state)&&!['PURCHASE','QUOTE','POLICY','WARRANTY'].includes(intent))return{...result,decision:{...result.decision,primaryIntent:'RECOMMEND_WITHIN_BUDGET'}};
     if(isBroadProductInfo(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY'].includes(intent))return factualDecision(result,'PRODUCT_INFO',[]);
     if(isDirectTechnicalCapability(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY','PRICE','STOCK'].includes(intent))return factualDecision(result,'CAPABILITY');
