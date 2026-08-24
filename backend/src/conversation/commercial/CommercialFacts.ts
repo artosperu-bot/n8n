@@ -21,6 +21,21 @@ const PRIORITIES: Array<[string, RegExp]> = [
 
 function unique(values: string[]): string[] { return [...new Set(values)]; }
 
+function isFeatureQuestion(text:string):boolean {
+  const asks=/[¿?]/.test(text)
+    || /^\s*(?:y\s+)?(?:tiene|trae|soporta|agarra|es|cuanto|cuanta|que|cual|de cuanto|a cuantos|hasta que)\b/.test(text);
+  const requirementCue=/\b(?:necesito|necesitamos|requiero|requerimos|busco|buscamos|quiero|queremos|priorizo|priorizamos|prefiero|preferimos|me importa|nos importa|si o si|debe tener|tiene que tener|que sea|que aguante|con buena|con buen|uso .* siempre|todo el tiempo)\b/.test(text);
+  return asks&&!requirementCue;
+}
+
+function currentPriorityMentions(text:string):string[] {
+  if(isFeatureQuestion(text))return[];
+  const found=PRIORITIES.filter(([,rx])=>rx.test(text)).map(([key])=>key);
+  // Specific hard requirements are more useful than their broad umbrella.
+  if(found.includes('nfc')||found.includes('5g'))return unique(found.filter(key=>key!=='conectividad'));
+  return unique(found);
+}
+
 function hasStrongPurchaseSignal(text: string): boolean {
   const useCaseStatement=/\b(?:lo|la)\s+quiero\s+para\b/.test(text);
   return /\bquiero\s+(?:avanzar(?:\s+con\s+la\s+compra)?|compr(?:ar|arlo|arla)?|ese|esa|este|esta)\b/.test(text)
@@ -92,7 +107,7 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
   else if (/\bbateria\b[^.!?]{0,50}\b(se\s+acaba|no\s+aguanta|dura\s+poco)\b|\bcasi\s+no\s+tengo\s+donde\s+cargar/.test(t)) problem = 'autonomia_insuficiente';
   else if (/\bse\s+rompe[n]?\b|\bfragil/.test(t)) problem = 'durabilidad';
 
-  const priorities = unique([...(previous.priorities ?? []), ...PRIORITIES.filter(([, rx]) => rx.test(t)).map(([key]) => key), ...(explicitBudgetRecommendation(t)?['precio']:[])]);
+  const priorities = unique([...(previous.priorities ?? []), ...currentPriorityMentions(t), ...(explicitBudgetRecommendation(t)?['precio']:[])]);
   const invoiceRequired = /\bfactura\b|\bruc\b/.test(t) ? true : (previous.invoiceRequired ?? null);
   const objection = /\b(muy\s+caro|esta\s+caro|se\s+me\s+hace\s+caro|sale\s+de\s+mi\s+presupuesto|mas\s+barato)\b/.test(t)
     ? 'precio'
