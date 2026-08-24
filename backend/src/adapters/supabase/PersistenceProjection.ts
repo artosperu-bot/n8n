@@ -77,6 +77,9 @@ export function projectCommercialPersistence(previous:ConversationState,current:
       accion_pendiente_turno:action,
     },
     context:{
+      actividad_activa:current.useCase??current.sector??null,
+      problema_activo:current.problem??null,
+      senal_compra:current.purchaseSignal??false,
       customer:{
         sector:current.sector??null,
         useCase:current.useCase??null,
