@@ -21,19 +21,34 @@ const PRIORITIES: Array<[string, RegExp]> = [
 
 function unique(values: string[]): string[] { return [...new Set(values)]; }
 
+function hasPriorityCue(text:string):boolean{
+  return /\b(?:necesito|necesitamos|requiero|requerimos|busco|buscamos|quiero|queremos|priorizo|priorizamos|prefiero|preferimos|me importa|nos importa|lo mas importante|mi prioridad|si o si|debe tener|tiene que tener|que sea|que aguante|con buena|con buen|uso .* siempre|todo el tiempo)\b/.test(text);
+}
+
 function isFeatureQuestion(text:string):boolean {
   const asks=/[¿?]/.test(text)
     || /^\s*(?:y\s+)?(?:tiene|trae|soporta|agarra|es|cuanto|cuanta|que|cual|de cuanto|a cuantos|hasta que)\b/.test(text);
-  const customerContextCue=/\b(?:necesito|necesitamos|requiero|requerimos|busco|buscamos|quiero|queremos|priorizo|priorizamos|prefiero|preferimos|me importa|nos importa|si o si|debe tener|tiene que tener|que sea|que aguante|con buena|con buen|uso .* siempre|todo el tiempo|se me|se nos|se les|me pasa|nos pasa|me conviene|recomiend)\b/.test(text);
-  return asks&&!customerContextCue;
+  return asks&&!hasPriorityCue(text);
 }
 
 function currentPriorityMentions(text:string):string[] {
-  if(isFeatureQuestion(text))return[];
+  // Mentioning a feature or describing a problem is not a need-payoff. A
+  // priority is stored only when the customer actually expresses preference,
+  // requirement, importance or repeated use that makes it a decision criterion.
+  if(isFeatureQuestion(text)||!hasPriorityCue(text))return[];
   const found=PRIORITIES.filter(([,rx])=>rx.test(text)).map(([key])=>key);
   // Specific hard requirements are more useful than their broad umbrella.
   if(found.includes('nfc')||found.includes('5g'))return unique(found.filter(key=>key!=='conectividad'));
   return unique(found);
+}
+
+function currentImplicationFacts(text:string):string[]{
+  if(isFeatureQuestion(text))return[];
+  const facts:string[]=[];
+  if(/\b(?:pierdo|perdemos|me hace perder|nos hace perder)\s+tiempo\b|\btengo\s+que\s+(?:parar|detener)\b|\bme\s+interrumpe\b/.test(text))facts.push('implicacion:perdida_tiempo_interrupcion');
+  if(/\b(?:pierdo|perdemos)\s+(?:ventas?|clientes?|pedidos?)\b/.test(text))facts.push('implicacion:perdida_comercial');
+  if(/\b(?:no puedo|no podemos)\s+(?:trabajar|continuar|seguir)\b/.test(text))facts.push('implicacion:interrupcion_operativa');
+  return unique(facts);
 }
 
 function hasStrongPurchaseSignal(text: string): boolean {
@@ -129,6 +144,7 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
     ...(sector ? [`sector:${sector}`] : []),
     ...(useCase ? [`uso:${useCase}`] : []),
     ...(problem ? [`problema:${problem}`] : []),
+    ...currentImplicationFacts(t),
     ...(quantity != null ? [`cantidad:${quantity}`] : []),
     ...priorities.map(p => `prioridad:${p}`),
     ...(invoiceRequired ? ['requiere:factura'] : []),
