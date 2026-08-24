@@ -1,8 +1,10 @@
 import type { LlmDecisionInput, LlmDecisionResult, LlmProvider, LlmResult, LlmWriteInput } from '../../ports/LlmProvider.ts';
+import { fold } from '../../shared/text.ts';
 import { applyFullRagWritePolicy } from './FullRagWritePolicy.ts';
 import { buildFullRagAnswer } from './FullRagAnswerKernel.ts';
 
 function usesDocumentaryRag(input:LlmWriteInput):boolean{return Boolean(input.verifiedFacts?.some(fact=>fact.domain==='PRODUCT_RAG'||fact.domain==='INSTITUTIONAL_RAG'));}
+function isBroadProductInfo(message:string):boolean{const t=fold(message);return /\b(info|informacion|caracteristicas|especificaciones|ficha|cuentame|hablame|que tal es|como es|que tal esta)\b/.test(t)&&!/\b(precio|stock|nfc|5g|bateria|camara|ram|memoria|resistente|resistencia|wifi|bluetooth|sim|termica)\b/.test(t);}
 function naturalSalesPlan(input:LlmWriteInput):string{
   const original=String(input.deterministicAnswer??'').trim();
   const style=[
@@ -29,7 +31,14 @@ function deterministicResult(text:string,model:string):LlmResult{return{text,mod
 export class FullRagLlmProvider implements LlmProvider{
   readonly #delegate:LlmProvider;
   constructor(delegate:LlmProvider){this.#delegate=delegate;}
-  decide(input:LlmDecisionInput):Promise<LlmDecisionResult>{if(!this.#delegate.decide)throw new Error('Wrapped LLM does not implement decide');return this.#delegate.decide(input);}
+  async decide(input:LlmDecisionInput):Promise<LlmDecisionResult>{
+    if(!this.#delegate.decide)throw new Error('Wrapped LLM does not implement decide');
+    const result=await this.#delegate.decide(input);
+    if(isBroadProductInfo(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY'].includes(String(result.decision.primaryIntent).toUpperCase())){
+      return{...result,decision:{...result.decision,primaryIntent:'PRODUCT_INFO',attributes:[],nextBestAction:'ANSWER_ONLY'}};
+    }
+    return result;
+  }
   async write(input:LlmWriteInput):Promise<LlmResult>{
     const enriched=applyFullRagWritePolicy(input);
     const intent=String(enriched.intent??'').toUpperCase();
