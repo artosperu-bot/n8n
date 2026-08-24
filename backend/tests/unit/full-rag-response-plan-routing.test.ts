@@ -18,16 +18,20 @@ const resistanceRag=[{
 
 const resistanceFact={domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m',productId:'P-ARMOR-22-256G',source:'TEST'};
 
-test('contextual FULL RAG reaches the commercial writer with immutable factual core',async()=>{
-  const spy=spyDelegate('Para tu trabajo en construcción, esa resistencia sí aporta frente a las caídas que mencionas.');
-  const llm=new FullRagLlmProvider(spy.provider as any);
-  const input:any={
+function contextualInput(){
+  return{
     message:'Trabajo en construcción y se me cae mucho el Armor 22, ¿aguanta caídas?',intent:'CAPABILITY',
     state:{activeProduct:'Armor 22',commercialStrategy:'FAB_SPIN'},activeProduct:'Armor 22',resolvedProduct:'Armor 22',attribute:'RESISTENCIA',
     useCase:'trabajo en construcción',problem:'caídas frecuentes',priorities:['resistencia'],rag:resistanceRag,
     verifiedFacts:[resistanceFact],verifiedFeatures:[resistanceFact],finalExecutableNba:'RELATED_VALUE',nextBestAction:'RELATED_VALUE',
     commercialMove:{action:'RELATED_VALUE',kind:'CONTEXTUAL_BENEFIT',targetProduct:'Armor 22',intensity:'LIGHT',reason:'VERIFIED_FEATURE_WITH_CUSTOMER_CONTEXT',basis:['VERIFIED_PRODUCT_FEATURE','CUSTOMER_CONTEXT'],attribute:'RESISTENCIA',verifiedFacts:[resistanceFact],relevantCustomerContext:{useCase:'trabajo en construcción',problem:'caídas frecuentes',priorities:['resistencia'],budget:null,objection:null}},
-  };
+  } as any;
+}
+
+test('contextual FULL RAG reaches the commercial writer with immutable factual core',async()=>{
+  const spy=spyDelegate('Para tu trabajo en construcción, esa resistencia sí aporta frente a las caídas que mencionas.');
+  const llm=new FullRagLlmProvider(spy.provider as any);
+  const input=contextualInput();
   const result=await llm.write(input);
   assert.equal(spy.calls(),1);
   assert.ok(spy.received()?.directAnswer);
@@ -52,4 +56,14 @@ test('isolated factual FULL RAG keeps deterministic bypass and does not invent a
   assert.match(result.text,/NFC/i);
   assert.doesNotMatch(result.text,/stock|disponibilidad|quieres|recomiendo/i);
   assert.equal(input.commercialResponsePlan?.mode,'FACTUAL_DIRECT');
+});
+
+test('fabricated scarcity urgency or social proof falls back to factual core',async()=>{
+  const spy=spyDelegate('Quedan poquísimas unidades, aprovecha hoy porque todos lo están comprando.');
+  const llm=new FullRagLlmProvider(spy.provider as any);
+  const result=await llm.write(contextualInput());
+  assert.equal(spy.calls(),1);
+  assert.match(result.text,/1[.,]5\s*m/i);
+  assert.doesNotMatch(result.text,/poqu[ií]simas|aprovecha hoy|todos lo est[aá]n comprando/i);
+  assert.match(result.model,/pressure-fallback/i);
 });
