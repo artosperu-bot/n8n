@@ -50,6 +50,20 @@ test('an isolated factual capability question does not become a customer priorit
   assert.equal(f.spinFacts?.some(value=>/prioridad:nfc|prioridad:conectividad/i.test(value)),false);
 });
 
+test('an isolated durability question does not fabricate a customer problem or priority',()=>{
+  const f=extractCommercialFacts('¿Aguanta caídas?',{activeProduct:'Armor 22'});
+  assert.equal(f.problem??null,null);
+  assert.deepEqual(f.priorities,[]);
+  assert.equal(f.spinFacts?.some(value=>/problema:|prioridad:resistencia/i.test(value)),false);
+});
+
+test('a declared recurring drop problem still becomes problem and resistance priority',()=>{
+  const f=extractCommercialFacts('Se me cae seguido el celular y necesito que sea resistente.',{});
+  assert.equal(f.problem,'caidas_frecuentes');
+  assert.ok(f.priorities?.includes('resistencia'));
+  assert.ok(f.spinFacts?.includes('problema:caidas_frecuentes'));
+});
+
 test('an explicit hard requirement still becomes a priority',()=>{
   const f=extractCommercialFacts('Necesito NFC sí o sí porque pago con el celular.',{});
   assert.ok(f.priorities?.includes('nfc'));
