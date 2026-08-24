@@ -103,6 +103,40 @@ function simpleFactLabel(fact:{key:string;value:string}):string{
   if(/nfc|google pay/.test(text))return value;
   return value;
 }
+function naturalList(values:string[]):string{
+  const clean=[...new Set(values.filter(Boolean))];
+  if(clean.length<=1)return clean[0]??'';
+  if(clean.length===2)return`${clean[0]} y ${clean[1]}`;
+  return`${clean.slice(0,-1).join(', ')} y ${clean.at(-1)}`;
+}
+function ruggedCertificationName(fact:{key:string;value:string}):string|null{
+  const text=fold(`${fact.key} ${fact.value}`);
+  if(/ip69k/.test(text))return'IP69K';
+  if(/ip68/.test(text))return'IP68';
+  if(/mil[- _]?std[- _]?810h|mil.*810h/.test(text))return'MIL-STD-810H';
+  return null;
+}
+function ruggedCertifications(input:LlmWriteInput):string[]{
+  return [...new Set((input.verifiedFeatures??[]).map(ruggedCertificationName).filter((value):value is string=>Boolean(value)))];
+}
+function ruggedFabCore(input:LlmWriteInput,product:string):string|null{
+  const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''} ${(input.priorities??input.state?.priorities??[]).join(' ')}`);
+  if(!/caida|golpe|construccion|obra|campo|repar|polvo|lluvia|agua|humedad/.test(context))return null;
+  const features=input.verifiedFeatures??[];
+  const drop=features.find(fact=>/resisten.*caida|caida/.test(fold(`${fact.key} ${fact.value}`)));
+  const certs=ruggedCertifications(input);
+  const featureParts:string[]=[];
+  if(drop)featureParts.push(simpleFactLabel(drop));
+  if(certs.length)featureParts.push(`protecciones y certificaciones ${naturalList(certs)}`);
+  if(!featureParts.length)return null;
+  const hasImpact=Boolean(drop||certs.includes('MIL-STD-810H'));
+  const hasIngress=certs.includes('IP68')||certs.includes('IP69K');
+  const protection=[hasImpact?'golpes y caídas':'',hasIngress?'agua y polvo':''].filter(Boolean);
+  const benefit=protection.length
+    ?`En la práctica, está mejor preparado para ${naturalList(protection)}; si ya vienes de caídas o reparaciones, eso ayuda a reducir el riesgo de volver al mismo problema.`
+    :'En la práctica, esas protecciones sí tienen sentido para un uso más exigente.';
+  return`${product} tiene ${naturalList(featureParts)}. ${benefit}`;
+}
 function compactContextualCore(input:LlmWriteInput,fallback:string):string{
   const intent=String(input.intent??'').toUpperCase();
   if(!['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent))return fallback;
@@ -115,7 +149,8 @@ function compactContextualCore(input:LlmWriteInput,fallback:string):string{
     .sort((a,b)=>b.score-a.score)
     .map(item=>item.fact);
   const selected=(facts.length?facts:(input.verifiedFeatures??[])).slice(0,2).map(simpleFactLabel).filter(Boolean);
-  const fit=product&&selected.length?`${product}: ${selected.join(' y ')}.`:'';
+  const ruggedFab=product?ruggedFabCore(input,product):null;
+  const fit=ruggedFab??(product&&selected.length?`${product}: ${selected.join(' y ')}.`:'');
   const commercial=input.quote?.price!=null&&input.quote?.stock!=null
     ?`${product||'El equipo'} está a S/ ${input.quote.price} y ${input.quote.stock>0?'sí está disponible':'ahora no tiene stock disponible'}.`
     :'';
@@ -124,12 +159,14 @@ function compactContextualCore(input:LlmWriteInput,fallback:string):string{
 function technicalDumpOnPain(text:string,input:LlmWriteInput):boolean{
   const context=fold(`${input.message} ${input.problem??input.state?.problem??''}`);
   if(!/caida|romp|repar|bateria|cargador|polvo|lluvia|agua|malogr|pierdo/.test(context))return false;
-  return (String(text).match(/\b(?:IP68|IP69K|MIL-STD|GLONASS|Galileo|BeiDou|Helio|Mali|GHz|GPU)\b/gi)??[]).length>2;
+  const noisy=(String(text).match(/\b(?:GLONASS|Galileo|BeiDou|Helio|Mali|GHz|GPU)\b/gi)??[]).length;
+  const rugged=(String(text).match(/\b(?:IP68|IP69K|MIL-STD-810H)\b/gi)??[]).length;
+  return noisy>0||rugged>3;
 }
 function naturalFallback(input:LlmWriteInput,core:string):string{
   const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''}`);
   let lead='';
-  if(/repar/.test(context))lead='Si ya terminaste reparándolo varias veces, seguir con el mismo tipo de equipo te puede llevar otra vez al mismo gasto.';
+  if(/repar/.test(context))lead='Si ya terminaste reparándolo varias veces, cada nueva caída puede significar volver a gastar y quedarte otra vez sin equipo.';
   else if(/caida|construccion|obra/.test(context))lead='En obra una caída pasa en un segundo; la idea es que no estés pendiente del celular cada vez que lo sacas para trabajar.';
   else if(/bateria|cargador|no llega a la tarde/.test(context))lead='Si a media tarde ya estás buscando dónde cargarlo, terminas pendiente de la batería cuando deberías seguir con tu trabajo.';
   else if(/polvo|lluvia|agua|humedad/.test(context))lead='Si trabajas entre polvo o lluvia, estar cuidando el celular a cada rato termina siendo una preocupación más.';
@@ -147,6 +184,17 @@ function missesRequiredCloseResult(text:string,input:LlmWriteInput):boolean{
     return !(priceOk&&stockOk&&/env[ií]o/i.test(value)&&/recoger|recojo|local/i.test(value));
   }
   return false;
+}
+function missesRuggedFabEvidence(text:string,input:LlmWriteInput):boolean{
+  const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''}`);
+  if(!/caida|golpe|construccion|obra|campo|repar|polvo|lluvia|agua|humedad/.test(context))return false;
+  const certs=ruggedCertifications(input);
+  if(!certs.length)return false;
+  const value=String(text??'');
+  const certsPresent=certs.every(cert=>value.toUpperCase().includes(cert.toUpperCase()));
+  const practical=/golpes?|ca[ií]das?|agua|polvo/.test(value);
+  const benefit=/riesgo|repar|quedarte|proteger|aguantar|preparado|pendiente/.test(value);
+  return !(certsPresent&&practical&&benefit);
 }
 
 export class FullRagLlmProvider implements LlmProvider{
@@ -183,7 +231,7 @@ export class FullRagLlmProvider implements LlmProvider{
       if(!responsePlan.shouldUseLlm)return deterministicResult(factualCore,`full-rag-kernel-${kernel.mode.toLowerCase()}`);
       const result=await this.#delegate.write(plannedInput);
       const composed=humanizeKernel(sanitize(result.text,plannedInput),plannedInput);
-      if(hasFabricatedCommercialPressure(composed)||technicalDumpOnPain(composed,plannedInput)||missesRequiredCloseResult(composed,plannedInput))return deterministicResult(naturalFallback(plannedInput,factualCore),`full-rag-kernel-${kernel.mode.toLowerCase()}-human-fallback`);
+      if(hasFabricatedCommercialPressure(composed)||technicalDumpOnPain(composed,plannedInput)||missesRequiredCloseResult(composed,plannedInput)||missesRuggedFabEvidence(composed,plannedInput))return deterministicResult(naturalFallback(plannedInput,factualCore),`full-rag-kernel-${kernel.mode.toLowerCase()}-human-fallback`);
       return{...result,text:composed};
     }
 
@@ -197,7 +245,7 @@ export class FullRagLlmProvider implements LlmProvider{
     Object.assign(input,enriched);
     const result=await this.#delegate.write(enriched);
     const composed=humanizeKernel(sanitize(result.text,enriched),enriched);
-    if((hasFabricatedCommercialPressure(composed)||technicalDumpOnPain(composed,enriched)||missesRequiredCloseResult(composed,enriched))&&factualCore)return deterministicResult(naturalFallback(enriched,factualCore),'full-rag-commercial-human-fallback');
+    if((hasFabricatedCommercialPressure(composed)||technicalDumpOnPain(composed,enriched)||missesRequiredCloseResult(composed,enriched)||missesRuggedFabEvidence(composed,enriched))&&factualCore)return deterministicResult(naturalFallback(enriched,factualCore),'full-rag-commercial-human-fallback');
     return{...result,text:composed};
   }
 }
