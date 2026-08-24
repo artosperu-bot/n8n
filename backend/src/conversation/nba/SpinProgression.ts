@@ -72,7 +72,9 @@ export function evaluateSpinReadiness(state:ConversationState={}):SpinReadiness{
     return{hasSituation:true,hasProblem:false,hasImplication,hasNeed:false,stage:'PROBLEM',nextMissingFact:'problema principal',readyForRecommendation:false,readyForStock:false,reason:'SITUATION_ONLY'};
   }
   if(!hasImplication){
-    return{hasSituation:true,hasProblem:true,hasImplication:false,hasNeed:false,stage:'IMPLICATION',nextMissingFact:'impacto del problema',readyForRecommendation:false,readyForStock:false,reason:'PROBLEM_ONLY'};
+    // Keep the internal label lexically distinct from "problema" so downstream
+    // writers cannot accidentally route an implication question as a problem question.
+    return{hasSituation:true,hasProblem:true,hasImplication:false,hasNeed:false,stage:'IMPLICATION',nextMissingFact:'impacto',readyForRecommendation:false,readyForStock:false,reason:'PROBLEM_ONLY'};
   }
   return{hasSituation:true,hasProblem:true,hasImplication:true,hasNeed:false,stage:'NEED_PAYOFF',nextMissingFact:'prioridad principal',readyForRecommendation:false,readyForStock:false,reason:'IMPLICATION_ONLY'};
 }
