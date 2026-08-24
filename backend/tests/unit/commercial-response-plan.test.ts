@@ -108,13 +108,27 @@ test('price plus availability advances to fulfillment instead of asking stock ag
 
 test('after customer chooses delivery or pickup the next close purpose is reservation',()=>{
   const plan=buildCommercialResponsePlan({
-    ...base,message:'Prefiero envío a Ate.',intent:'POLICY',resolvedCurrentIntent:'POLICY',
+    ...base,message:'Prefiero envío a Ate.',intent:'FULFILLMENT_SELECTION',resolvedCurrentIntent:'FULFILLMENT_SELECTION',
     state:{activeProduct:'Armor 22',pendingCommercialAction:'SOFT_CLOSE'},finalExecutableNba:'SOFT_CLOSE',
-  },'Sí, hacemos envíos a Ate.');
+  },'Perfecto, sería con envío a Ate.');
   assert.equal(plan.closePurpose,'RESERVATION');
   const instruction=buildCommercialResponseInstruction(plan);
   assert.match(instruction,/reserv/i);
   assert.doesNotMatch(instruction,/env[ií]o o recoger|revisar disponibilidad/i);
+});
+
+test('a policy question during fulfillment resumes the same fulfillment choice instead of jumping to reservation',()=>{
+  const plan=buildCommercialResponsePlan({
+    ...base,message:'¿Dónde queda su local?',intent:'POLICY',resolvedCurrentIntent:'POLICY',
+    state:{activeProduct:'Armor 22',pendingCommercialAction:'SOFT_CLOSE'},finalExecutableNba:'SOFT_CLOSE',
+  },'Nuestro local está en la dirección verificada.');
+  assert.equal(plan.closePurpose,'FULFILLMENT_RESUME');
+  const instruction=buildCommercialResponseInstruction(plan);
+  assert.match(instruction,/responde primero la pol[ií]tica/i);
+  assert.match(instruction,/env[ií]o/i);
+  assert.match(instruction,/recoger|recojo|local/i);
+  assert.doesNotMatch(instruction,/reserv/i);
+  assert.doesNotMatch(instruction,/precio.*stock|stock.*precio/i);
 });
 
 test('soft close exists only when exact NBA authorizes it', () => {
