@@ -86,8 +86,13 @@ export function resolveIntentPlan(message: string): IntentPlan {
     || has(/\b(?:cual|que)\b\s+si\s+(?:lo\s+)?(?:tiene|cumple|ofrece)\b/)
     || has(/\bhay\s+(?:uno|un|algo|alguno)\b[^?.!]{0,25}\bmas\s+barato\b/);
   if (recommendationLanguage) hits.push('RECOMMEND');
-  if (has(/\b(quiero comprar|quiero comprarlo|quiero comprarla|comprarlo|comprarla|como compro|lo compro|la compro|me llevo (?:ese|esa|este|esta)|me quedo con|quiero (?:ese|esa|este|esta)|ya (?:ese|esa|este|esta) quiero|me decidi(?: por (?:ese|esa|este|esta))?|ya me decidi|lo quiero|la quiero|avanzar con la compra|quiero avanzar)\b/)
-    || has(/\bya\s+(?:el|la)\s+(?:[a-z]*\d+[a-z0-9 -]{0,24}|\d{2,})\s+quiero\b/)) hits.push('PURCHASE');
+
+  const useCaseLoQuiero=has(/\b(?:lo|la)\s+quiero\s+para\b/);
+  const explicitPurchase = has(/\b(quiero comprar|quiero comprarlo|quiero comprarla|comprarlo|comprarla|como compro|lo compro|la compro|me llevo (?:ese|esa|este|esta)|me quedo con|quiero (?:ese|esa|este|esta)|ya (?:ese|esa|este|esta) quiero|me decidi(?: por (?:ese|esa|este|esta))?|ya me decidi|avanzar con la compra|quiero avanzar)\b/)
+    || (!useCaseLoQuiero&&has(/\b(?:lo|la)\s+quiero\b/))
+    || has(/\bya\s+(?:el|la)\s+(?:[a-z]*\d+[a-z0-9 -]{0,24}|\d{2,})\s+quiero\b/);
+  if(explicitPurchase)hits.push('PURCHASE');
+
   if (has(/\b(cotiza|cotizar|cotizacion|cotizarnos)\b/)) hits.push('QUOTE');
   if (has(/\b(asesor|humano|persona|vendedor)\b/)) hits.push('HUMAN');
   if (has(/\b(caro|sale de mi presupuesto|fuera de mi presupuesto|no confio|me preocupa|esperaba|descuento|otra tienda[^.!?]{0,60}(?:barato|economico)|mas barato)\b/)) hits.push('OBJECTION');
@@ -105,7 +110,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const directUse = has(/\b(trabajo|trabajar|trabajando|construccion|campo|tecnico|juego|juegos|jugar|gaming|free fire|pubg|cod mobile|call of duty|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para|delivery)\b/);
   const everydayNeed = has(/\b(uso simple|uso basico|whatsapp|llamadas?|mensajeria|comunicacion)\b/)
     && has(/\b(quiero un|quiero una|busco|necesito|para usar|para uso|lo quiero para|la quiero para)\b/);
-  const use = directUse || everydayNeed;
+  const use = directUse || everydayNeed || useCaseLoQuiero;
 
   if (productInfo) hits.push('PRODUCT_INFO');
   if (use) hits.push('EVALUATE_USE');
@@ -113,7 +118,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (/^(hola|buenas|buenos dias|buenas tardes|buenas noches)[\s!.,¿?]*$/.test(t)) hits.push('GREETING');
 
   const intents = unique(hits);
-  const declarativeNeed = use && has(/\b(necesito|necesitamos|busco|quiero algo|quiero un|quiero una)\b/) && !/[?¿]/.test(message);
+  const declarativeNeed = use && (useCaseLoQuiero||has(/\b(necesito|necesitamos|busco|quiero algo|quiero un|quiero una)\b/)) && !/[?¿]/.test(message);
   const precedence: SemanticIntent[] = declarativeNeed
     ? ['PURCHASE','QUOTE','COMPARE','PRICE_AVAILABILITY','STOCK','RECOMMEND','EVALUATE_USE','IMAGES','WARRANTY','POLICY','ATTRIBUTE','PRODUCT_INFO','OBJECTION','HUMAN','OTHER']
     : ['ORDER_STATUS','PURCHASE','QUOTE','COMPARE','PRICE_AVAILABILITY','STOCK','RECOMMEND','IMAGES','CATEGORIES','SUBCATEGORIES','CATALOG','WARRANTY','POLICY','PRODUCT_INFO','OBJECTION','EVALUATE_USE','ATTRIBUTE','HUMAN','GREETING','OTHER'];
