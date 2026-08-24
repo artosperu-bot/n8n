@@ -2,13 +2,20 @@ import type { CommercialMove, LlmWriteInput } from '../../ports/LlmProvider.ts';
 import { fold } from '../../shared/text.ts';
 import { normalizeEvidence } from '../evidence/EvidenceNormalizer.ts';
 import { canExecuteCapability, evaluateTurnCapabilities, missingFactCapability, requestedUnsupportedCapability, type CommercialCapabilityAction } from './CommercialCapabilities.ts';
-import { deriveCommercialImplications } from './CommercialImplications.ts';
 import { normalizeGenuineUseCase } from './UseCaseNormalizer.ts';
 import { buildGroundedDirectAnswer } from './GroundedDirectAnswer.ts';
 import { evaluateSpinReadiness } from '../nba/SpinProgression.ts';
 
 function unique(values:Array<string|null|undefined>):string[]{
   return [...new Set(values.map(value=>String(value??'').trim()).filter(Boolean))];
+}
+function explicitImplications(input:LlmWriteInput,state:any):string[]{
+  const persisted=(state?.spinFacts??[])
+    .map((value:unknown)=>String(value??'').trim())
+    .filter((value:string)=>/^implicacion:/i.test(value))
+    .map((value:string)=>value.replace(/^implicacion:/i,'').trim())
+    .filter(Boolean);
+  return unique([...(input.implications??[]),...persisted]);
 }
 
 function directAttributeFamily(attribute:string|null,fact:{key:string;value:string}):boolean{
@@ -144,7 +151,7 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const objection=input.objection??state.objection??input.decision?.objection??null;
   const levelOfInterest=input.levelOfInterest??state.levelOfInterest??0;
   const attribute=unique([input.attribute,...(input.decision?.attributes??[]),...(state.currentAttributes??[])])[0]??null;
-  const implications=unique(input.implications??deriveCommercialImplications(problem,objection));
+  const implications=explicitImplications(input,state);
   const previousPendingAction=input.pendingAction??state.pendingCommercialAction??state.lastNba??null;
   const verifiedFacts=input.verifiedFacts??normalizeEvidence({intent:input.intent,quote:input.quote,rag:input.rag});
   const allVerifiedFeatures=input.verifiedFeatures??verifiedFacts.filter(fact=>fact.domain==='PRODUCT_RAG');
