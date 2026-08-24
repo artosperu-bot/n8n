@@ -55,6 +55,18 @@ test('broad PRODUCT_INFO opens one useful SPIN question while a focused capabili
   assert.equal(isNbaCompatible('PRODUCT_INFO','ASK_MISSING_FACT',{}),true);
 });
 
+test('deterministic N+1 outranks a conflicting compatible planner proposal',()=>{
+  const plannerOverview=decision({primaryIntent:'PRODUCT_INFO',nextBestAction:'ANSWER_ONLY',targetProduct:'Armor 22'});
+  const deterministicOverview=decision({primaryIntent:'PRODUCT_INFO',nextBestAction:'ASK_MISSING_FACT',targetProduct:'Armor 22'});
+  const overview=validateTurnDecision(plannerOverview,{activeProduct:'Armor 22'},['Armor 22'],deterministicOverview);
+  assert.equal(overview.nextBestAction,'ASK_MISSING_FACT');
+
+  const plannerCapability=decision({primaryIntent:'CAPABILITY',attributes:['NFC'],nextBestAction:'SOFT_CLOSE',targetProduct:'Armor 22'});
+  const deterministicCapability=decision({primaryIntent:'CAPABILITY',attributes:['NFC'],nextBestAction:'ANSWER_ONLY',targetProduct:'Armor 22'});
+  const capability=validateTurnDecision(plannerCapability,{activeProduct:'Armor 22'},['Armor 22'],deterministicCapability);
+  assert.equal(capability.nextBestAction,'ANSWER_ONLY');
+});
+
 test('recommendation can use one SPIN discovery N+1 before enough context exists',()=>{
   assert.equal(nextBestAction('RECOMMEND',{priorities:['resistencia','bateria']}),'ASK_MISSING_FACT');
   assert.equal(isNbaCompatible('RECOMMEND','ASK_MISSING_FACT',{}),true);
