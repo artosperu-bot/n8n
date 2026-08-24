@@ -1,7 +1,7 @@
 import type { ConversationMessageMeta, ConversationRepository, TurnCompletionMeta } from '../../ports/ConversationRepository.ts';
 import type { ConversationState } from '../../domain/types.ts';
-import { deriveCommercialImplications } from '../../conversation/commercial/CommercialImplications.ts';
 import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from '../../conversation/commercial/UseCaseNormalizer.ts';
+import { projectCommercialPersistence } from './PersistenceProjection.ts';
 
 type Options = {
   url: string;
@@ -15,15 +15,7 @@ type Options = {
 type ActiveLease = { owner:string; messageId:string; requestId:string };
 
 const PRODUCT_ORIGINS = new Set(['MENSAJE_ACTUAL','REFERENCIA_CONTEXTO','PRODUCTO_ACTIVO','SELECCION_USUARIO','SIN_RESOLVER']);
-const SPIN_CONTRIBUTIONS = new Set(['SITUACION','PROBLEMA','IMPLICACION','NECESIDAD_SOLUCION']);
 
-function spinPhase(state: ConversationState): string | null {
-  if (state.purchaseSignal) return 'NECESIDAD_SOLUCION';
-  if (state.problem) return 'PROBLEMA';
-  if ((state.priorities?.length ?? 0) > 0) return 'NECESIDAD_SOLUCION';
-  if (state.useCase || state.sector) return 'SITUACION';
-  return null;
-}
 function productOrigin(state:ConversationState):string {
   const value=String(state.lastProductResolutionOrigin ?? '').toUpperCase();
   return PRODUCT_ORIGINS.has(value) ? value : 'SIN_RESOLVER';
@@ -42,17 +34,6 @@ function normalizedCommercialState(state:ConversationState):ConversationState{
     useCase:normalizeGenuineUseCase(state.useCase),
     spinFacts:cleanStrings(state.spinFacts).map(normalizeUseCaseSpinFact).filter((value):value is string=>Boolean(value)),
   };
-}
-function compactSpinContribution(state:ConversationState):string|null {
-  const direct=String(state.lastSpinContribution ?? '').trim().toUpperCase();
-  if(SPIN_CONTRIBUTIONS.has(direct)) return direct;
-
-  const latest=String(cleanStrings(state.spinFacts).at(-1) ?? '').toLocaleLowerCase('es');
-  if(/^(?:necesidad|prioridad):/.test(latest)) return 'NECESIDAD_SOLUCION';
-  if(/^implicacion:/.test(latest)) return 'IMPLICACION';
-  if(/^problema:/.test(latest)) return 'PROBLEMA';
-  if(/^(?:situacion|uso|sector|cliente):/.test(latest)) return 'SITUACION';
-  return null;
 }
 function recommendationCandidates(state:ConversationState):string[]{
   const traced=state.lastDecisionTrace?.recommendation?.eligibleCandidates?.map(x=>x.product)??[];
@@ -226,18 +207,30 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const base=row?.contexto
       ?storedCanonicalState(row.contexto)
       :{sessionId,turnCount:0,comparisonProducts:[],spinFacts:[],priorities:[]};
-    return { ...base, sessionId, contextVersion:Number(row?.context_version ?? base.contextVersion ?? 0) };
+    const result={ ...base, sessionId, contextVersion:Number(row?.context_version ?? base.contextVersion ?? 0) };
+    this.#lastState.set(sessionId,structuredClone(result));
+    return result;
   }
 
   async completeTurn(sessionId:string,userContent:string,assistantContent:string,state:ConversationState,meta:TurnCompletionMeta={}):Promise<void> {
     state=normalizedCommercialState(state);
     const lease=this.#activeLease.get(sessionId);
     if(!lease) throw new Error(`Supabase atomic turn missing lease for ${sessionId}`);
+    const previous=this.#lastState.get(sessionId)??{sessionId,turnCount:0,comparisonProducts:[],spinFacts:[],priorities:[]};
     const currentVersion=Number(state.contextVersion ?? 0);
     const origin=productOrigin(state);
     const status=productStatus(state);
     const requiresClarification=state.lastRoute==='CLARIFICATION' || status==='AMBIGUO' || Boolean(state.explicitSwitch && !state.lastResolvedProductId);
-    const context=canonicalContext(state);
+    const projection=projectCommercialPersistence(previous,state,{messageId:lease.messageId});
+    const baseContext=canonicalContext(state);
+    const context={
+      ...baseContext,
+      ...projection.context,
+      conversacion:{
+        ...baseContext.conversacion,
+        accion_pendiente:projection.context.pendingAction?.type??(projection.context.pendingQuestion?'ASK_MISSING_FACT':null),
+      },
+    };
     const candidateNames=recommendationCandidates(state);
     const metricsDetail=[{
       model:meta.model ?? null,
@@ -287,15 +280,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
         selectedProduct:state.selectedProduct ?? null,
         recommendedProduct:state.recommendedProduct ?? null,
       },
-      spin_aporte:compactSpinContribution(state),
-      spin_fase_actual:spinPhase(state),
-      actividad_detectada:state.useCase ?? state.sector ?? null,
-      problemas_detectados:state.problem ? [state.problem] : [],
-      prioridades_detectadas:cleanStrings(state.priorities),
+      ...projection.turn,
       atributo_detectado:cleanStrings(state.currentAttributes)?.[0]??null,
-      implicaciones_detectadas:deriveCommercialImplications(state.problem,state.objection),
-      pregunta_pendiente_turno:state.lastNba==='ASK_MISSING_FACT'&&state.pendingMissingFact?{missingFact:state.pendingMissingFact}:null,
-      accion_pendiente_turno:(state.pendingCommercialAction??state.lastNba) ? {accion:state.pendingCommercialAction??state.lastNba} : null,
       contexto_comercial_snapshot:context,
       objecion_detectada:state.objection ? {tipo:state.objection} : null,
       nivel_interes:state.levelOfInterest ?? 0,
@@ -330,9 +316,11 @@ export class SupabaseConversationRepository implements ConversationRepository {
       problema_activo:state.problem ?? null,
       presupuesto_activo:state.budget ?? null,
       cantidad_activa:state.quantity ?? null,
+      objecion_activa:state.objection ?? null,
       senal_compra:state.purchaseSignal ?? false,
-      accion_pendiente:state.lastNba ?? null,
+      accion_pendiente:projection.context.pendingAction?.type??(projection.context.pendingQuestion?'ASK_MISSING_FACT':null),
       derivacion_activa:state.handoffActive ?? false,
+      bloquear_respuesta_automatica:state.blockAutomaticReply ?? false,
       motivo_derivacion:state.handoffReason ?? null,
       context_version:currentVersion+1,
       ultimo_turno_fecha:new Date().toISOString(),
@@ -344,6 +332,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       p_contexto:contextPayload,
     });
     if(persisted?.ok !== true) throw new Error(`Supabase atomic persist rejected: ${String(persisted?.status ?? 'UNKNOWN')}`);
+    this.#lastState.set(sessionId,structuredClone({...state,sessionId,contextVersion:currentVersion+1}));
 
     const released=await this.#rpc('ia_liberar_turno',{
       p_session_id:sessionId,
