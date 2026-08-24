@@ -154,7 +154,8 @@ function compactRecommendationPresentation(input:LlmWriteInput,answer:string):st
 function focusedCapabilityFact(input:LlmWriteInput):string|null{
   const message=fold(input.message);const product=String(input.resolvedProduct??input.state?.queryTarget??input.state?.activeProduct??'').trim();
   if(/\bram\b/.test(message)){const ram=ramProfile(input);if(!ram)return null;const physical=Number.isInteger(ram.physical)?String(ram.physical):String(ram.physical).replace('.',',');const virtual=Number.isInteger(ram.virtual)?String(ram.virtual):String(ram.virtual).replace('.',',');return `Tiene ${physical} GB de RAM física + hasta ${virtual} GB de RAM virtual.`;}
-  if(/\b(?:caida|caidas|golpe|golpes)\b/.test(message)){
+  const broadResistance=/\b(?:agua|polvo|ip68|ip69|mil|resisten|proteccion)\b/.test(message);
+  if(/\b(?:caida|caidas|golpe|golpes)\b/.test(message)&&!broadResistance){
     const rows=[...(input.commercialMove?.verifiedFacts??[]),...(input.verifiedFacts??[])];const atomic=rows.find(row=>String(row.key??'').toUpperCase()==='RESISTENCIA_CAIDAS');
     if(atomic){const value=String(atomic.value??'').trim();return value?`${product?`${product} `:''}tiene resistencia a caídas de ${value.replace(/[.!?]+$/,'')}.`:null;}
     const candidate=rows.find(row=>/CAID|IMPACT|RESIST/.test(String(row.key??'').toUpperCase())||/resistencia\s+a\s+ca[ií]das?/i.test(String(row.value??'')));if(!candidate)return null;const raw=String(candidate.value??'').replace(/\s+/g,' ').trim();const match=raw.match(/resistencia\s+a\s+ca[ií]das?\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*m\b/i);if(!match)return null;return `${product?`${product} `:''}tiene resistencia a caídas de ${match[1]} m.`;
@@ -186,11 +187,25 @@ function guardGeneratedAnswer(input:LlmWriteInput,answer:string):string|null {
 }
 function commercialMoveDelivered(input:LlmWriteInput,answer:string):boolean{
   const move=input.commercialMove;if(!move)return false;const text=fold(answer);if(move.kind==='STOCK_STATUS'){const status=move.verifiedFacts.find(fact=>fact.key==='DISPONIBILIDAD')?.value;return status==='DISPONIBLE'?/\b(?:esta|sigue)\s+disponible\b|\bhay\s+(?:stock|disponibilidad|unidades?)\b|\btenemos\s+(?:stock|disponibilidad)\b/.test(text):status==='NO_DISPONIBLE'?/\bno\s+(?:esta\s+)?disponible\b|\bsin\s+stock\b|\bno\s+hay\s+stock\b/.test(text):false;}
-  if(move.kind==='CONTEXTUAL_BENEFIT'){const rendered=renderCommercialMove(move,input.intent);if(rendered&&fold(answer).includes(fold(rendered)))return true;const context=move.relevantCustomerContext;const contextGroups=unique([context.useCase,context.problem,...context.priorities,context.objection]).map(value=>fold(value).replace(/[_-]+/g,' ').split(/\s+/).filter(token=>token.length>=4&&!['para','principal'].includes(token))).filter(tokens=>tokens.length);const factTokens=move.verifiedFacts.flatMap(fact=>fold(fact.value).split(/[^a-z0-9.,]+/)).filter(token=>token.length>=3||/\d/.test(token));if(contextGroups.some(tokens=>tokens.every(token=>text.includes(token)))&&factTokens.some(token=>text.includes(token))&&/\b(?:util|ayuda|sirve|conviene|encaja|adecuad[oa]|ideal|permite|facilita|reduce|protege|proteccion|te da|da mas margen)\b/.test(text))return true;return false;}
+  if(move.kind==='CONTEXTUAL_BENEFIT'){
+    const rendered=renderCommercialMove(move,input.intent);if(rendered&&text.includes(fold(rendered)))return true;
+    const semantic=fold(`${move.attribute??''} ${move.verifiedFacts.map(fact=>`${fact.key} ${fact.value}`).join(' ')}`);
+    if(/nfc|google pay/.test(semantic)&&/nfc|google pay/.test(text)&&/contactless|pago/.test(text))return true;
+    if(/nocturn|camara/.test(semantic)&&/nocturn/.test(text)&&/captur|noche/.test(text))return true;
+    if(/termic/.test(semantic)&&/termic/.test(text)&&/rango|inspeccion|temperatura/.test(text))return true;
+    if(/5g|4g|lte|red/.test(semantic)&&/(5g|4g lte)/.test(text))return true;
+    const context=move.relevantCustomerContext;const contextGroups=unique([context.useCase,context.problem,...context.priorities,context.objection]).map(value=>fold(value).replace(/[_-]+/g,' ').split(/\s+/).filter(token=>token.length>=4&&!['para','principal'].includes(token))).filter(tokens=>tokens.length);const factTokens=move.verifiedFacts.flatMap(fact=>fold(fact.value).split(/[^a-z0-9.,]+/)).filter(token=>token.length>=3||/\d/.test(token));if(contextGroups.some(tokens=>tokens.every(token=>text.includes(token)))&&factTokens.some(token=>text.includes(token))&&/\b(?:util|ayuda|sirve|conviene|encaja|adecuad[oa]|ideal|permite|facilita|reduce|protege|proteccion|te da|da mas margen)\b/.test(text))return true;return false;
+  }
   if(move.kind==='RELATED_VERIFIED_FACT'&&move.verifiedFacts[0]?.key==='PRECIO'&&String(input.intent).toUpperCase()==='STOCK')return /\bprecio\b/.test(text);return move.verifiedFacts.some(fact=>fold(answer).includes(fold(fact.value)));
 }
+function continuationAddsNewInformation(answer:string,continuation:string):boolean{
+  const compact=fold(continuation).replace(/^ademas\s+/,'').trim();if(!compact||/^(?:si|no)[.!]?$/.test(compact))return false;
+  const stop=new Set(['ademas','tambien','este','esta','esto','dato','punto','valor','para','porque','justo','funcion','confirmar','prioridad']);
+  const answerText=fold(answer);const tokens=compact.split(/[^a-z0-9]+/).filter(token=>token.length>=4&&!stop.has(token));
+  return tokens.some(token=>!answerText.includes(token));
+}
 function preserveCommercialMove(input:LlmWriteInput,answer:string):string{
-  if(String(input.nextBestAction??'').toUpperCase()!=='RELATED_VALUE'||commercialMoveDelivered(input,answer))return answer;let continuation=renderCommercialMove(input.commercialMove??null,input.intent);if(continuation&&input.commercialMove?.kind==='CONTEXTUAL_BENEFIT'&&!/^\s*(?:adem[aá]s|tambi[eé]n)\b/i.test(continuation)){continuation=`Además, ${continuation.charAt(0).toLocaleLowerCase('es')}${continuation.slice(1)}`;}return continuation?`${answer.trim()} ${continuation}`.trim():answer;
+  if(String(input.nextBestAction??'').toUpperCase()!=='RELATED_VALUE'||commercialMoveDelivered(input,answer))return answer;let continuation=renderCommercialMove(input.commercialMove??null,input.intent);if(!continuation||!continuationAddsNewInformation(answer,continuation))return answer;if(input.commercialMove?.kind==='CONTEXTUAL_BENEFIT'&&!/^\s*(?:adem[aá]s|tambi[eé]n)\b/i.test(continuation)){continuation=`Además, ${continuation.charAt(0).toLocaleLowerCase('es')}${continuation.slice(1)}`;}return `${answer.trim()} ${continuation}`.trim();
 }
 function directAnswerDelivered(input:LlmWriteInput,directAnswer:string,answer:string):boolean{
   const message=fold(input.message);if(/\bram\b/.test(message))return !omitsRamComponent(input,answer);if(/\b(?:caida|caidas|golpe|golpes)\b/.test(message)){const wanted=numericClaims(directAnswer).find(claim=>claim.unit==='m');if(!wanted)return /caida|golpe/i.test(answer);return numericClaims(answer).some(claim=>claim.unit==='m'&&claim.value===wanted.value)&&/caida|golpe/i.test(answer);}const required=numericClaims(directAnswer);if(required.length){const actual=numericClaims(answer);return required.every(wanted=>actual.some(value=>value.value===wanted.value&&value.unit===wanted.unit));}const ignored=new Set(['este','esta','tiene','para','sobre','producto','equipo','armor']);const tokens=fold(directAnswer).split(/[^a-z0-9]+/).filter(token=>token.length>=4&&!ignored.has(token));const text=fold(answer);return tokens.length>0&&tokens.slice(0,4).every(token=>text.includes(token));
