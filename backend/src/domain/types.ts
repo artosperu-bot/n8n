@@ -86,6 +86,7 @@ export type ConversationState = {
   useCase?: string|null;
   problem?: string|null;
   priorities?: string[];
+  explicitPriorities?: string[];
   quantity?: number|null;
   invoiceRequired?: boolean|null;
   objection?: string|null;
