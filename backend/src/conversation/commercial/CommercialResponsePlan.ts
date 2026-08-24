@@ -77,11 +77,11 @@ export function buildCommercialResponsePlan(input: LlmWriteInput, factualCore: s
 function authorizedActionInstruction(exactNba: string): string {
   if (exactNba === 'ANSWER_ONLY') return 'termina después de responder';
   if (exactNba === 'RELATED_VALUE') return 'añade solo el valor relacionado ya autorizado, sin CTA adicional';
-  if (exactNba === 'ASK_MISSING_FACT') return 'formula solo la pregunta faltante autorizada';
+  if (exactNba === 'ASK_MISSING_FACT') return 'formula únicamente la pregunta SPIN faltante ya autorizada';
   if (exactNba === 'OFFER_ALTERNATIVE') return 'ofrece solo la alternativa ya autorizada';
   if (exactNba === 'COMPARE') return 'presenta solo la comparación autorizada';
   if (exactNba === 'RECOMMEND') return 'verbaliza únicamente la recomendación ya autorizada';
-  if (exactNba === 'SOFT_CLOSE') return 'realiza solo el cierre suave autorizado';
+  if (exactNba === 'SOFT_CLOSE') return 'haz una sola pregunta breve para revisar disponibilidad; no ofrezcas reserva, pago, color, envío ni otra acción en la misma pregunta';
   if (exactNba === 'COLLECT_RESERVATION_DATA') return 'solicita únicamente el dato de reserva que falta';
   if (exactNba === 'EXECUTE_RESERVATION') return 'continúa únicamente con el paso de reserva autorizado, sin afirmar éxito antes de confirmación';
   if (exactNba === 'ASSISTED_HANDOFF') return 'ofrece solo la derivación humana autorizada';
@@ -94,22 +94,22 @@ export function buildCommercialResponseInstruction(plan: CommercialResponsePlan)
   const safety = 'No inventes escasez, urgencia, popularidad, prueba social, rendimiento, precio, stock ni capacidades.';
 
   if (plan.mode === 'DISCOVERY_SPIN') {
-    return `Conserva RESPUESTA_DIRECTA. Pregunta solo el dato faltante autorizado y como máximo una pregunta; no repitas información ya conocida. ${action}. ${safety}`;
+    return `Conserva RESPUESTA_DIRECTA. SPIN y N+1 son capas distintas: responde primero lo actual y luego formula solo la pregunta faltante autorizada, como máximo una. No preguntes presupuesto salvo que ese sea exactamente el dato faltante; no repitas situación, problema o prioridad ya conocidos. ${action}. ${safety}`;
   }
   if (plan.mode === 'CONTEXTUAL_FAB') {
-    return `Conserva RESPUESTA_DIRECTA sin cambiar sus hechos. Demuestra que el contexto conocido cambia el criterio relevante (${context}). Conecta únicamente el hecho verificado actual con un efecto práctico seguro y un beneficio ligado a esa necesidad; no agregues otra característica. ${action}. ${safety}`;
+    return `Conserva RESPUESTA_DIRECTA sin cambiar sus hechos. Demuestra que el contexto conocido cambia el criterio relevante (${context}). Conecta únicamente el hecho verificado actual con un efecto práctico seguro y un beneficio ligado a esa necesidad; no agregues otra característica ni un CTA si no está autorizado. ${action}. ${safety}`;
   }
   if (plan.mode === 'GUIDED_CHOICE') {
-    return `Conserva los hechos de RESPUESTA_DIRECTA. Reduce el esfuerzo de decisión usando solo 2 a 4 diferencias verificadas y prioriza el contexto conocido (${context}). Recomienda solo si la evidencia sustenta una opción. ${action}. ${safety}`;
+    return `Conserva los hechos de RESPUESTA_DIRECTA. Reduce el esfuerzo de decisión usando solo 2 a 4 diferencias verificadas y prioriza el contexto conocido (${context}). Recomienda solo si la evidencia sustenta una opción y no inventes trade-offs. ${action}. ${safety}`;
   }
   if (plan.mode === 'OBJECTION_LAER') {
-    return `Conserva RESPUESTA_DIRECTA. Reconoce primero la objeción real sin repetir literalmente al cliente; responde con hechos verificados y contexto conocido (${context}), y luego ${action}. No seas defensivo ni presiones. ${safety}`;
+    return `Conserva RESPUESTA_DIRECTA. Reconoce el precio de forma humana, por ejemplo que se sale de lo que esperaba, sin decir “entiendo la objeción” ni repetir literalmente al cliente. Responde con hechos verificados y contexto conocido (${context}), y luego ${action}. No mezcles alternativa y cierre en el mismo turno salvo que la acción lo autorice. No seas defensivo ni presiones. ${safety}`;
   }
   if (plan.mode === 'SOFT_CLOSE') {
-    return `Conserva RESPUESTA_DIRECTA. Usa el contexto conocido (${context}) para explicar brevemente por qué encaja y realiza solo un cierre suave autorizado; no vuelvas a discovery. ${action}. ${safety}`;
+    return `Conserva RESPUESTA_DIRECTA. Usa el contexto conocido (${context}) para explicar brevemente por qué encaja y ejecuta un solo +1: una pregunta breve de disponibilidad. No vuelvas a discovery y no combines stock con reserva, pago, color, envío u otra opción. ${action}. ${safety}`;
   }
   if (plan.mode === 'PURCHASE_PROGRESS') {
-    return `Conserva RESPUESTA_DIRECTA y el producto ya elegido. Reduce fricción, no reinicies discovery y pide solo el dato indispensable que la acción autorizada requiera. ${action}. ${safety}`;
+    return `Conserva RESPUESTA_DIRECTA y el producto ya elegido. Reduce fricción, no reinicies discovery y pide solo el dato indispensable que la acción autorizada requiera. Interés no equivale a compra; esta modalidad solo se usa cuando purchaseSignal ya fue autorizado. ${action}. ${safety}`;
   }
   if (plan.mode === 'HANDOFF') {
     return `Conserva RESPUESTA_DIRECTA y deriva solo si la acción ya está autorizada; no afirmes que la transferencia o reserva ya ocurrió. ${action}. ${safety}`;
