@@ -61,6 +61,7 @@ async function supabaseRows(table:string,sessionId:string,select:string,order?:s
   return response.json();
 }
 function add(findings:Finding[],condition:boolean,code:string,message:string){if(!condition)findings.push({level:'RED',code,message});}
+function hasImplicationFact(value:any):boolean{return normalizedArray(value).some(item=>/^implicacion:/i.test(item));}
 
 const functional:any[]=[];
 for(const scenario of result.report.scenarios){
@@ -87,7 +88,7 @@ for(const scenario of result.report.scenarios){
     add(findings,t3.nba==='ASK_MISSING_FACT','IMPLICATION_NBA_MISSING',`T3 debía avanzar a impacto/implicación y terminó en ${t3.nba||'SIN_NBA'}.`);
     add(findings,/genera|afecta|interrup|p[eé]rdida|pierdes|parar|consecuencia/i.test(t3.answer)&&!containsBudgetQuestion(t3.answer),'IMPLICATION_QUESTION_WRONG','T3 debía explorar el impacto del problema, no presupuesto ni otro CTA.');
 
-    add(findings,String(t4.state?.lastSpinContribution??'').toUpperCase()==='IMPLICACION','IMPLICATION_NOT_PERSISTED',`T4 debía registrar IMPLICACION y registró ${String(t4.state?.lastSpinContribution??null)}.`);
+    add(findings,String(t4.state?.lastSpinContribution??'').toUpperCase()==='IMPLICACION'||hasImplicationFact(t4.state?.spinFacts),'IMPLICATION_NOT_PERSISTED',`T4 debía registrar la implicación canónica; lastSpinContribution=${String(t4.state?.lastSpinContribution??null)} spinFacts=${JSON.stringify(t4.state?.spinFacts??[])}.`);
     add(findings,t4.nba==='ASK_MISSING_FACT','NEED_NBA_MISSING',`T4 debía avanzar a prioridad/need-payoff y terminó en ${t4.nba||'SIN_NBA'}.`);
     add(findings,/pesa|prioridad|importante|importa/i.test(t4.answer)&&!containsBudgetQuestion(t4.answer),'NEED_QUESTION_WRONG','T4 debía preguntar qué pesa más al elegir.');
 
@@ -126,7 +127,8 @@ else{
         checks.situation=String(r1?.siguiente_accion??'').toUpperCase()==='ASK_MISSING_FACT'&&/uso/i.test(JSON.stringify(r1?.pregunta_pendiente_turno??{}));
         checks.problem=String(r2?.siguiente_accion??'').toUpperCase()==='ASK_MISSING_FACT'&&/problema/i.test(JSON.stringify(r2?.pregunta_pendiente_turno??{}))&&!containsBudgetQuestion(r2?.pregunta_pendiente_turno);
         checks.implication=String(r3?.siguiente_accion??'').toUpperCase()==='ASK_MISSING_FACT'&&/impacto|implic/i.test(JSON.stringify(r3?.pregunta_pendiente_turno??{}));
-        checks.implicationPersisted=String(r4?.spin_aporte??'').toUpperCase()==='IMPLICACION'||normalizedArray(r4?.implicaciones_detectadas).length>0;
+        const snapshot4=jsonish(r4?.contexto_comercial_snapshot);
+        checks.implicationPersisted=String(r4?.spin_aporte??'').toUpperCase()==='IMPLICACION'||hasImplicationFact(snapshot4?.spinFacts);
         checks.need=String(r4?.siguiente_accion??'').toUpperCase()==='ASK_MISSING_FACT'&&/prioridad/i.test(JSON.stringify(r4?.pregunta_pendiente_turno??{}));
         checks.needPersisted=normalizedArray(r5?.prioridades_detectadas).some(value=>/resisten|golpe|caida/i.test(value));
         checks.noBudgetHijack=[r1,r2,r3,r4].every(row=>!containsBudgetQuestion(row?.pregunta_pendiente_turno));
