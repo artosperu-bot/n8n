@@ -30,16 +30,16 @@ const armorX13=[
 test('overview uses six separated commercial blocks, includes virtual RAM and one FAB line',()=>{
   const result=buildFullRagAnswer({message:'Info del Armor 22',intent:'PRODUCT_INFO',resolvedProduct:'Armor 22',state:{},rag:armor22} as any);
   assert.ok(result);
-  const bullets=result!.answer.split('\n').filter(line=>line.startsWith('- '));
-  assert.equal(bullets.length,6);
-  assert.match(result!.answer,/- Rendimiento:/);
-  assert.match(result!.answer,/- Memoria:/);
+  const points=result!.answer.split('\n').filter(line=>/^\d+\.\s/.test(line));
+  assert.equal(points.length,6);
+  assert.match(result!.answer,/1\. Rendimiento:/);
+  assert.match(result!.answer,/2\. Memoria:/);
   assert.match(result!.answer,/8 GB de RAM física/i);
   assert.match(result!.answer,/8 GB de RAM virtual/i);
-  assert.match(result!.answer,/- Batería:/);
-  assert.match(result!.answer,/- Resistencia:/);
-  assert.match(result!.answer,/- Cámaras:/);
-  assert.match(result!.answer,/- Pantalla:/);
+  assert.match(result!.answer,/3\. Batería:/);
+  assert.match(result!.answer,/4\. Resistencia:/);
+  assert.match(result!.answer,/5\. Cámaras:/);
+  assert.match(result!.answer,/6\. Pantalla:/);
   assert.equal((result!.answer.match(/En la práctica:/g)??[]).length,1);
 });
 
