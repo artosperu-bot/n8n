@@ -93,7 +93,6 @@ for(const scenario of result.report.scenarios){
 
     add(findings,normalizedArray(t5.state?.priorities).some(value=>/resisten|golpe|caida/i.test(value)),'NEED_NOT_PERSISTED',`T5 no conservó resistencia como prioridad: ${JSON.stringify(t5.state?.priorities??[])}.`);
     add(findings,t5.nba!=='ASK_MISSING_FACT','SPIN_DID_NOT_FINISH',`T5 ya tenía S/P/I/N y no debía seguir interrogando; NBA=${t5.nba}.`);
-    add(findings(!0 as never) as any,true,'','');
   }
 
   if(scenario.id==='CSMOKE-INTEREST-NOT-PURCHASE'){
