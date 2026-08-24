@@ -22,6 +22,7 @@
     "qa:full-rag50": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-full-rag50.ts",
     "qa:persistence-contract": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-persistence-contract.ts",
     "qa:human-sales": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-human-sales.ts",
+    "qa:promised-flow": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-promised-sales-flow.ts",
     "qa:commercial-smoke": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-commercial-smoke.ts",
     "qa:commercial50": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-commercial50.ts"
   },
