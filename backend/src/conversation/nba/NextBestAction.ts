@@ -13,6 +13,12 @@ import { evaluateSpinReadiness } from './SpinProgression.ts';
 export function nextBestAction(intent: string, state: ConversationState = {}): string | null {
   const normalized=String(intent??'').toUpperCase();
   const multiUnit=(state.quantity??1)>=2;
+  const resolvedProduct=Boolean(state.activeProduct||state.selectedProduct||state.recommendedProduct);
+  const actionableFit=Boolean(
+    (state.useCase&&state.problem)
+    || (state.priorities?.length??0)>0
+    || (state.explicitPriorities?.length??0)>0
+  );
 
   if (state.purchaseSignal) return multiUnit ? 'ASSISTED_HANDOFF' : 'COLLECT_RESERVATION_DATA';
 
@@ -25,7 +31,7 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'STOCK':
       // SQL resolves price + availability together. Once a product is known,
       // the useful +1 is fulfillment (delivery vs pickup), not asking stock again.
-      return state.activeProduct || state.selectedProduct || state.recommendedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
+      return resolvedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
     case 'PRODUCT_INFO': {
       const spin=evaluateSpinReadiness(state);
@@ -48,9 +54,13 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
         : 'ANSWER_ONLY';
 
     case 'EVALUATE_USE': {
+      // SPIN remains useful context, but it must not become a form the customer
+      // has to complete. Once use + pain/need + product fit are already known,
+      // move to the next commercial result: offer price + availability.
+      if(resolvedProduct&&actionableFit)return'SOFT_CLOSE';
       const spin=evaluateSpinReadiness(state);
       if(spin.nextMissingFact)return'ASK_MISSING_FACT';
-      if(!state.recommendedProduct&&!state.activeProduct)return'RECOMMEND';
+      if(!resolvedProduct)return'RECOMMEND';
       return'ANSWER_ONLY';
     }
 
@@ -61,6 +71,9 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
 
     case 'RECOMMEND':
     case 'RECOMMEND_WITHIN_BUDGET': {
+      // If a recommendation is already grounded and we have enough context to
+      // explain why it fits, do not reopen SPIN merely to fill missing boxes.
+      if(resolvedProduct&&actionableFit)return'SOFT_CLOSE';
       const spin=evaluateSpinReadiness(state);
       return spin.nextMissingFact ? 'ASK_MISSING_FACT' : 'ANSWER_ONLY';
     }
