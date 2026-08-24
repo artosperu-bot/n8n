@@ -1,4 +1,5 @@
 import type { ConversationState } from '../../domain/types.ts';
+import { fold } from '../../shared/text.ts';
 import { evaluateSpinReadiness } from './SpinProgression.ts';
 
 export type ProgressionLevel='HIGH'|'MEDIUM'|'LOW';
@@ -18,6 +19,11 @@ type ProgressionResult={level:ProgressionLevel;candidateNba:string;reason:string
 const CLOSING_ACTIONS=new Set(['COLLECT_RESERVATION_DATA','ASSISTED_HANDOFF','EXECUTE_RESERVATION']);
 const HIGHER_VALUE_ACTIONS=new Set(['COMPARE','OFFER_ALTERNATIVE']);
 
+function specificActionablePain(problem:string|null|undefined):boolean{
+  const value=fold(problem??'');
+  return /reparaciones repetidas|reparaciones_repetidas|caidas frecuentes|caidas_frecuentes|autonomia insuficiente|autonomia_insuficiente|exposicion agua polvo|exposicion_agua_polvo|polvo|humedad|lluvia|bateria.*(?:no dura|no llega)|(?:no dura|no llega).*bateria/.test(value);
+}
+
 export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):ProgressionResult{
   const intent=String(input.intent??'').toUpperCase();
   const current=String(input.currentNba??'ANSWER_ONLY').toUpperCase();
@@ -26,7 +32,8 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
   const previousNba=String(state.lastNba??state.pendingCommercialAction??'').toUpperCase();
   const resolved=Boolean(input.resolvedProduct);
   const actionableFit=Boolean(
-    (state.useCase&&state.problem)
+    specificActionablePain(state.problem)
+    || (state.useCase&&state.problem)
     || (state.priorities?.length??0)>0
     || (state.explicitPriorities?.length??0)>0
   );
@@ -38,9 +45,6 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
 
   if(state.objection&&(input.verifiedAlternatives??0)>0)return{level:'MEDIUM',candidateNba:'OFFER_ALTERNATIVE',reason:'OBJECTION_WITH_VERIFIED_ALTERNATIVE'};
 
-  // A recommendation is the current answer, not a terminal state. Once that
-  // recommendation is grounded and useful, immediately advance to the next
-  // seller-led result instead of waiting for another customer question.
   if(current==='RECOMMEND'){
     if(consultative&&resolved&&input.verifiedCurrentAnswer&&actionableFit)return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'GROUNDED_RECOMMENDATION_READY_FOR_COMMERCIAL_RESULT'};
     return{level:'MEDIUM',candidateNba:'RECOMMEND',reason:'CURRENT_RECOMMENDATION_NOT_YET_READY_TO_CLOSE'};
@@ -58,8 +62,6 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
     return{level:'LOW',candidateNba:'ANSWER_ONLY',reason:'FACTUAL_ANSWER_COMPLETE'};
   }
 
-  // Result first: once fit is already grounded, do not reopen SPIN just because
-  // a later SPIN box is empty. Move the customer to the next concrete result.
   if(consultative&&actionableFit&&resolved&&input.verifiedCurrentAnswer&&previousNba!=='SOFT_CLOSE')return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'ACTIONABLE_FIT_READY_FOR_COMMERCIAL_RESULT'};
 
   if(['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','PRODUCT_INFO'].includes(intent)&&spin.nextMissingFact){
@@ -68,8 +70,6 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
 
   if(consultative&&spin.readyForStock&&previousNba!=='SOFT_CLOSE'&&input.verifiedCurrentAnswer&&resolved)return{level:'MEDIUM',candidateNba:'SOFT_CLOSE',reason:'GROUNDED_FIT_READY_FOR_STOCK'};
 
-  // A customer who asks price or stock has already expressed enough commercial
-  // intent for us to lead the next step. No artificial interest-score gate.
   if(['PRICE','PRICE_AVAILABILITY','STOCK'].includes(intent)&&resolved&&input.verifiedCurrentAnswer)return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'PRICE_STOCK_READY_FOR_FULFILLMENT'};
 
   return{level:'LOW',candidateNba:current==='ASK_MISSING_FACT'&&spin.nextMissingFact?current:'ANSWER_ONLY',reason:'NO_USEFUL_EXECUTABLE_PROGRESSION'};
