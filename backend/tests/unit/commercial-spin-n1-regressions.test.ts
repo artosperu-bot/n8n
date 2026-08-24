@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluateSpinReadiness } from '../../src/conversation/nba/SpinProgression.ts';
 import { nextBestAction } from '../../src/conversation/nba/NextBestAction.ts';
+import { isNbaCompatible } from '../../src/conversation/nba/NbaCompatibility.ts';
 import { prepareCommercialWriteInput } from '../../src/conversation/commercial/CommercialWriteContract.ts';
 import { validateTurnDecision } from '../../src/conversation/decision/DecisionValidator.ts';
-import type { TurnDecision } from '../../src/ports/LlmProvider.ts';
+import { safeWrite } from '../../src/conversation/writer/WriterGuard.ts';
+import type { LlmProvider, TurnDecision } from '../../src/ports/LlmProvider.ts';
 
 function decision(patch:Partial<TurnDecision>):TurnDecision{
   return{
@@ -15,6 +17,10 @@ function decision(patch:Partial<TurnDecision>):TurnDecision{
     ...patch,
   };
 }
+
+const echoWriter:LlmProvider={
+  async write(){return{text:'Tomo ese dato como contexto.',model:'test-writer',usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},durationMs:0};},
+};
 
 test('SPIN exposes the next missing conversational fact in order without making budget a generic step',()=>{
   const empty=evaluateSpinReadiness({});
@@ -46,10 +52,12 @@ test('an explicitly stated need can skip redundant SPIN questions',()=>{
 test('broad PRODUCT_INFO opens one useful SPIN question while a focused capability stays factual',()=>{
   assert.equal(nextBestAction('PRODUCT_INFO',{}),'ASK_MISSING_FACT');
   assert.equal(nextBestAction('CAPABILITY',{}),'ANSWER_ONLY');
+  assert.equal(isNbaCompatible('PRODUCT_INFO','ASK_MISSING_FACT',{}),true);
 });
 
-test('recommendation with needs but no use case keeps recommendation response and uses N+1 to discover situation',()=>{
+test('recommendation can use one SPIN discovery N+1 before enough context exists',()=>{
   assert.equal(nextBestAction('RECOMMEND',{priorities:['resistencia','bateria']}),'ASK_MISSING_FACT');
+  assert.equal(isNbaCompatible('RECOMMEND','ASK_MISSING_FACT',{}),true);
   const prepared=prepareCommercialWriteInput({
     message:'Busco uno resistente y con buena batería, ¿qué me recomiendas?',intent:'RECOMMEND',
     state:{priorities:['resistencia','bateria']},decision:{nextBestAction:'ASK_MISSING_FACT'} as any,
@@ -67,6 +75,19 @@ test('construction problem does not jump to budget as the next SPIN question',()
   });
   assert.notEqual(prepared.missingFact,'presupuesto máximo');
   assert.equal(prepared.missingFact,'impacto del problema');
+});
+
+test('writer executes the authorized implication question and only one question',async()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'Se me cae seguido el celular.',intent:'EVALUATE_USE',
+    state:{useCase:'trabajo_construccion',problem:'caidas_frecuentes'},decision:{nextBestAction:'ASK_MISSING_FACT'} as any,
+    allowedProducts:[],
+  });
+  const result=await safeWrite(echoWriter,prepared,'Tomo ese dato como contexto.');
+  assert.equal(result.nextBestAction,'ASK_MISSING_FACT');
+  assert.equal(result.missingFact,'impacto del problema');
+  assert.match(result.answer,/genera|interrupciones|p[eé]rdida de tiempo/i);
+  assert.equal((result.answer.match(/\?/g)??[]).length,1);
 });
 
 test('interest language cannot be escalated by the planner into PURCHASE',()=>{
@@ -103,4 +124,17 @@ test('factual turns cannot persist planner-created SPIN contribution',()=>{
   assert.equal(result.spinContribution,null);
   assert.deepEqual(result.priorities,[]);
   assert.equal(result.customerNeed,null);
+});
+
+test('neutral OTHER turns cannot fabricate SPIN memory unless answering a pending SPIN question',()=>{
+  const planner=decision({primaryIntent:'OTHER',spinContribution:'SITUACION',priorities:['confirmar demanda'],customerNeed:'asegurar compra',customerProblem:'se puede agotar',nextBestAction:'ANSWER_ONLY'});
+  const deterministic=decision({primaryIntent:'OTHER',nextBestAction:'ANSWER_ONLY'});
+  const neutral=validateTurnDecision(planner,{activeProduct:'Armor 22'},['Armor 22'],deterministic);
+  assert.equal(neutral.customerNeed,null);
+  assert.equal(neutral.customerProblem,null);
+  assert.equal(neutral.spinContribution,null);
+  assert.deepEqual(neutral.priorities,[]);
+
+  const pending=validateTurnDecision(decision({...planner,spinContribution:'IMPLICACION'}),{activeProduct:'Armor 22',useCase:'trabajo',problem:'caidas',pendingMissingFact:'impacto del problema'},['Armor 22'],deterministic);
+  assert.equal(pending.spinContribution,'IMPLICACION');
 });
