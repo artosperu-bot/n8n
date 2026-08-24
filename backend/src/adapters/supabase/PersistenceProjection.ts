@@ -1,8 +1,8 @@
 import type { ConversationState } from '../../domain/types.ts';
 
 type ProjectionMeta={messageId:string};
-type PendingQuestion={kind:'DISCOVERY';target:string;status:'PENDING';createdMessageId:string};
-type PendingAction={type:string;status:'PENDING';createdMessageId:string};
+type PendingQuestion={kind:'DISCOVERY';target:string;missingFact:string;status:'PENDING';createdMessageId:string};
+type PendingAction={type:string;accion:string;status:'PENDING';createdMessageId:string};
 
 function clean(values:string[]|undefined):string[]{
   return [...new Set((values??[]).filter(v=>typeof v==='string').map(v=>v.trim()).filter(Boolean))];
@@ -31,12 +31,12 @@ function targetForMissingFact(value:string|null|undefined):string{
 }
 function pendingQuestion(state:ConversationState,meta:ProjectionMeta):PendingQuestion|null{
   if(String(state.lastNba??'').toUpperCase()!=='ASK_MISSING_FACT'||!String(state.pendingMissingFact??'').trim()) return null;
-  return {kind:'DISCOVERY',target:targetForMissingFact(state.pendingMissingFact),status:'PENDING',createdMessageId:meta.messageId};
+  return {kind:'DISCOVERY',target:targetForMissingFact(state.pendingMissingFact),missingFact:String(state.pendingMissingFact).trim(),status:'PENDING',createdMessageId:meta.messageId};
 }
 function pendingAction(state:ConversationState,meta:ProjectionMeta):PendingAction|null{
   const raw=String(state.pendingCommercialAction??state.lastNba??'').trim().toUpperCase();
   if(!raw||raw==='ANSWER_ONLY'||raw==='ASK_MISSING_FACT') return null;
-  return {type:raw,status:'PENDING',createdMessageId:meta.messageId};
+  return {type:raw,accion:raw,status:'PENDING',createdMessageId:meta.messageId};
 }
 function spinContribution(previous:ConversationState,current:ConversationState):string|null{
   const direct=String(current.lastSpinContribution??'').trim().toUpperCase();
