@@ -44,9 +44,12 @@ export class FullRagLlmProvider implements LlmProvider{
     const intent=String(enriched.intent??'').toUpperCase();
 
     // RAG-only factual authority. Budget recommendations are intentionally left
-    // outside this kernel because price/budget is SQL authority.
+    // outside this kernel because price/budget is SQL authority. A persisted
+    // recommended product must not override the product resolved in the current
+    // factual turn.
+    const kernelInput:LlmWriteInput=intent==='RECOMMEND'?enriched:{...enriched,recommendedProduct:null};
     const kernel=['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','COMPARE','RECOMMEND'].includes(intent)
-      ? buildFullRagAnswer(enriched)
+      ? buildFullRagAnswer(kernelInput)
       : null;
     if(kernel){
       Object.assign(input,enriched,{directAnswer:kernel.answer});
