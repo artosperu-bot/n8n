@@ -3,7 +3,12 @@ import { evaluateSpinReadiness } from './SpinProgression.ts';
 
 /**
  * Bounded commercial next-best-action catalog.
- * Facts still come from SQL/RAG authorities; this layer only controls progression.
+ * Facts still come from SQL/RAG authorities; this layer only controls the one
+ * executable +1 after the current customer request is answered.
+ *
+ * SPIN is a separate authority: it says which discovery fact is missing. N+1
+ * decides whether the current turn should ask that one fact or perform another
+ * commercial action. Never execute two independent continuations in one turn.
  */
 export function nextBestAction(intent: string, state: ConversationState = {}): string | null {
   const normalized=String(intent??'').toUpperCase();
@@ -20,8 +25,10 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'STOCK':
       return state.selectedProduct || (state.interestSignal && state.activeProduct) ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
-    case 'PRODUCT_INFO':
-      return 'ANSWER_ONLY';
+    case 'PRODUCT_INFO': {
+      const spin=evaluateSpinReadiness(state);
+      return spin.nextMissingFact ? 'ASK_MISSING_FACT' : 'ANSWER_ONLY';
+    }
 
     case 'ATTRIBUTE':
     case 'CAPABILITY':
@@ -34,10 +41,9 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
 
     case 'EVALUATE_USE': {
       const spin=evaluateSpinReadiness(state);
-      if(!spin.hasSituation||!spin.hasNeed)return'ASK_MISSING_FACT';
+      if(spin.nextMissingFact)return'ASK_MISSING_FACT';
       if(!state.recommendedProduct&&!state.activeProduct)return'RECOMMEND';
-      // The actual stock CTA is decided after the grounded answer, once the
-      // product fit has been verified. Do not jump to stock before evidence.
+      // Grounded fit is evaluated after the answer before any stock close.
       return'ANSWER_ONLY';
     }
 
@@ -47,8 +53,10 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
         : 'ASK_MISSING_FACT';
 
     case 'RECOMMEND':
-    case 'RECOMMEND_WITHIN_BUDGET':
-      return 'ANSWER_ONLY';
+    case 'RECOMMEND_WITHIN_BUDGET': {
+      const spin=evaluateSpinReadiness(state);
+      return spin.nextMissingFact ? 'ASK_MISSING_FACT' : 'ANSWER_ONLY';
+    }
 
     case 'COMPARE':
       return (state.priorities?.length ?? 0) > 0 ? 'RECOMMEND' : 'COMPARE';
