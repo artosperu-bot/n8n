@@ -14,6 +14,7 @@ import { OpenAIEmbeddingProvider } from './adapters/openai/OpenAIEmbeddingProvid
 import { SupabaseConversationRepository } from './adapters/supabase/SupabaseConversationRepository.ts';
 import { SupabaseRagRepository } from './adapters/supabase/SupabaseRagRepository.ts';
 import { SupabaseTelemetryRepository } from './adapters/supabase/SupabaseTelemetryRepository.ts';
+import { WhatsAppCloudApiClient } from './adapters/whatsapp/WhatsAppCloudApiClient.ts';
 import { HybridConversationEngine } from './conversation/HybridConversationEngine.ts';
 import { RecentHistoryLlmProvider } from './conversation/history/RecentHistoryLlmProvider.ts';
 import { FullRagLlmProvider } from './conversation/commercial/FullRagLlmProvider.ts';
@@ -89,5 +90,13 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
     ? new N8nAutomationBus({ url: need(config.n8nWebhookUrl,'N8N_WEBHOOK_URL'), token: config.n8nWebhookToken, strict: config.n8nStrict })
     : new NoopAutomationBus();
 
-  return {config,conversations,telemetry,erp,rag,llm,automation,engine: new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation })};
+  const whatsapp = config.whatsappAccessToken && config.whatsappPhoneNumberId
+    ? new WhatsAppCloudApiClient({
+        accessToken: config.whatsappAccessToken,
+        phoneNumberId: config.whatsappPhoneNumberId,
+        version: config.whatsappGraphApiVersion,
+      })
+    : null;
+
+  return {config,conversations,telemetry,erp,rag,llm,automation,whatsapp,engine: new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation })};
 }
