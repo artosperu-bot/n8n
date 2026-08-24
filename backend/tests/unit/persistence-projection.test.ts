@@ -42,6 +42,7 @@ test('purchase signal remains a current-state fact and is not inferred from inte
   const p=projectCommercialPersistence({}, {levelOfInterest:90,interestEvents:['PRICE:X','STOCK:X'],purchaseSignal:false,lastNba:'SOFT_CLOSE'}, {messageId:'m1'});
   assert.equal(p.context.commercial.purchaseSignal,false);
   assert.equal(p.context.commercial.interestLevel,90);
+  assert.equal(p.context.commercial.readiness,'OFFER_READY');
 });
 
 test('typed pending contracts keep legacy keys during migration',()=>{
@@ -56,4 +57,23 @@ test('canonical context exposes RPC compatibility aliases without changing autho
   assert.equal(p.context.actividad_activa,'trabajo_construccion');
   assert.equal(p.context.problema_activo,'caidas_frecuentes');
   assert.equal(p.context.senal_compra,false);
+});
+
+test('sufficient fit evidence becomes FIT_READY without requiring full SPIN',()=>{
+  const p=projectCommercialPersistence({}, {
+    activeProduct:'Armor 22',
+    useCase:'trabajo_construccion',
+    priorities:['resistencia','bateria'],
+    spinFacts:['uso:trabajo_construccion','prioridad:resistencia','prioridad:bateria'],
+    purchaseSignal:false,
+  }, {messageId:'m6'});
+  assert.equal(p.context.commercial.readiness,'FIT_READY');
+  assert.deepEqual(p.context.customer.implications,[]);
+});
+
+test('explicit purchase is the only state that becomes PURCHASE',()=>{
+  const interested=projectCommercialPersistence({}, {levelOfInterest:95,purchaseSignal:false}, {messageId:'m7'});
+  assert.notEqual(interested.context.commercial.readiness,'PURCHASE');
+  const purchase=projectCommercialPersistence({}, {levelOfInterest:10,purchaseSignal:true}, {messageId:'m8'});
+  assert.equal(purchase.context.commercial.readiness,'PURCHASE');
 });
