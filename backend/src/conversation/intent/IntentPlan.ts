@@ -2,7 +2,7 @@ import { fold } from '../../shared/text.ts';
 
 export type SemanticIntent =
   | 'GREETING' | 'PRODUCT_INFO' | 'ATTRIBUTE' | 'EVALUATE_USE' | 'RECOMMEND'
-  | 'COMPARE' | 'PRICE_AVAILABILITY' | 'STOCK' | 'IMAGES' | 'POLICY' | 'WARRANTY'
+  | 'COMPARE' | 'PRICE_AVAILABILITY' | 'STOCK' | 'IMAGES' | 'POLICY' | 'FULFILLMENT_SELECTION' | 'WARRANTY'
   | 'ORDER_STATUS' | 'OBJECTION' | 'HUMAN' | 'PURCHASE' | 'QUOTE' | 'CATALOG'
   | 'CATEGORIES' | 'SUBCATEGORIES' | 'OTHER';
 
@@ -57,13 +57,24 @@ function hasComparativePriceQuestion(t:string):boolean {
     || /\b(?:cuesta|vale|sale)\b[^?.!]{0,45}\bmas\b[^?.!]{0,45}\bque\b[^?.!]{0,45}\bpor\s+que\b/.test(t);
 }
 
+function isFulfillmentSelection(message:string,t:string):boolean{
+  if(/[¿?]/.test(message))return false;
+  const delivery=/^(?:\s*(?:prefiero|quiero|mejor)?\s*)?(?:envio|delivery|entrega)(?:\s+(?:a|para)\b|\b)/.test(t)
+    || /\b(?:prefiero|quiero|mejor)\b[^.!?]{0,30}\b(?:envio|delivery|entrega)\b/.test(t);
+  const pickup=/\b(?:prefiero|quiero|voy a|mejor)\b[^.!?]{0,35}\b(?:recoger|recojo|retirar|local|tienda)\b/.test(t)
+    || /^\s*(?:recojo|recoger|retirar)\b/.test(t);
+  return delivery||pickup;
+}
+
 export function resolveIntentPlan(message: string): IntentPlan {
   const t = fold(message);
   const hits: SemanticIntent[] = [];
   const has = (rx: RegExp) => rx.test(t);
+  const fulfillmentSelection=isFulfillmentSelection(message,t);
 
   if (has(/\b(precio|cuanto cuesta|cuanto vale|cuanto esta|cuanto sale|cuanto ta|a cuanto esta|a cuanto sale|costo)\b/)) hits.push('PRICE_AVAILABILITY');
   if (has(/\b(stock|stk|disponible|disponibilidad|hay unidades|tienen unidades|queda stock|quedan unidades)\b/)) hits.push('STOCK');
+  if (fulfillmentSelection) hits.push('FULFILLMENT_SELECTION');
   if (isDirectImageRequest(t)) hits.push('IMAGES');
   if (has(/\b(pedido|orden)\b/) && has(/\b(consultar|estado|seguimiento|ver|revisar|donde)\b/)) hits.push('ORDER_STATUS');
   if (has(/\b(categorias?)\b/)) hits.push('CATEGORIES');
@@ -97,7 +108,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(asesor|humano|persona|vendedor)\b/)) hits.push('HUMAN');
   if (has(/\b(caro|sale de mi presupuesto|fuera de mi presupuesto|no confio|me preocupa|esperaba|descuento|otra tienda[^.!?]{0,60}(?:barato|economico)|mas barato)\b/)) hits.push('OBJECTION');
   if (has(/\bgarantia\b/)) hits.push('WARRANTY');
-  if (has(/\b(tienda fisica|direccion|ubicacion|horario|recojo|envio|envios|provincia|lima|contraentrega|forma de pago|medios? de pago|yape|plin|transferencia|tarjeta|boleta|factura|cambio|devolucion|reembolso)\b/)) hits.push('POLICY');
+  if (!fulfillmentSelection&&has(/\b(tienda fisica|direccion|ubicacion|horario|recojo|envio|envios|provincia|lima|contraentrega|forma de pago|medios? de pago|yape|plin|transferencia|tarjeta|boleta|factura|cambio|devolucion|reembolso)\b/)) hits.push('POLICY');
 
   const attributes = unique(ATTRS.filter(([rx]) => rx.test(t)).map(([, name]) => name));
   const hasProductLike=has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);
@@ -113,15 +124,15 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const use = directUse || everydayNeed || useCaseLoQuiero;
 
   if (productInfo) hits.push('PRODUCT_INFO');
-  if (use) hits.push('EVALUATE_USE');
+  if (use&&!fulfillmentSelection) hits.push('EVALUATE_USE');
   if ((attributes.length || requirementFollowup) && !productInfo) hits.push('ATTRIBUTE');
   if (/^(hola|buenas|buenos dias|buenas tardes|buenas noches)[\s!.,¿?]*$/.test(t)) hits.push('GREETING');
 
   const intents = unique(hits);
-  const declarativeNeed = use && (useCaseLoQuiero||has(/\b(necesito|necesitamos|busco|quiero algo|quiero un|quiero una)\b/)) && !/[?¿]/.test(message);
+  const declarativeNeed = use && !fulfillmentSelection && (useCaseLoQuiero||has(/\b(necesito|necesitamos|busco|quiero algo|quiero un|quiero una)\b/)) && !/[?¿]/.test(message);
   const precedence: SemanticIntent[] = declarativeNeed
-    ? ['PURCHASE','QUOTE','COMPARE','PRICE_AVAILABILITY','STOCK','RECOMMEND','EVALUATE_USE','IMAGES','WARRANTY','POLICY','ATTRIBUTE','PRODUCT_INFO','OBJECTION','HUMAN','OTHER']
-    : ['ORDER_STATUS','PURCHASE','QUOTE','COMPARE','PRICE_AVAILABILITY','STOCK','RECOMMEND','IMAGES','CATEGORIES','SUBCATEGORIES','CATALOG','WARRANTY','POLICY','PRODUCT_INFO','OBJECTION','EVALUATE_USE','ATTRIBUTE','HUMAN','GREETING','OTHER'];
+    ? ['PURCHASE','QUOTE','COMPARE','PRICE_AVAILABILITY','STOCK','FULFILLMENT_SELECTION','RECOMMEND','EVALUATE_USE','IMAGES','WARRANTY','POLICY','ATTRIBUTE','PRODUCT_INFO','OBJECTION','HUMAN','OTHER']
+    : ['ORDER_STATUS','PURCHASE','QUOTE','COMPARE','PRICE_AVAILABILITY','STOCK','FULFILLMENT_SELECTION','RECOMMEND','IMAGES','CATEGORIES','SUBCATEGORIES','CATALOG','WARRANTY','POLICY','PRODUCT_INFO','OBJECTION','EVALUATE_USE','ATTRIBUTE','HUMAN','GREETING','OTHER'];
   const primary = precedence.find(x => intents.includes(x)) ?? 'OTHER';
 
   return {
