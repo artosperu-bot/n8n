@@ -22,13 +22,14 @@ export function evaluateSpinReadiness(state:ConversationState={}):SpinReadiness{
   const priorities=unique(state.priorities??[]);
   const progressedSpin=['PROBLEMA','IMPLICACION','NECESIDAD_SOLUCION'].includes(contribution);
 
-  // A need can be explicit ("necesito batería y resistencia"), emerge from a
-  // real problem, or be recognized by the SPIN classifier. Two independent
-  // priorities are also enough to avoid asking redundant discovery questions.
+  // With a known situation, one concrete need/priority is enough to stop asking
+  // redundant discovery questions. Without a situation, isolated attributes do
+  // not qualify the conversation for a stock CTA.
+  const contextualPriority=hasSituation&&priorities.length>=1;
   const hasNeed=Boolean(
     state.problem
     || explicit.length>0
-    || priorities.length>=2
+    || contextualPriority
     || progressedSpin
   );
 
