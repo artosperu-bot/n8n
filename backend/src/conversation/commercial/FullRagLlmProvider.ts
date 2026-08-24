@@ -81,10 +81,12 @@ function sanitize(text:string,input:LlmWriteInput):string{
   if(['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent)&&nba==='ANSWER_ONLY')clean=clean.replace(/^\s*Te recomiendo\s+([^.:\n]+)(\s*[:.]?)/i,(_m,product)=>`Para lo que buscas, me iría por ${String(product).trim()}.`);
   return clean;
 }
+function isLocationPolicy(message:string):boolean{return /\b(?:donde queda|direccion|ubicacion|local|tienda)\b/.test(fold(message));}
 function softCloseQuestion(input:LlmWriteInput):string{
   if(input.commercialResponsePlan?.closePurpose==='PRICE_AVAILABILITY')return'¿Quieres que te confirme precio y disponibilidad?';
   if(input.commercialResponsePlan?.closePurpose==='RESERVATION')return'¿Quieres que te lo reserve?';
-  return'¿Prefieres envío o recogerlo en nuestro local?';
+  if(input.commercialResponsePlan?.closePurpose==='FULFILLMENT_RESUME'&&isLocationPolicy(input.message))return'¿Prefieres envío o recogerlo aquí?';
+  return'¿Prefieres envío o recojo?';
 }
 function humanizeKernel(text:string,input:LlmWriteInput,includeCommercialContinuation=true):string{
   let clean=String(text??'')
@@ -148,16 +150,13 @@ function ruggedFabCore(input:LlmWriteInput,product:string):string|null{
   if(!/caida|golpe|construccion|obra|campo|repar|polvo|lluvia|agua|humedad/.test(context))return null;
   const dropLabel=ruggedDropLabel(input);
   const certs=ruggedCertifications(input);
-  const featureParts:string[]=[];
-  if(dropLabel)featureParts.push(dropLabel);
-  if(certs.length)featureParts.push(`certificaciones ${naturalList(certs)}`);
+  const featureParts=[dropLabel,...certs].filter((value):value is string=>Boolean(value));
   if(!featureParts.length)return null;
   const hasImpact=Boolean(dropLabel||certs.includes('MIL-STD-810H'));
   const hasIngress=certs.includes('IP68')||certs.includes('IP69K');
-  const protection=hasImpact&&hasIngress?'golpes, caídas, agua y polvo':hasImpact?'golpes y caídas':hasIngress?'agua y polvo':'uso exigente';
-  const intro=/repar/.test(context)?`En ese caso me iría por ${product}`:`Para ese ritmo me iría por ${product}`;
-  const benefit=`En palabras simples, está mucho mejor preparado para ${protection}; si lo usas para trabajar, eso ayuda a reducir el riesgo de volver al mismo ciclo de caída, reparación y quedarte sin equipo.`;
-  return`${intro}: tiene ${naturalList(featureParts)}. ${benefit}`;
+  const protection=hasImpact&&hasIngress?'golpes, agua y polvo':hasImpact?'golpes y caídas':hasIngress?'agua y polvo':'uso exigente';
+  const work=/trabajo|construccion|obra|campo/.test(context)?' en el trabajo':'';
+  return`${product} tiene ${naturalList(featureParts)}, así que está pensado para aguantar mejor ${protection}${work}.`;
 }
 function compactContextualCore(input:LlmWriteInput,fallback:string):string{
   const intent=String(input.intent??'').toUpperCase();
@@ -169,12 +168,20 @@ function compactContextualCore(input:LlmWriteInput,fallback:string):string{
   const selected=(facts.length?facts:(input.verifiedFeatures??[])).slice(0,2).map(simpleFactLabel).filter(Boolean);
   const ruggedFab=product?ruggedFabCore(input,product):null;
   const fit=ruggedFab??(product&&selected.length?`${product}: ${selected.join(' y ')}.`:'');
-  const commercial=input.quote?.price!=null&&input.quote?.stock!=null?`${product||'El equipo'} está a S/ ${input.quote.price} y ${input.quote.stock>0?'tenemos disponibilidad':'ahora no tiene stock disponible'}.`:'';
+  const commercial=input.quote?.price!=null&&input.quote?.stock!=null?`${fit?'Está':product||'El equipo está'} a S/ ${input.quote.price} y ${input.quote.stock>0?'tenemos disponibilidad':'ahora no tiene stock disponible'}.`:'';
   return [fit,commercial].filter(Boolean).join(' ')||fallback;
 }
 function painContext(input:LlmWriteInput):boolean{
   const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''}`);
   return /caida|romp|repar|bateria|cargador|polvo|lluvia|agua|humedad|malogr|pierdo/.test(context);
+}
+function currentMessagePain(message:string):string{
+  const current=fold(message);
+  if(/repar/.test(current))return /\b(?:dos|2)\b/.test(current)?'Si ya lo reparaste dos veces por caídas, lo importante es no volver al mismo gasto.':'Si ya lo reparaste varias veces, lo importante es no volver al mismo gasto.';
+  if(/caida|construccion|obra/.test(current))return'En obra una caída pasa en un segundo; conviene que el celular esté hecho para aguantar ese ritmo.';
+  if(/bateria|cargador|no llega a la tarde/.test(current))return'Si a media tarde ya buscas dónde cargarlo, necesitas más margen para terminar la jornada sin estar pendiente de la batería.';
+  if(/polvo|lluvia|agua|humedad/.test(current))return'Si trabajas entre polvo o lluvia, conviene que el equipo esté preparado para ese ambiente.';
+  return'';
 }
 function technicalDumpOnPain(text:string,input:LlmWriteInput):boolean{
   if(!painContext(input))return false;
@@ -182,13 +189,19 @@ function technicalDumpOnPain(text:string,input:LlmWriteInput):boolean{
   const rugged=(String(text).match(/\b(?:IP68|IP69K|MIL-STD-810H)\b/gi)??[]).length;
   return noisy>0||rugged>3;
 }
+function compactPolicyCore(input:LlmWriteInput,core:string):string{
+  let clean=String(core??'').replace(/\s+/g,' ').trim();
+  if(!isLocationPolicy(input.message))return clean;
+  clean=clean
+    .replace(/^STECH\s+PER[ÚU]\s+(?:atiende|est[aá])\s+en\s+/i,'')
+    .replace(/,?\s*c[oó]digo\s+postal\s+\d+\.?$/i,'')
+    .replace(/[.]+$/,'')
+    .trim();
+  return clean?`Estamos en ${clean}.`:core;
+}
+function policyResumeResponse(input:LlmWriteInput,core:string):string{return[compactPolicyCore(input,core),softCloseQuestion(input)].filter(Boolean).join(' ').trim();}
 function naturalFallback(input:LlmWriteInput,core:string):string{
-  const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''}`);
-  let lead='';
-  if(/repar/.test(context))lead='Si ya lo reparaste varias veces, cada nueva caída puede terminar otra vez en gasto y en quedarte sin celular justo cuando lo necesitas.';
-  else if(/caida|construccion|obra/.test(context))lead='En obra una caída pasa en un segundo; la idea es que no estés pendiente del celular cada vez que lo sacas para trabajar.';
-  else if(/bateria|cargador|no llega a la tarde/.test(context))lead='Si a media tarde ya estás buscando dónde cargarlo, terminas pendiente de la batería cuando deberías seguir con tu trabajo.';
-  else if(/polvo|lluvia|agua|humedad/.test(context))lead='Si trabajas entre polvo o lluvia, estar cuidando el celular a cada rato termina siendo una preocupación más.';
+  const lead=currentMessagePain(input.message);
   const question=input.commercialResponsePlan?.exactNba==='SOFT_CLOSE'?softCloseQuestion(input):'';
   return [lead,core,question].filter(Boolean).join(' ').trim();
 }
@@ -201,7 +214,7 @@ function missesRequiredCloseResult(text:string,input:LlmWriteInput):boolean{
   const value=String(text??'');
   if(plan.closePurpose==='RESERVATION')return !/reserv|separ/i.test(value);
   if(plan.closePurpose==='PRICE_AVAILABILITY')return !(/precio/i.test(value)&&/disponib|stock/i.test(value));
-  if(plan.closePurpose==='FULFILLMENT_RESUME')return !(/env[ií]o/i.test(value)&&/recoger|recojo|local/i.test(value));
+  if(plan.closePurpose==='FULFILLMENT_RESUME')return !(/env[ií]o/i.test(value)&&/recoger|recojo|local|aqu[ií]/i.test(value));
   if(plan.closePurpose==='FULFILLMENT'){
     const needsPrice=input.quote?.price!=null;const needsAvailability=input.quote?.stock!=null;
     const priceOk=!needsPrice||/S\/\s*\d/i.test(value);const stockOk=!needsAvailability||/disponib|stock/i.test(value);
@@ -210,6 +223,8 @@ function missesRequiredCloseResult(text:string,input:LlmWriteInput):boolean{
   return false;
 }
 function missesRuggedFabEvidence(text:string,input:LlmWriteInput):boolean{
+  const intent=String(input.intent??'').toUpperCase();
+  if(!['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent))return false;
   const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''}`);
   if(!/caida|golpe|construccion|obra|campo|repar|polvo|lluvia|agua|humedad/.test(context))return false;
   const certs=ruggedCertifications(input);if(!certs.length)return false;
@@ -267,6 +282,7 @@ export class FullRagLlmProvider implements LlmProvider{
     if(responsePlan.mode==='SOFT_CLOSE'&&factualCore)enriched.deterministicAnswer=buildCommercialResponseInstruction(responsePlan);
     else if(usesDocumentaryRag(enriched))enriched.deterministicAnswer=naturalSalesPlan(enriched);
     Object.assign(input,enriched);
+    if(responsePlan.closePurpose==='FULFILLMENT_RESUME'&&factualCore)return deterministicResult(policyResumeResponse(enriched,factualCore),'stech-policy-overlay');
     if(shouldForceHumanPainResponse(enriched,factualCore))return deterministicResult(naturalFallback(enriched,factualCore),'full-rag-commercial-human-pain');
     const result=await this.#delegate.write(enriched);
     const composed=humanizeKernel(sanitize(result.text,enriched),enriched);
