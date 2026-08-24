@@ -20,7 +20,7 @@ export type CommercialResponseMode =
   | 'PURCHASE_PROGRESS'
   | 'HANDOFF';
 
-export type CommercialClosePurpose='FULFILLMENT'|'RESERVATION'|null;
+export type CommercialClosePurpose='PRICE_AVAILABILITY'|'FULFILLMENT'|'RESERVATION'|null;
 
 export type CommercialResponsePlan = {
   mode: CommercialResponseMode;
