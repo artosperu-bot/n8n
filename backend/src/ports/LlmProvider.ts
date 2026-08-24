@@ -10,6 +10,29 @@ export type ProductHighlight={
 };
 export type RagPresentationMode='PRODUCT_OVERVIEW'|'ATTRIBUTE'|'INSTITUTIONAL'|'DEFAULT';
 
+export type CommercialResponseMode =
+  | 'FACTUAL_DIRECT'
+  | 'DISCOVERY_SPIN'
+  | 'CONTEXTUAL_FAB'
+  | 'GUIDED_CHOICE'
+  | 'OBJECTION_LAER'
+  | 'SOFT_CLOSE'
+  | 'PURCHASE_PROGRESS'
+  | 'HANDOFF';
+
+export type CommercialResponsePlan = {
+  mode: CommercialResponseMode;
+  strategy: string | null;
+  shouldUseLlm: boolean;
+  acknowledgeContext: boolean;
+  contextFocus: string[];
+  factualCore: string;
+  exactNba: string;
+  maxQuestions: 0 | 1;
+  allowedActions: string[];
+  forbiddenClaims: string[];
+};
+
 export type CommercialMove = {
   action:'RELATED_VALUE';
   kind:'STOCK_STATUS'|'CONTEXTUAL_BENEFIT'|'RELATED_VERIFIED_FACT';
@@ -36,6 +59,7 @@ export type LlmWriteInput = {
   customerContext?: Record<string, unknown>; commercialGoal?: string | null; capabilityAction?: string | null; turnCapabilities?: Record<string, boolean>; resolvedCurrentIntent?: string;
   commercialSignals?: Record<string, unknown>; resolvedProduct?: string | null; supportedCapabilities?: string[]; executableNba?: string; levelOfInterest?: number; attribute?: string | null;
   implications?: string[]; pendingQuestion?: string | null; pendingAction?: string | null; commercialMove?: CommercialMove | null; imageUrls?: string[]; commercialContractPrepared?: boolean;
+  commercialResponsePlan?: CommercialResponsePlan | null;
 };
 
 export type LlmDecisionInput = { message: string; state: ConversationState; history?: RecentDialogueMessage[]; };
