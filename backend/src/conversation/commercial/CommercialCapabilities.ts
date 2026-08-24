@@ -113,7 +113,8 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
   const previousStockKnown=priorStockKnown(input,product);
   const priorClose=String(input.state?.pendingCommercialAction??input.state?.lastNba??'').toUpperCase()==='SOFT_CLOSE';
   const priceStockProgression=['PRICE','PRICE_AVAILABILITY','STOCK'].includes(currentIntent);
-  const fulfillmentSelectionProgression=currentIntent==='POLICY'&&priorClose&&Boolean(product);
+  const fulfillmentSelectionProgression=currentIntent==='FULFILLMENT_SELECTION'&&priorClose&&Boolean(product);
+  const policyOverlayProgression=currentIntent==='POLICY'&&priorClose&&Boolean(product);
   const fitOfferProgression=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(currentIntent)
     && Boolean(product&&featureEvidence&&(input.useCase||input.problem||(input.priorities??[]).length));
   return {
@@ -138,12 +139,10 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
     recommendProduct:base.recommendProduct&&Boolean(recommended&&allowed.some(item=>same(item,recommended))&&featureEvidence),
     showImages:base.showImages&&hasRealImages(input),
     offerAlternative:base.offerAlternative&&alternatives.length>0,
-    // Seller-led progression: fit can close with current verified quote; a
-    // price/stock answer moves to fulfillment; a fulfillment choice can always
-    // move to reservation without re-querying stock in that same policy turn.
     softClose:base.softClose&&Boolean(product&&(
       fitOfferProgression
       || fulfillmentSelectionProgression
+      || policyOverlayProgression
       || (priceStockProgression&&(currentStockKnown||previousStockKnown||interestContext))
     )),
     collectReservationData:base.collectReservationData&&Boolean(product&&input.purchaseSignal),
