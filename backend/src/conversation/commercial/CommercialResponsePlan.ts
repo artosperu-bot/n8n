@@ -19,7 +19,7 @@ function exactNba(input: LlmWriteInput): string {
 
 function responseMode(input: LlmWriteInput, nba: string): CommercialResponseMode {
   const intent = String(input.resolvedCurrentIntent ?? input.intent ?? '').toUpperCase();
-  const strategy = String(input.state?.commercialStrategy ?? '').toUpperCaseCase?.() ?? String(input.state?.commercialStrategy ?? '').toUpperCase();
+  const strategy = String(input.state?.commercialStrategy ?? '').toUpperCase();
   const hasGenuineContext = Boolean(
     input.useCase
     || input.problem
