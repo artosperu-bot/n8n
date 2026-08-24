@@ -4,6 +4,7 @@ import { validateTurnDecision } from '../../src/conversation/decision/DecisionVa
 import { nextBestAction } from '../../src/conversation/nba/NextBestAction.ts';
 import { isNbaCompatible } from '../../src/conversation/nba/NbaCompatibility.ts';
 import { resolveIntentPlan } from '../../src/conversation/intent/IntentPlan.ts';
+import { prepareCommercialWriteInput } from '../../src/conversation/commercial/CommercialWriteContract.ts';
 
 test('FULFILLMENT_SELECTION survives decision validation and stays on reservation close',()=>{
   const state={
@@ -34,4 +35,23 @@ test('deterministic intent separates fulfillment choices from policy questions',
   assert.equal(resolveIntentPlan('Prefiero recogerlo en su local.').primary,'FULFILLMENT_SELECTION');
   assert.equal(resolveIntentPlan('¿Hacen envíos a Ate?').primary,'POLICY');
   assert.equal(resolveIntentPlan('¿Dónde queda su local?').primary,'POLICY');
+});
+
+test('commercial capability contract does not downgrade fulfillment selection to ANSWER_ONLY',()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'Envío a Ate.',
+    intent:'FULFILLMENT_SELECTION',
+    state:{
+      activeProduct:'Armor 22',
+      lastNba:'SOFT_CLOSE',
+      pendingCommercialAction:'SOFT_CLOSE',
+      lastAssistantMessage:'Armor 22 está a S/ 1399 y tenemos disponibilidad. ¿Prefieres envío o recogerlo en nuestro local?',
+    },
+    resolvedProduct:'Armor 22',
+    allowedProducts:['Armor 22'],
+    decision:{nextBestAction:'SOFT_CLOSE'} as any,
+    finalExecutableNba:'SOFT_CLOSE',
+  } as any);
+  assert.equal(prepared.nextBestAction,'SOFT_CLOSE');
+  assert.equal(prepared.finalExecutableNba,'SOFT_CLOSE');
 });
