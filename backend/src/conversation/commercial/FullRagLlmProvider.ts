@@ -2,6 +2,7 @@ import type { LlmDecisionInput, LlmDecisionResult, LlmProvider, LlmResult, LlmWr
 import { fold } from '../../shared/text.ts';
 import { applyFullRagWritePolicy } from './FullRagWritePolicy.ts';
 import { buildFullRagAnswer } from './FullRagAnswerKernel.ts';
+import { buildCommercialResponsePlan } from './CommercialResponsePlan.ts';
 
 function usesDocumentaryRag(input:LlmWriteInput):boolean{return Boolean(input.verifiedFacts?.some(fact=>fact.domain==='PRODUCT_RAG'||fact.domain==='INSTITUTIONAL_RAG'));}
 function isBroadProductInfo(message:string):boolean{const t=fold(message);return /\b(info|informacion|caracteristicas|especificaciones|ficha|cuentame|hablame|que tal es|como es|que tal esta)\b/.test(t)&&!/\b(precio|stock|nfc|5g|bateria|camara|ram|memoria|resistente|resistencia|wifi|bluetooth|sim|termica)\b/.test(t);}
@@ -48,7 +49,15 @@ export class FullRagLlmProvider implements LlmProvider{
     const isRecommendation=['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
     const kernelInput:LlmWriteInput=isRecommendation?enriched:{...enriched,recommendedProduct:null};
     const kernel=['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent)?buildFullRagAnswer(kernelInput):null;
-    if(kernel){const answer=humanizeKernel(kernel.answer,enriched);Object.assign(input,enriched,{directAnswer:answer});return deterministicResult(answer,`full-rag-kernel-${kernel.mode.toLowerCase()}`);}
+    if(kernel){
+      const factualCore=humanizeKernel(kernel.answer,enriched);
+      const plannedInput:LlmWriteInput={...enriched,directAnswer:factualCore,deterministicAnswer:factualCore};
+      plannedInput.commercialResponsePlan=buildCommercialResponsePlan(plannedInput,factualCore);
+      Object.assign(input,plannedInput);
+      if(!plannedInput.commercialResponsePlan.shouldUseLlm)return deterministicResult(factualCore,`full-rag-kernel-${kernel.mode.toLowerCase()}`);
+      const result=await this.#delegate.write(plannedInput);
+      return{...result,text:humanizeKernel(sanitize(result.text,plannedInput),plannedInput)};
+    }
     if(usesDocumentaryRag(enriched))enriched.deterministicAnswer=naturalSalesPlan(enriched);Object.assign(input,enriched);const result=await this.#delegate.write(enriched);return{...result,text:humanizeKernel(sanitize(result.text,enriched),enriched)};
   }
 }
