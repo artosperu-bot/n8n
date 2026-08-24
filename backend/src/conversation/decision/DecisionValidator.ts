@@ -29,6 +29,7 @@ function forcedInstitutionalRag(intent:string):boolean{return['POLICY','WARRANTY
 function sameStringListContains(values:string[],target:string):boolean{return values.some(value=>fold(value)===fold(target));}
 function sameProduct(a:string|null|undefined,b:string|null|undefined):boolean{return Boolean(a&&b&&fold(a)===fold(b));}
 function strongStage(intent:string):string|null{if(intent==='PURCHASE')return'CIERRE';if(['HUMAN','QUOTE'].includes(intent))return'CIERRE_ASISTIDO';return null;}
+function factualSemanticIntent(intent:string):boolean{return['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','PRICE_AVAILABILITY','PRICE','STOCK','IMAGES','IMAGE','POLICY','WARRANTY','ORDER_STATUS'].includes(intent);}
 
 export function validateTurnDecision(decision:TurnDecision,state:ConversationState,catalogCandidates:string[]=[],fallbackDecision?:TurnDecision):TurnDecision{
   const universe=unique([...catalogCandidates,state.activeProduct,state.queryTarget,state.salientProduct,state.selectedProduct,state.recommendedProduct,...(state.comparisonProducts??[])]);
@@ -41,6 +42,16 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
   if(fallbackIntent&&['PURCHASE','HUMAN','QUOTE'].includes(fallbackIntent))primaryIntent=fallbackIntent;
   const contextualPurchaseContinuation=state.purchaseSignal===true&&String(state.lastIntent??'').toUpperCase()==='STOCK'&&String(state.lastNba??state.pendingCommercialAction??'').toUpperCase()==='SOFT_CLOSE'&&['OTHER',null].includes(plannerIntent as any)&&fallbackIntent==='OTHER';
   if(contextualPurchaseContinuation)primaryIntent='PURCHASE';
+
+  // Interest and curiosity are not purchase authority. The semantic planner may
+  // recognize tone, but only deterministic current-turn purchase evidence (or a
+  // previously confirmed purchase continuation) can enter reservation flow.
+  if(primaryIntent==='PURCHASE'&&fallbackIntent!=='PURCHASE'&&state.purchaseSignal!==true)primaryIntent=fallbackIntent??'OTHER';
+
+  // Current deterministic intent outranks stale comparison history. This keeps a
+  // new use case or an inherited-budget recommendation from being pulled back to
+  // COMPARE merely because a pair exists in memory.
+  if(primaryIntent==='COMPARE'&&fallbackIntent&&['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','BUDGET_CONSTRAINT'].includes(fallbackIntent))primaryIntent=fallbackIntent;
 
   const comparisonAuthority=fallbackIntent==='COMPARE'||(state.comparisonProducts?.length??0)>=2;
   if(primaryIntent==='COMPARE'&&!comparisonAuthority)primaryIntent=fallbackIntent??'OTHER';
@@ -101,8 +112,12 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
   const normalizedMentions=currentTurnTarget&&!sameStringListContains(currentMentions,currentTurnTarget)&&uniqueNewCatalogTarget&&sameProduct(currentTurnTarget,uniqueNewCatalogTarget)?unique([...currentMentions,currentTurnTarget]):currentMentions;
   const commercialStage=strongStage(primaryIntent)??canonicalStage(decision.commercialStage)??canonicalStage(fallbackDecision?.commercialStage);
   const deterministicPriorities=unique(fallbackDecision?.priorities??state.priorities??[]);
+  const factual=factualSemanticIntent(primaryIntent);
+  const customerNeed=factual?null:decision.customerNeed;
+  const customerProblem=factual?null:decision.customerProblem;
+  const spinContribution=factual?null:(typeof decision.spinContribution==='string'&&decision.spinContribution.trim()&&!decision.spinContribution.includes('[object Object]')?decision.spinContribution.trim().slice(0,240):null);
 
   if(state.sessionId&&(uniqueNewCatalogTarget||knownDecisionTarget&&state.activeProduct&&!sameProduct(knownDecisionTarget,state.activeProduct)||referenceType!=='ACTIVE_PRODUCT_FALLBACK'))console.log(JSON.stringify({event:'STECH_REFERENCE_TRACE',sessionId:state.sessionId,activeBefore:state.activeProduct??null,selectedBefore:state.selectedProduct??null,recommendedBefore:state.recommendedProduct??null,plannerTarget:decision.targetProduct??null,deterministicTarget:fallbackDecision?.targetProduct??null,plannerReference:decision.referenceType??null,deterministicReference:fallbackDecision?.referenceType??null,catalogCandidates,newCatalogCandidates,currentMentions:normalizedMentions,comparisonProducts,finalTarget:targetProduct??null,finalReference:referenceType??null,selectedProduct:selectedProduct??null,explicitSwitch,authorityReason,finalIntent:primaryIntent}));
 
-  return{...decision,primaryIntent,secondaryIntents:unique(decision.secondaryIntents??[]).map(x=>canonicalIntent(x)).filter((x):x is string=>Boolean(x)),targetProduct,mentionedProducts:normalizedMentions,referenceType,explicitSwitch,selectedProduct,comparisonProducts,attributes,priorities:deterministicPriorities,commercialStage,spinContribution:typeof decision.spinContribution==='string'&&decision.spinContribution.trim()&&!decision.spinContribution.includes('[object Object]')?decision.spinContribution.trim().slice(0,240):null,nextBestAction,needsSql:forcedSql(primaryIntent)||targetNeedsResolution,needsProductRag:forcedProductRag(primaryIntent),needsInstitutionalRag:forcedInstitutionalRag(primaryIntent),confidence:Number.isFinite(decision.confidence)?Math.max(0,Math.min(1,decision.confidence)):0.5};
+  return{...decision,primaryIntent,secondaryIntents:unique(decision.secondaryIntents??[]).map(x=>canonicalIntent(x)).filter((x):x is string=>Boolean(x)),targetProduct,mentionedProducts:normalizedMentions,referenceType,explicitSwitch,selectedProduct,comparisonProducts,attributes,customerNeed,customerProblem,priorities:deterministicPriorities,commercialStage,spinContribution,nextBestAction,needsSql:forcedSql(primaryIntent)||targetNeedsResolution,needsProductRag:forcedProductRag(primaryIntent),needsInstitutionalRag:forcedInstitutionalRag(primaryIntent),confidence:Number.isFinite(decision.confidence)?Math.max(0,Math.min(1,decision.confidence)):0.5};
 }
