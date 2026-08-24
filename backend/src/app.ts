@@ -1,10 +1,13 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { buildRuntime } from './bootstrap.ts';
+import { parseWhatsAppWebhook, verifyWhatsAppWebhook } from './adapters/whatsapp/WhatsAppWebhookAdapter.ts';
+import { writeTrace } from './shared/trace.ts';
 
 type EnvLike = Record<string,string|undefined>;
 async function readJson(req: IncomingMessage): Promise<any> { const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); if (!chunks.length) return {}; return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
 function send(res: ServerResponse, status: number, body: unknown) { const data = JSON.stringify(body); res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(data) }); res.end(data); }
+function sendText(res: ServerResponse,status:number,body:string){const data=String(body);res.writeHead(status,{'content-type':'text/plain; charset=utf-8','content-length':Buffer.byteLength(data)});res.end(data);}
 function runtimeBuildId():string { try { return execFileSync('git',['rev-parse','--short','HEAD'],{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim()||'unknown'; } catch { return process.env.STECH_BUILD_ID??'unknown'; } }
 
 export function createStechApp(options: { env?: EnvLike } = {}) {
@@ -13,6 +16,24 @@ export function createStechApp(options: { env?: EnvLike } = {}) {
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
+      if (url.pathname === '/webhooks/whatsapp' && req.method === 'GET') {
+        const verification=verifyWhatsAppWebhook(url.searchParams,runtime.config.whatsappVerifyToken);
+        if(!verification.ok){writeTrace({event:'WHATSAPP_VERIFY',status:'REJECTED'});return sendText(res,403,'Forbidden');}
+        writeTrace({event:'WHATSAPP_VERIFY',status:'VERIFIED'});
+        return sendText(res,200,verification.challenge??'');
+      }
+      if (url.pathname === '/webhooks/whatsapp' && req.method === 'POST') {
+        const body=await readJson(req);
+        const parsed=parseWhatsAppWebhook(body);
+        send(res,200,{received:true});
+        queueMicrotask(()=>{
+          try{
+            if(parsed.messages.length)writeTrace({event:'WHATSAPP_INBOUND',count:parsed.messages.length,types:[...new Set(parsed.messages.map(message=>message.type))]});
+            if(parsed.statuses.length)writeTrace({event:'WHATSAPP_STATUS',count:parsed.statuses.length,statuses:[...new Set(parsed.statuses.map(status=>status.status))]});
+          }catch(error){writeTrace({event:'WHATSAPP_ERROR',stage:'POST_ACK_LOG',error:error instanceof Error?error.message:String(error)},'error');}
+        });
+        return;
+      }
       if (req.method === 'GET' && url.pathname === '/health') return send(res, 200, { status: 'ok', service: 'stech-backend', buildId, modes: { llm: runtime.config.llmMode, erp: runtime.config.erpMode, persistence: runtime.config.persistenceMode, n8n: runtime.config.automationMode, build:buildId } });
       if (req.method === 'POST' && url.pathname === '/api/chat') {
         const body = await readJson(req); const result = await runtime.engine.processTurn({ sessionId: String(body.sessionId ?? ''), message: String(body.message ?? ''), messageId: body.messageId ? String(body.messageId) : undefined }); return send(res, 200, result);
