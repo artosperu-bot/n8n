@@ -34,10 +34,9 @@ export class FullRagLlmProvider implements LlmProvider{
     const enriched=applyFullRagWritePolicy(input);
     const intent=String(enriched.intent??'').toUpperCase();
 
-    // Single documentary authority for product RAG. Once the kernel can resolve
-    // the turn, do not send the answer through another writer that can duplicate,
-    // broaden or contradict the verified facts.
-    const kernel=['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent)
+    // RAG-only factual authority. Budget recommendations are intentionally left
+    // outside this kernel because price/budget is SQL authority.
+    const kernel=['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','COMPARE','RECOMMEND'].includes(intent)
       ? buildFullRagAnswer(enriched)
       : null;
     if(kernel){
@@ -45,7 +44,7 @@ export class FullRagLlmProvider implements LlmProvider{
       return deterministicResult(kernel.answer,`full-rag-kernel-${kernel.mode.toLowerCase()}`);
     }
 
-    // Institutional RAG and non-product routes keep their existing behavior.
+    // Institutional RAG and routes that depend on SQL keep their existing behavior.
     if(usesDocumentaryRag(enriched))enriched.deterministicAnswer=naturalSalesPlan(enriched);
     Object.assign(input,enriched);
     const result=await this.#delegate.write(enriched);
