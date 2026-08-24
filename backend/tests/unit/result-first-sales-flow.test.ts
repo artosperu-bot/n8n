@@ -171,3 +171,56 @@ test('rugged pain keeps resistance certifications and translates them into FAB v
   assert.match(result.text,/env[ií]o/i);
   assert.match(result.text,/recoger|recojo|local/i);
 });
+
+test('repeated-repair rugged pain falls back to the promised human FAB shape when the writer is weak',async()=>{
+  const delegate={
+    async write(){return{text:'Armor 22 es resistente.',model:'test',usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},durationMs:0};},
+  };
+  const provider=new FullRagLlmProvider(delegate as any);
+  const verifiedFeatures=[
+    {domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m',productId:'P-ARMOR-22-256G',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'IP68',value:'Sí',productId:'P-ARMOR-22-256G',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'IP69K',value:'Sí',productId:'P-ARMOR-22-256G',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'MIL_STD_810H',value:'Sí',productId:'P-ARMOR-22-256G',source:'TEST'},
+  ] as any;
+  const result=await provider.write({
+    message:'Ya mandé reparar mi celular dos veces por caídas.',intent:'EVALUATE_USE',
+    state:{activeProduct:'Armor 22',recommendedProduct:'Armor 22',useCase:'trabajo_construccion',problem:'reparaciones_repetidas'},
+    resolvedProduct:'Armor 22',recommendedProduct:'Armor 22',allowedProducts:['Armor 22'],
+    quote:{shortName:'Armor 22',product:'Armor 22',price:1399,stock:9,currency:'PEN'} as any,
+    verifiedFeatures,
+    verifiedFacts:verifiedFeatures,
+    finalExecutableNba:'SOFT_CLOSE',nextBestAction:'SOFT_CLOSE',
+    directAnswer:'Armor 22 encaja para trabajo exigente.',
+  } as any);
+  assert.match(result.text,/Si ya lo reparaste varias veces/i);
+  assert.match(result.text,/cada nueva ca[ií]da/i);
+  assert.match(result.text,/gasto/i);
+  assert.match(result.text,/quedarte sin celular|quedarte otra vez sin equipo/i);
+  assert.match(result.text,/1\.5 m/i);
+  assert.match(result.text,/IP68/i);
+  assert.match(result.text,/IP69K/i);
+  assert.match(result.text,/MIL-STD-810H/i);
+  assert.match(result.text,/golpes/i);
+  assert.match(result.text,/agua/i);
+  assert.match(result.text,/polvo/i);
+  assert.match(result.text,/S\/\s*1399/i);
+  assert.match(result.text,/disponib/i);
+  assert.match(result.text,/env[ií]o/i);
+  assert.match(result.text,/recoger|recojo|local/i);
+});
+
+test('delivery or pickup choice after fulfillment offer is not downgraded to POLICY',async()=>{
+  const delegate={
+    async decide(){return{decision:{primaryIntent:'POLICY',secondaryIntents:[],targetProduct:'Armor 22',mentionedProducts:[],referenceType:'ACTIVE_PRODUCT_FALLBACK',explicitSwitch:false,selectedProduct:null,comparisonProducts:[],attributes:['ENVÍO'],customerNeed:null,customerProblem:null,priorities:[],objection:null,commercialStage:null,spinContribution:null,nextBestAction:'ANSWER_ONLY',needsSql:false,needsProductRag:false,needsInstitutionalRag:true,confidence:0.9},model:'test',usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},durationMs:0} as any;},
+    async write(){throw new Error('not used');},
+  };
+  const provider=new FullRagLlmProvider(delegate as any);
+  const state={activeProduct:'Armor 22',lastNba:'SOFT_CLOSE',pendingCommercialAction:'SOFT_CLOSE',lastAssistantMessage:'Armor 22 está a S/ 1399 y sí está disponible. ¿Prefieres envío o recogerlo en nuestro local?'} as any;
+  const delivery=await provider.decide({message:'Envío a Ate.',state} as any);
+  assert.equal(delivery.decision.primaryIntent,'FULFILLMENT_SELECTION');
+  assert.equal(delivery.decision.needsInstitutionalRag,false);
+  const pickup=await provider.decide({message:'Prefiero recogerlo en su local.',state} as any);
+  assert.equal(pickup.decision.primaryIntent,'FULFILLMENT_SELECTION');
+  assert.equal(pickup.decision.needsInstitutionalRag,false);
+});
