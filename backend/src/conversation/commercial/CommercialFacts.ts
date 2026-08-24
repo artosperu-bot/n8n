@@ -7,7 +7,6 @@ export type CommercialFacts = Pick<ConversationState,
 >;
 
 const PRIORITIES: Array<[string, RegExp]> = [
-  // Preserve explicit hard requirements in addition to their broad family.
   ['termica', /\b(camara\s+termica|camara\s+termal|termica|thermal|flir)\b/],
   ['vision_nocturna', /\b(vision\s+nocturna|camara\s+nocturna)\b/],
   ['nfc', /\bnfc\b/],
@@ -23,12 +22,14 @@ const PRIORITIES: Array<[string, RegExp]> = [
 function unique(values: string[]): string[] { return [...new Set(values)]; }
 
 function hasStrongPurchaseSignal(text: string): boolean {
+  const useCaseStatement=/\b(?:lo|la)\s+quiero\s+para\b/.test(text);
   return /\bquiero\s+(?:avanzar(?:\s+con\s+la\s+compra)?|compr(?:ar|arlo|arla)?|ese|esa|este|esta)\b/.test(text)
     || /\b(?:ya\s+)?(?:ese|esa|este|esta)\s+quiero\b/.test(text)
     || /\bme\s+quedo\s+con\s+(?:ese|esa|este|esta)\b/.test(text)
     || /\bme\s+llevo(?:\s+(?:ese|esa|este|esta))?\b/.test(text)
     || /\bme\s+(?:he\s+)?decidi(?:\s+por\s+(?:ese|esa|este|esta))?\b/.test(text)
-    || /\b(?:lo|la)\s+(?:quiero|compro)\b/.test(text)
+    || /\b(?:lo|la)\s+compro\b/.test(text)
+    || (!useCaseStatement&&/\b(?:lo|la)\s+quiero\b/.test(text))
     || /\bcomo\s+compro\b/.test(text)
     || /\b(?:separar|reservar)(?:lo|la)?\b/.test(text)
     || /\bquiero\s+(?:q|que)\s+(?:un\s+)?asesor\s+(?:siga|continue|continúe|me\s+ayude)(?:\s+con\s+la\s+compra)?\b/.test(text)
