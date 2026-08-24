@@ -43,8 +43,10 @@ export function compatibleNba(
   const i=String(intent).toUpperCase();
   if (state.purchaseSignal===true || i==='PURCHASE') return purchaseAction(state);
   if (['HUMAN','QUOTE'].includes(i)) return 'ASSISTED_HANDOFF';
-  if (isNbaCompatible(intent,proposed,state)) return proposed;
+  // N+1 is deterministic authority. The planner may help only when the
+  // deterministic action is incompatible with the final semantic intent.
   if (isNbaCompatible(intent,fallback,state)) return fallback;
+  if (isNbaCompatible(intent,proposed,state)) return proposed;
   if (FACTUAL.has(i)) return 'ANSWER_ONLY';
   return null;
 }
