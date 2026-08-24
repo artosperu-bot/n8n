@@ -37,16 +37,21 @@ function inferredSections(state:ConversationState):string[]{
   const combined=`${use} ${problem} ${priorities}`;
   const result:string[]=[];
 
+  // Specific customer pain has priority over a generic work label.
+  if(/caida|golpe|durabilidad|repar|polvo|agua|lluvia|humedad|malogr/.test(problem))result.push('RESISTENCIA');
+  if(/autonomia|bateria|cargador|no dura|no llega/.test(problem))result.push('BATERIA');
+  if(/termic|temperatura|calor|inspeccion.*temperatura/.test(problem))result.push('TERMICA','RESISTENCIA','BATERIA','SENSORES');
+  if(/foto|fotografia|camara|video/.test(problem))result.push('CAMARA','MEMORIA');
+
   if(/gaming|juego|jugar|free fire|pubg|cod mobile|call of duty/.test(combined))result.push('RENDIMIENTO','MEMORIA','PANTALLA','BATERIA');
   if(/delivery|repart|logistica/.test(combined))result.push('BATERIA','POSICIONAMIENTO','REDES','CONECTIVIDAD','RESISTENCIA');
   if(/campo|construccion|obra|mineria|tecnico/.test(combined))result.push('RESISTENCIA','BATERIA','POSICIONAMIENTO');
   if(/trabajo nocturno|noche|nocturn|vigilancia/.test(combined))result.push('CAMARA','BATERIA','RESISTENCIA');
   if(/termic|temperatura|calor|inspeccion.*temperatura/.test(combined))result.push('TERMICA','RESISTENCIA','BATERIA','SENSORES');
-  if(/oficina|multitarea|varias apps|whatsapp|correo|navegador|trabajo/.test(combined))result.push('RENDIMIENTO','MEMORIA','BATERIA');
+  if(/oficina|multitarea|varias apps|whatsapp|correo|navegador/.test(combined))result.push('RENDIMIENTO','MEMORIA','BATERIA');
+  else if(/\btrabajo\b/.test(use)&&result.length===0)result.push('RENDIMIENTO','MEMORIA','BATERIA');
   if(/foto|fotografia|camara|video|contenido|redes sociales|subir.*red/.test(combined))result.push('CAMARA','MEMORIA','PANTALLA');
 
-  if(/caida|golpe|durabilidad/.test(problem))result.push('RESISTENCIA');
-  if(/autonomia|bateria/.test(problem))result.push('BATERIA');
   return unique(result);
 }
 
