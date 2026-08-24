@@ -16,7 +16,7 @@ type ProgressionInput={
 type ProgressionResult={level:ProgressionLevel;candidateNba:string;reason:string;};
 
 const CLOSING_ACTIONS=new Set(['COLLECT_RESERVATION_DATA','ASSISTED_HANDOFF','EXECUTE_RESERVATION']);
-const HIGHER_VALUE_ACTIONS=new Set(['RECOMMEND','COMPARE','OFFER_ALTERNATIVE']);
+const HIGHER_VALUE_ACTIONS=new Set(['COMPARE','OFFER_ALTERNATIVE']);
 
 export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):ProgressionResult{
   const intent=String(input.intent??'').toUpperCase();
@@ -24,58 +24,53 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
   const state=input.state??{};
   const spin=evaluateSpinReadiness(state);
   const previousNba=String(state.lastNba??state.pendingCommercialAction??'').toUpperCase();
+  const resolved=Boolean(input.resolvedProduct);
+  const actionableFit=Boolean(
+    (state.useCase&&state.problem)
+    || (state.priorities?.length??0)>0
+    || (state.explicitPriorities?.length??0)>0
+  );
+  const consultative=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
 
   if(state.purchaseSignal||intent==='PURCHASE'||CLOSING_ACTIONS.has(current))return{level:'HIGH',candidateNba:CLOSING_ACTIONS.has(current)?current:'COLLECT_RESERVATION_DATA',reason:'PURCHASE_CONTINUITY'};
 
   if(/^CIERRE/.test(String(state.commercialStage??'').toUpperCase())&&current==='ASK_MISSING_FACT')return{level:'HIGH',candidateNba:'ANSWER_ONLY',reason:'CLOSING_STAGE_BLOCKS_DISCOVERY'};
 
-  // The requested commercial operation (compare/recommend/alternative) is part
-  // of resolving the current turn and outranks a later stock CTA.
-  if(HIGHER_VALUE_ACTIONS.has(current))return{level:'MEDIUM',candidateNba:current,reason:'CURRENT_COMMERCIAL_ACTION_FIRST'};
-
   if(state.objection&&(input.verifiedAlternatives??0)>0)return{level:'MEDIUM',candidateNba:'OFFER_ALTERNATIVE',reason:'OBJECTION_WITH_VERIFIED_ALTERNATIVE'};
 
-  // Broad product information is discovery-friendly. Answer first, then ask the
-  // one SPIN fact selected by the separate SPIN policy. A focused capability is
-  // not permission to restart discovery.
-  if(intent==='PRODUCT_INFO'&&input.verifiedCurrentAnswer&&Boolean(input.resolvedProduct)){
+  // A recommendation is the current answer, not a terminal state. Once that
+  // recommendation is grounded and useful, immediately advance to the next
+  // seller-led result instead of waiting for another customer question.
+  if(current==='RECOMMEND'){
+    if(consultative&&resolved&&input.verifiedCurrentAnswer&&actionableFit)return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'GROUNDED_RECOMMENDATION_READY_FOR_COMMERCIAL_RESULT'};
+    return{level:'MEDIUM',candidateNba:'RECOMMEND',reason:'CURRENT_RECOMMENDATION_NOT_YET_READY_TO_CLOSE'};
+  }
+
+  if(HIGHER_VALUE_ACTIONS.has(current))return{level:'MEDIUM',candidateNba:current,reason:'CURRENT_COMMERCIAL_ACTION_FIRST'};
+
+  if(intent==='PRODUCT_INFO'&&input.verifiedCurrentAnswer&&resolved){
     if(spin.nextMissingFact)return{level:'LOW',candidateNba:'ASK_MISSING_FACT',reason:'BROAD_PRODUCT_INFO_DISCOVERY'};
   }
 
   if(['CAPABILITY','ATTRIBUTE'].includes(intent)){
     const explicitCloseContext=Boolean(state.interestSignal||state.selectedProduct);
-    if(
-      explicitCloseContext
-      && spin.readyForStock
-      && previousNba!=='SOFT_CLOSE'
-      && input.verifiedCurrentAnswer
-      && Boolean(input.resolvedProduct)
-    )return{level:'MEDIUM',candidateNba:'SOFT_CLOSE',reason:'EXPLICIT_INTEREST_AFTER_VERIFIED_FACT'};
+    if(explicitCloseContext&&spin.readyForStock&&previousNba!=='SOFT_CLOSE'&&input.verifiedCurrentAnswer&&resolved)return{level:'MEDIUM',candidateNba:'SOFT_CLOSE',reason:'EXPLICIT_INTEREST_AFTER_VERIFIED_FACT'};
     return{level:'LOW',candidateNba:'ANSWER_ONLY',reason:'FACTUAL_ANSWER_COMPLETE'};
   }
 
-  // For consultative turns, keep advancing discovery one useful question at a
-  // time until the customer has supplied enough context. Budget is not a generic
-  // SPIN stage; objection/budget intents handle it explicitly before this point.
+  // Result first: once fit is already grounded, do not reopen SPIN just because
+  // a later SPIN box is empty. Move the customer to the next concrete result.
+  if(consultative&&actionableFit&&resolved&&input.verifiedCurrentAnswer&&previousNba!=='SOFT_CLOSE')return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'ACTIONABLE_FIT_READY_FOR_COMMERCIAL_RESULT'};
+
   if(['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','PRODUCT_INFO'].includes(intent)&&spin.nextMissingFact){
     return{level:'LOW',candidateNba:'ASK_MISSING_FACT',reason:`SPIN_NEEDS_${spin.stage}`};
   }
 
-  // Only after the current fit/recommendation is grounded do we allow the +1 to
-  // become a stock/availability close. Do not repeat the same close on every
-  // subsequent technical question.
-  const consultativeCloseIntent=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
-  if(
-    consultativeCloseIntent
-    && spin.readyForStock
-    && previousNba!=='SOFT_CLOSE'
-    && input.verifiedCurrentAnswer
-    && Boolean(input.resolvedProduct)
-  )return{level:'MEDIUM',candidateNba:'SOFT_CLOSE',reason:'GROUNDED_FIT_READY_FOR_STOCK'};
+  if(consultative&&spin.readyForStock&&previousNba!=='SOFT_CLOSE'&&input.verifiedCurrentAnswer&&resolved)return{level:'MEDIUM',candidateNba:'SOFT_CLOSE',reason:'GROUNDED_FIT_READY_FOR_STOCK'};
 
-  if(['PRICE','PRICE_AVAILABILITY','STOCK'].includes(intent)&&Boolean(state.interestSignal||state.selectedProduct)&&input.resolvedProduct){
-    return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'EXPLICIT_INTEREST'};
-  }
+  // A customer who asks price or stock has already expressed enough commercial
+  // intent for us to lead the next step. No artificial interest-score gate.
+  if(['PRICE','PRICE_AVAILABILITY','STOCK'].includes(intent)&&resolved&&input.verifiedCurrentAnswer)return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'PRICE_STOCK_READY_FOR_FULFILLMENT'};
 
   return{level:'LOW',candidateNba:current==='ASK_MISSING_FACT'&&spin.nextMissingFact?current:'ANSWER_ONLY',reason:'NO_USEFUL_EXECUTABLE_PROGRESSION'};
 }
