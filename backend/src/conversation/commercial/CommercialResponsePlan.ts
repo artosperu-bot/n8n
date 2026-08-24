@@ -19,7 +19,7 @@ function exactNba(input: LlmWriteInput): string {
 
 function responseMode(input: LlmWriteInput, nba: string): CommercialResponseMode {
   const intent = String(input.resolvedCurrentIntent ?? input.intent ?? '').toUpperCase();
-  const strategy = String(input.state?.commercialStrategy ?? '').toUpperCase();
+  const strategy = String(input.state?.commercialStrategy ?? '').toUpperCaseCase?.() ?? String(input.state?.commercialStrategy ?? '').toUpperCase();
   const hasGenuineContext = Boolean(
     input.useCase
     || input.problem
@@ -101,4 +101,12 @@ export function buildCommercialResponseInstruction(plan: CommercialResponsePlan)
     return `Conserva RESPUESTA_DIRECTA y deriva solo si la acción ya está autorizada; no afirmes que la transferencia o reserva ya ocurrió. ${action}. ${safety}`;
   }
   return `Conserva RESPUESTA_DIRECTA y termina sin discovery, recomendación ni CTA adicional. ${safety}`;
+}
+
+export function hasFabricatedCommercialPressure(text: string): boolean {
+  const normalized = String(text ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const fakeScarcity = /\b(?:quedan?|hay)\s+(?:muy\s+)?(?:pocas?|poquisimas?|ultimas?)\s+(?:unidades?|equipos?)\b|\bultimas?\s+(?:unidades?|equipos?)\b/.test(normalized);
+  const fakeUrgency = /\b(?:aprovecha|compra|decide|separa)\s+(?:hoy|ahora|ya)\b|\bsolo\s+por\s+hoy\b|\bultima\s+oportunidad\b|\bse\s+acaba\s+hoy\b/.test(normalized);
+  const fakeSocialProof = /\b(?:todos?|muchos\s+clientes?)\s+(?:lo|la|los|las)?\s*(?:compran|estan\s+comprando|prefieren|eligen)\b|\b(?:el|la)\s+mas\s+vendid[oa]\b/.test(normalized);
+  return fakeScarcity || fakeUrgency || fakeSocialProof;
 }
