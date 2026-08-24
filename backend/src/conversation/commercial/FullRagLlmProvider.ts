@@ -21,13 +21,30 @@ function isExplicitDiscoveryFact(message:string):boolean{
     || /\b(?:se me malogro|se malogro)\b[^.!?]{0,60}\b(?:agua|lluvia|polvo|humedad)\b|\b(?:agua|lluvia|polvo|humedad)\b[^.!?]{0,60}\b(?:malogro|rompio|dano)\b/.test(t)
     || /\b(?:lo mas importante|mi prioridad|priorizo|me importa|necesito que|quiero que sea|busco que sea)\b/.test(t);
 }
+function fulfillmentChoice(message:string):{mode:'DELIVERY'|'PICKUP';location:string|null}|null{
+  if(/[¿?]/.test(message))return null;
+  const t=fold(message);
+  const pickup=/\b(?:prefiero|quiero|voy a|mejor)\b[^.!?]{0,35}\b(?:recoger|recojo|retirar|local|tienda)\b/.test(t)||/^\s*(?:recojo|recoger|local|tienda)\b/.test(t);
+  if(pickup)return{mode:'PICKUP',location:null};
+  if(!/\b(?:envio|enviar|delivery|entrega)\b/.test(t))return null;
+  const match=message.match(/\b(?:env[ií]o|delivery|entrega)(?:\s+(?:a|para))?\s+([^¿?!.]{2,60})/i);
+  const location=String(match?.[1]??'').replace(/^a\s+/i,'').trim()||null;
+  return{mode:'DELIVERY',location};
+}
 function isExplicitFulfillmentChoice(message:string,state:LlmDecisionInput['state']):boolean{
   const pending=String(state.pendingCommercialAction??state.lastNba??'').toUpperCase();
-  if(pending!=='SOFT_CLOSE'||/[¿?]/.test(message))return false;
-  const t=fold(message);
-  return /\b(?:envio|enviar|delivery|entrega)\b/.test(t)
-    || /\b(?:prefiero|quiero|voy a|mejor)\b[^.!?]{0,35}\b(?:recoger|recojo|retirar|local|tienda)\b/.test(t)
-    || /^\s*(?:recojo|recoger|local|tienda)\b/.test(t);
+  if(pending!=='SOFT_CLOSE')return false;
+  const prompt=fold(state.lastAssistantMessage??'');
+  if(!/envio|recoger|recojo|local/.test(prompt))return false;
+  return Boolean(fulfillmentChoice(message));
+}
+function fulfillmentSelectionResponse(input:LlmWriteInput):string{
+  const choice=fulfillmentChoice(input.message);
+  const product=String(input.resolvedProduct??input.state?.selectedProduct??input.state?.recommendedProduct??input.state?.activeProduct??'').trim();
+  const target=product?` ${product}`:' el equipo';
+  if(choice?.mode==='PICKUP')return`Perfecto, puedes recogerlo en nuestro local. ¿Quieres que te reserve${target} para recojo?`;
+  const where=choice?.location?` a ${choice.location}`:'';
+  return`Perfecto, sería con envío${where}. ¿Quieres que te reserve${target}?`;
 }
 function isShortAffirmative(message:string):boolean{
   const t=fold(message).replace(/[.!¡¿?]+/g,'').replace(/\s+/g,' ').trim();
@@ -38,7 +55,7 @@ function isReservationAffirmative(message:string,state:LlmDecisionInput['state']
   const pending=String(state.pendingCommercialAction??state.lastNba??'').toUpperCase();
   if(pending!=='SOFT_CLOSE')return false;
   const prompt=fold(state.lastAssistantMessage??'');
-  return /\bquieres\b[^?]{0,80}\b(?:reserv(?:ar|e)|separ(?:ar|e)|compr(?:ar|e))\b/.test(prompt)
+  return /\bquieres\b[^?]{0,100}\b(?:reserv(?:ar|e)|separ(?:ar|e)|compr(?:ar|e))\b/.test(prompt)
     || /\b(?:te\s+lo|lo|la)\s+(?:reserv(?:o|e)|separ(?:o|e))\b/.test(prompt);
 }
 function isDirectTechnicalCapability(message:string):boolean{const t=fold(message);const feature=/\b(nfc|google pay|wifi|wi fi|bluetooth|infrarrojo|5g|4g|lte|dual sim|sim|audifono|audifonos|jack|ip68|ip69k|vision nocturna|camara nocturna|camara termica)\b/.test(t);const form=/\b(tiene|trae|soporta|funciona con|trabaja con|agarra|es|sirve para)\b/.test(t);return feature&&form&&!/\b(cual|que)\b[^?.!]{0,45}\b(recomiend|conviene|mejor)\b/.test(t);}
@@ -116,9 +133,7 @@ function ruggedCertificationName(fact:{key:string;value:string}):string|null{
   if(/mil[- _]?std[- _]?810h|mil.*810h/.test(text))return'MIL-STD-810H';
   return null;
 }
-function ruggedCertifications(input:LlmWriteInput):string[]{
-  return [...new Set((input.verifiedFeatures??[]).map(ruggedCertificationName).filter((value):value is string=>Boolean(value)))];
-}
+function ruggedCertifications(input:LlmWriteInput):string[]{return[...new Set((input.verifiedFeatures??[]).map(ruggedCertificationName).filter((value):value is string=>Boolean(value)))];}
 function ruggedFabCore(input:LlmWriteInput,product:string):string|null{
   const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''} ${(input.priorities??input.state?.priorities??[]).join(' ')}`);
   if(!/caida|golpe|construccion|obra|campo|repar|polvo|lluvia|agua|humedad/.test(context))return null;
@@ -127,7 +142,7 @@ function ruggedFabCore(input:LlmWriteInput,product:string):string|null{
   const certs=ruggedCertifications(input);
   const featureParts:string[]=[];
   if(drop)featureParts.push(simpleFactLabel(drop));
-  if(certs.length)featureParts.push(`IP68, IP69K y MIL-STD-810H`.split(', ').filter(cert=>certs.includes(cert.replace(' y ',''))).length===certs.length?`certificaciones ${naturalList(certs)}`:`certificaciones ${naturalList(certs)}`);
+  if(certs.length)featureParts.push(`certificaciones ${naturalList(certs)}`);
   if(!featureParts.length)return null;
   const hasImpact=Boolean(drop||certs.includes('MIL-STD-810H'));
   const hasIngress=certs.includes('IP68')||certs.includes('IP69K');
@@ -144,17 +159,11 @@ function compactContextualCore(input:LlmWriteInput,fallback:string):string{
   const hasContext=Boolean(input.useCase??input.state?.useCase??input.problem??input.state?.problem??(input.priorities??input.state?.priorities??[]).length);
   if(!hasContext)return fallback;
   const product=String(input.resolvedProduct??input.recommendedProduct??input.quote?.shortName??input.quote?.product??input.state?.recommendedProduct??input.state?.activeProduct??'').trim();
-  const facts=(input.verifiedFeatures??[])
-    .map(fact=>({fact,score:contextualFactScore(input,fact)}))
-    .filter(item=>item.score>0)
-    .sort((a,b)=>b.score-a.score)
-    .map(item=>item.fact);
+  const facts=(input.verifiedFeatures??[]).map(fact=>({fact,score:contextualFactScore(input,fact)})).filter(item=>item.score>0).sort((a,b)=>b.score-a.score).map(item=>item.fact);
   const selected=(facts.length?facts:(input.verifiedFeatures??[])).slice(0,2).map(simpleFactLabel).filter(Boolean);
   const ruggedFab=product?ruggedFabCore(input,product):null;
   const fit=ruggedFab??(product&&selected.length?`${product}: ${selected.join(' y ')}.`:'');
-  const commercial=input.quote?.price!=null&&input.quote?.stock!=null
-    ?`${product||'El equipo'} está a S/ ${input.quote.price} y ${input.quote.stock>0?'tenemos disponibilidad':'ahora no tiene stock disponible'}.`
-    :'';
+  const commercial=input.quote?.price!=null&&input.quote?.stock!=null?`${product||'El equipo'} está a S/ ${input.quote.price} y ${input.quote.stock>0?'tenemos disponibilidad':'ahora no tiene stock disponible'}.`:'';
   return [fit,commercial].filter(Boolean).join(' ')||fallback;
 }
 function painContext(input:LlmWriteInput):boolean{
@@ -196,8 +205,7 @@ function missesRequiredCloseResult(text:string,input:LlmWriteInput):boolean{
 function missesRuggedFabEvidence(text:string,input:LlmWriteInput):boolean{
   const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''}`);
   if(!/caida|golpe|construccion|obra|campo|repar|polvo|lluvia|agua|humedad/.test(context))return false;
-  const certs=ruggedCertifications(input);
-  if(!certs.length)return false;
+  const certs=ruggedCertifications(input);if(!certs.length)return false;
   const value=String(text??'');
   const certsPresent=certs.every(cert=>value.toUpperCase().includes(cert.toUpperCase()));
   const practical=/golpes?|ca[ií]das?|agua|polvo/.test(value);
@@ -224,6 +232,7 @@ export class FullRagLlmProvider implements LlmProvider{
   }
   async write(input:LlmWriteInput):Promise<LlmResult>{
     const enriched=applyFullRagWritePolicy(input);const intent=String(enriched.intent??'').toUpperCase();
+    if(intent==='FULFILLMENT_SELECTION')return deterministicResult(fulfillmentSelectionResponse(enriched),'stech-fulfillment-selection');
     const isRecommendation=['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
     const kernelInput:LlmWriteInput=isRecommendation?enriched:{...enriched,recommendedProduct:null};
     const kernel=['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent)?buildFullRagAnswer(kernelInput):null;
@@ -243,7 +252,6 @@ export class FullRagLlmProvider implements LlmProvider{
       if(hasFabricatedCommercialPressure(composed)||technicalDumpOnPain(composed,plannedInput)||missesRequiredCloseResult(composed,plannedInput)||missesRuggedFabEvidence(composed,plannedInput))return deterministicResult(naturalFallback(plannedInput,factualCore),`full-rag-kernel-${kernel.mode.toLowerCase()}-human-fallback`);
       return{...result,text:composed};
     }
-
     const rawCore=String(enriched.directAnswer??'').trim();
     const factualCore=compactContextualCore(enriched,rawCore);
     enriched.directAnswer=factualCore;
