@@ -70,6 +70,20 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
 
   const currentIntent=String(canonicalPatch.lastIntent??'').toUpperCase();
   const currentRoute=String(canonicalPatch.lastRoute??'').toUpperCase();
+
+  // Product exploration is conversational memory, not purchase selection.
+  // Keep a bounded recency list and expose the latest two as a possible
+  // comparison pair only when a later turn explicitly asks to compare/choose.
+  const explorationCandidate=currentRoute==='RAG_PRODUCT'&&['PRODUCT_INFO','CAPABILITY','EVALUATE_USE'].includes(currentIntent)
+    ?String(canonicalPatch.queryTarget??canonicalPatch.salientProduct??'').trim()
+    :'';
+  if(explorationCandidate){
+    const explored=(previous.exploredProducts??[]).filter(product=>!sameProduct(product,explorationCandidate));
+    explored.push(explorationCandidate);
+    next.exploredProducts=explored.slice(-4);
+    next.comparisonProducts=next.exploredProducts.slice(-2);
+  }
+
   const trace=canonicalPatch.lastDecisionTrace as any;
   const tracedWinner=String(trace?.recommendation?.winner??'').trim()||null;
   const recommendationTopTie=topRecommendationTie(trace);
