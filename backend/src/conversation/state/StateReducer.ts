@@ -1,4 +1,5 @@
 import type { ConversationState } from '../../domain/types.ts';
+import { fold } from '../../shared/text.ts';
 import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from '../commercial/UseCaseNormalizer.ts';
 
 export type StatePatch=Partial<ConversationState>&{spinResidual?:string};
@@ -31,6 +32,24 @@ function productFlowState(state:Partial<ConversationState>):ProductFlowState{
 
 function sameProduct(a:string|null|undefined,b:string|null|undefined):boolean{
   return Boolean(a&&b&&a.trim().toLocaleLowerCase()===b.trim().toLocaleLowerCase());
+}
+
+const EXPLICIT_PRIORITY_PATTERNS:Array<[string,RegExp]>=[
+  ['termica',/\b(camara\s+termica|termica|thermal|flir)\b/],
+  ['nfc',/\bnfc\b/],
+  ['5g',/\b5g\b/],
+  ['resistencia',/\b(resistente|resistencia|caida|caidas|golpe|golpes|ip68|ip69k|rugged)\b/],
+  ['bateria',/\b(bateria|autonomia|carga|cargar)\b/],
+  ['camara',/\b(camara|foto|fotos|video|vision\s+nocturna)\b/],
+  ['rendimiento',/\b(rendimiento|procesador|ram|multitarea|gaming|jugar|juego|free\s*fire|pubg|cod\s*mobile)\b/],
+  ['conectividad',/\b(wifi|bluetooth|gps|4g|conectividad)\b/],
+  ['precio',/\b(precio|presupuesto|economico|barato)\b/],
+];
+function explicitPriorityMentions(message:string|null|undefined):string[]{
+  const text=fold(message??'');if(!text)return[];
+  const cue=/\b(priorizo|prioridad|me importa|me interesa|prefiero|lo mas importante|es importante|si o si|necesito|requiero|busco)\b/.test(text);
+  if(!cue)return[];
+  return [...new Set(EXPLICIT_PRIORITY_PATTERNS.filter(([,rx])=>rx.test(text)).map(([key])=>key))];
 }
 
 const STAGE_RANK:Record<string,number>={DESCUBRIMIENTO:1,EVALUACION:2,OBJECION:2,CONSIDERACION:3,CIERRE:4,CIERRE_ASISTIDO:4};
@@ -67,6 +86,12 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
     updatedAt:new Date().toISOString(),
   };
   next.useCase=normalizeGenuineUseCase(next.useCase);
+
+  // A queried attribute is not automatically a purchase priority. Keep a
+  // separate memory only for preference/requirement language such as
+  // "me importa batería", "NFC sí o sí" or "necesito resistencia".
+  const explicitNow=explicitPriorityMentions(canonicalPatch.lastUserMessage);
+  next.explicitPriorities=[...new Set([...(previous.explicitPriorities??[]),...explicitNow])].slice(-6);
 
   const currentIntent=String(canonicalPatch.lastIntent??'').toUpperCase();
   const currentRoute=String(canonicalPatch.lastRoute??'').toUpperCase();
