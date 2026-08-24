@@ -2,6 +2,7 @@ import type { ConversationState } from '../../domain/types.ts';
 import type { TurnDecision } from '../../ports/LlmProvider.ts';
 import { fold } from '../../shared/text.ts';
 import { compatibleNba } from '../nba/NbaCompatibility.ts';
+import { nextBestAction as deterministicNextBestAction } from '../nba/NextBestAction.ts';
 
 const INTENTS=new Set(['GREETING','PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','BUDGET_CONSTRAINT','RECOMMEND','RECOMMEND_WITHIN_BUDGET','COMPARE','PRICE_AVAILABILITY','PRICE','STOCK','IMAGES','IMAGE','POLICY','WARRANTY','OBJECTION','HANDLE_PRICE_OBJECTION','PURCHASE','HUMAN','QUOTE','CATALOG','CATEGORIES','SUBCATEGORIES','ORDER_STATUS','OTHER']);
 const INTENT_ALIASES:Record<string,string>={
@@ -93,7 +94,9 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
   if(referenceType==='SELECTION_REFERENT'&&recentSelection&&!sqlPurchaseTarget&&!namedPurchaseTarget&&!contextualPurchaseTarget)selectedProduct=recentSelection;
   const explicitSwitch=Boolean(selectionAuthorized&&selectedProduct&&fold(selectedProduct)!==fold(state.activeProduct??''));
 
-  const proposedNba=canonicalNba(decision.nextBestAction),fallbackNba=canonicalNba(fallbackDecision?.nextBestAction),nextBestAction=compatibleNba(primaryIntent,state,proposedNba,fallbackNba);
+  const proposedNba=canonicalNba(decision.nextBestAction);
+  const deterministicNba=canonicalNba(deterministicNextBestAction(primaryIntent,state)??fallbackDecision?.nextBestAction);
+  const nextBestAction=compatibleNba(primaryIntent,state,proposedNba,deterministicNba);
   let comparisonProducts=rawComparisonProducts.slice(0,2);
   const active=knownCanonical(state.activeProduct,universe);
 
