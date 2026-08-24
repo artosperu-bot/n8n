@@ -72,12 +72,14 @@ function isShortAffirmative(text:string):boolean {
 
 function confirmsPriorPurchaseStep(message:string,previous:ConversationState):boolean {
   if(!isShortAffirmative(message))return false;
-  const lastIntent=String(previous.lastIntent??'').toUpperCase();
   const lastNba=String(previous.lastNba??previous.pendingCommercialAction??'').toUpperCase();
-  if(lastIntent!=='STOCK'||lastNba!=='SOFT_CLOSE')return false;
+  if(lastNba!=='SOFT_CLOSE')return false;
   const prompt=fold(previous.lastAssistantMessage??'');
-  return /\bquieres\b[^?]{0,70}\b(?:avanzar|seguir|continuar|comprar|reservar|separar)\b/.test(prompt)
-    || /\b(?:avanzamos|seguimos|continuamos)\b[^?]{0,45}\b(?:modelo|compra|reserva)?\b/.test(prompt);
+  // The affirmative is purchase only when the previous visible question was
+  // explicitly about reserving/buying. A yes to delivery-vs-pickup is not purchase.
+  return /\bquieres\b[^?]{0,80}\b(?:reservar|separar|comprar)\b/.test(prompt)
+    || /\b(?:te\s+lo|lo|la)\s+(?:reservo|separo)\b/.test(prompt)
+    || /\b(?:avanzamos|seguimos|continuamos)\b[^?]{0,45}\b(?:con\s+la\s+)?(?:compra|reserva)\b/.test(prompt);
 }
 
 function hasInterestSignal(text:string):boolean {
