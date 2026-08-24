@@ -29,6 +29,18 @@ function isExplicitFulfillmentChoice(message:string,state:LlmDecisionInput['stat
     || /\b(?:prefiero|quiero|voy a|mejor)\b[^.!?]{0,35}\b(?:recoger|recojo|retirar|local|tienda)\b/.test(t)
     || /^\s*(?:recojo|recoger|local|tienda)\b/.test(t);
 }
+function isShortAffirmative(message:string):boolean{
+  const t=fold(message).replace(/[.!¡¿?]+/g,'').replace(/\s+/g,' ').trim();
+  return /^(?:si|dale|ok|okay|claro|de acuerdo|vamos|avancemos|listo|hazlo|hagamoslo)$/.test(t);
+}
+function isReservationAffirmative(message:string,state:LlmDecisionInput['state']):boolean{
+  if(!isShortAffirmative(message))return false;
+  const pending=String(state.pendingCommercialAction??state.lastNba??'').toUpperCase();
+  if(pending!=='SOFT_CLOSE')return false;
+  const prompt=fold(state.lastAssistantMessage??'');
+  return /\bquieres\b[^?]{0,80}\b(?:reserv(?:ar|e)|separ(?:ar|e)|compr(?:ar|e))\b/.test(prompt)
+    || /\b(?:te\s+lo|lo|la)\s+(?:reserv(?:o|e)|separ(?:o|e))\b/.test(prompt);
+}
 function isDirectTechnicalCapability(message:string):boolean{const t=fold(message);const feature=/\b(nfc|google pay|wifi|wi fi|bluetooth|infrarrojo|5g|4g|lte|dual sim|sim|audifono|audifonos|jack|ip68|ip69k|vision nocturna|camara nocturna|camara termica)\b/.test(t);const form=/\b(tiene|trae|soporta|funciona con|trabaja con|agarra|es|sirve para)\b/.test(t);return feature&&form&&!/\b(cual|que)\b[^?.!]{0,45}\b(recomiend|conviene|mejor)\b/.test(t);}
 function isBroadComparison(message:string):boolean{const t=fold(message);const compare=/\b(compara|comparame|comparar|comparacion|diferencia|vs|versus)\b/.test(t);const criterion=/\b(bateria|autonomia|carga|resistencia|resistente|caida|golpe|camara|foto|video|ram|memoria|almacenamiento|procesador|rendimiento|gaming|jugar|free fire|pantalla|hz|nfc|5g|termica|peso|tamano)\b/.test(t);return compare&&!criterion;}
 function isTradeoffComparisonFollowup(message:string,state:LlmDecisionInput['state']):boolean{
@@ -124,6 +136,18 @@ function naturalFallback(input:LlmWriteInput,core:string):string{
   const question=input.commercialResponsePlan?.exactNba==='SOFT_CLOSE'?softCloseQuestion(input):'';
   return [lead,core,question].filter(Boolean).join(' ').trim();
 }
+function missesRequiredCloseResult(text:string,input:LlmWriteInput):boolean{
+  const plan=input.commercialResponsePlan;if(plan?.exactNba!=='SOFT_CLOSE')return false;
+  const value=String(text??'');
+  if(plan.closePurpose==='RESERVATION')return !/reserv|separ/i.test(value);
+  if(plan.closePurpose==='PRICE_AVAILABILITY')return !(/precio/i.test(value)&&/disponib|stock/i.test(value));
+  if(plan.closePurpose==='FULFILLMENT'){
+    const needsPrice=input.quote?.price!=null;const needsAvailability=input.quote?.stock!=null;
+    const priceOk=!needsPrice||/S\/\s*\d/i.test(value);const stockOk=!needsAvailability||/disponib|stock/i.test(value);
+    return !(priceOk&&stockOk&&/env[ií]o/i.test(value)&&/recoger|recojo|local/i.test(value));
+  }
+  return false;
+}
 
 export class FullRagLlmProvider implements LlmProvider{
   readonly #delegate:LlmProvider;
@@ -131,7 +155,8 @@ export class FullRagLlmProvider implements LlmProvider{
   async decide(input:LlmDecisionInput):Promise<LlmDecisionResult>{
     if(!this.#delegate.decide)throw new Error('Wrapped LLM does not implement decide');
     const result=await this.#delegate.decide(input);let decision=result.decision;const intent=String(decision.primaryIntent).toUpperCase();
-    if(isExplicitFulfillmentChoice(input.message,input.state))decision={...decision,primaryIntent:'POLICY'};
+    if(isReservationAffirmative(input.message,input.state))decision={...decision,primaryIntent:'PURCHASE'};
+    else if(isExplicitFulfillmentChoice(input.message,input.state))decision={...decision,primaryIntent:'POLICY'};
     else if(isExplicitUseCase(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY','PRICE','STOCK'].includes(intent))decision={...decision,primaryIntent:'EVALUATE_USE'};
     else if(isExplicitDiscoveryFact(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY','PRICE','STOCK'].includes(intent))decision={...decision,primaryIntent:'EVALUATE_USE'};
     else if(isBudgetRecommendationFollowup(input.message,input.state)&&!['PURCHASE','QUOTE','POLICY','WARRANTY'].includes(intent))decision={...decision,primaryIntent:'RECOMMEND_WITHIN_BUDGET'};
@@ -158,7 +183,7 @@ export class FullRagLlmProvider implements LlmProvider{
       if(!responsePlan.shouldUseLlm)return deterministicResult(factualCore,`full-rag-kernel-${kernel.mode.toLowerCase()}`);
       const result=await this.#delegate.write(plannedInput);
       const composed=humanizeKernel(sanitize(result.text,plannedInput),plannedInput);
-      if(hasFabricatedCommercialPressure(composed)||technicalDumpOnPain(composed,plannedInput))return deterministicResult(naturalFallback(plannedInput,factualCore),`full-rag-kernel-${kernel.mode.toLowerCase()}-human-fallback`);
+      if(hasFabricatedCommercialPressure(composed)||technicalDumpOnPain(composed,plannedInput)||missesRequiredCloseResult(composed,plannedInput))return deterministicResult(naturalFallback(plannedInput,factualCore),`full-rag-kernel-${kernel.mode.toLowerCase()}-human-fallback`);
       return{...result,text:composed};
     }
 
@@ -172,7 +197,7 @@ export class FullRagLlmProvider implements LlmProvider{
     Object.assign(input,enriched);
     const result=await this.#delegate.write(enriched);
     const composed=humanizeKernel(sanitize(result.text,enriched),enriched);
-    if((hasFabricatedCommercialPressure(composed)||technicalDumpOnPain(composed,enriched))&&factualCore)return deterministicResult(naturalFallback(enriched,factualCore),'full-rag-commercial-human-fallback');
+    if((hasFabricatedCommercialPressure(composed)||technicalDumpOnPain(composed,enriched)||missesRequiredCloseResult(composed,enriched))&&factualCore)return deterministicResult(naturalFallback(enriched,factualCore),'full-rag-commercial-human-fallback');
     return{...result,text:composed};
   }
 }
