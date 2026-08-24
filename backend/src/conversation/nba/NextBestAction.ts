@@ -23,7 +23,9 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'PRICE_AVAILABILITY':
     case 'PRICE':
     case 'STOCK':
-      return state.selectedProduct || (state.interestSignal && state.activeProduct) ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
+      // SQL resolves price + availability together. Once a product is known,
+      // the useful +1 is fulfillment (delivery vs pickup), not asking stock again.
+      return state.activeProduct || state.selectedProduct || state.recommendedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
     case 'PRODUCT_INFO': {
       const spin=evaluateSpinReadiness(state);
@@ -34,16 +36,21 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'CAPABILITY':
     case 'IMAGES':
     case 'IMAGE':
-    case 'POLICY':
     case 'WARRANTY':
     case 'ORDER_STATUS':
       return 'ANSWER_ONLY';
+
+    case 'POLICY':
+      // If the previous turn already offered delivery/pickup, a policy answer
+      // such as "envío a Ate" or "prefiero recojo" should move one step to reservation.
+      return state.activeProduct && String(state.pendingCommercialAction??state.lastNba??'').toUpperCase()==='SOFT_CLOSE'
+        ? 'SOFT_CLOSE'
+        : 'ANSWER_ONLY';
 
     case 'EVALUATE_USE': {
       const spin=evaluateSpinReadiness(state);
       if(spin.nextMissingFact)return'ASK_MISSING_FACT';
       if(!state.recommendedProduct&&!state.activeProduct)return'RECOMMEND';
-      // Grounded fit is evaluated after the answer before any stock close.
       return'ANSWER_ONLY';
     }
 
