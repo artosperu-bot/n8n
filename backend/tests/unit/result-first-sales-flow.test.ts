@@ -6,6 +6,7 @@ import { prepareCommercialWriteInput } from '../../src/conversation/commercial/C
 import { buildCommercialResponseInstruction, buildCommercialResponsePlan } from '../../src/conversation/commercial/CommercialResponsePlan.ts';
 import { extractCommercialFacts } from '../../src/conversation/commercial/CommercialFacts.ts';
 import { normalizeUseCaseSpinFact } from '../../src/conversation/commercial/UseCaseNormalizer.ts';
+import { priceResponse, stockResponse } from '../../src/conversation/commercial/ResponsePolicy.ts';
 
 test('a known work pain with a resolved fit stops SPIN and opens the commercial close',()=>{
   const state={
@@ -49,6 +50,23 @@ test('a first direct price answer advances to fulfillment without needing prior 
     intent:'PRICE',currentNba:'ANSWER_ONLY',state:{} as any,resolvedProduct:'Armor 22',verifiedCurrentAnswer:true,relatedValueAvailable:true,
   });
   assert.equal(progression.candidateNba,'SOFT_CLOSE');
+});
+
+test('deterministic price policy returns price plus availability and asks fulfillment in one response',()=>{
+  const answer=priceResponse({product:'Armor 22',shortName:'Armor 22',price:1399,stock:9,currency:'PEN',source:'FAKE_TEST_DATA'},true);
+  assert.match(answer,/S\/\s*1399/i);
+  assert.match(answer,/disponib/i);
+  assert.match(answer,/env[ií]o/i);
+  assert.match(answer,/recoger|recojo|local/i);
+  assert.doesNotMatch(answer,/revisar stock|quieres avanzar/i);
+});
+
+test('deterministic stock policy also returns known price and fulfillment instead of another stock question',()=>{
+  const answer=stockResponse({product:'Armor 22',shortName:'Armor 22',price:1399,stock:9,currency:'PEN',source:'FAKE_TEST_DATA'},null,true);
+  assert.match(answer,/S\/\s*1399/i);
+  assert.match(answer,/disponib/i);
+  assert.match(answer,/env[ií]o/i);
+  assert.match(answer,/recoger|recojo|local/i);
 });
 
 test('a fulfillment selection advances to reservation',()=>{
