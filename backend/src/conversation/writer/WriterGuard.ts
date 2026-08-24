@@ -66,6 +66,11 @@ function acknowledgeKnownContext(input:LlmWriteInput,answer:string):string{
   const acknowledgement=useCase?`Lo tienes pensado para ${humanizeCommercialFact(useCase)}.`:problem?`Entonces el punto a resolver es ${humanizeCommercialFact(problem)}.`:priorities[0]?`Tomo como prioridad ${humanizeCommercialFact(priorities[0])}.`:'';
   return acknowledgement?`${acknowledgement} ${answer}`.trim():answer;
 }
+function softCloseQuestion(input:LlmWriteInput):string{
+  return input.commercialResponsePlan?.closePurpose==='RESERVATION'
+    ?'¿Quieres que te lo reserve?'
+    :'¿Prefieres envío o recogerlo en nuestro local?';
+}
 function executeNba(input:LlmWriteInput,answer:string):string {
   const action=String(input.nextBestAction??input.decision?.nextBestAction??'').toUpperCase();
   if(action==='ANSWER_ONLY'||action==='RELATED_VALUE')return answer;
@@ -91,7 +96,7 @@ function executeNba(input:LlmWriteInput,answer:string):string {
     const alternatives=unique(input.alternatives??[]).slice(0,2);const namesOne=alternatives.some(product=>new RegExp(`\\b${escapes(product)}\\b`,'i').test(answer));
     return alternatives.length&&!namesOne?`${answer.trim()} Una opción real es ${alternatives.join(' o ')}.`.trim():answer;
   }
-  if(action==='SOFT_CLOSE'&&!/[¿?]/.test(answer))return `${answer.trim()} ¿Quieres que revise disponibilidad?`.trim();
+  if(action==='SOFT_CLOSE'&&!/[¿?]/.test(answer))return `${answer.trim()} ${softCloseQuestion(input)}`.trim();
   return answer;
 }
 
@@ -148,7 +153,7 @@ function compactUseCase(value:string|null|undefined):string|null{
 }
 function compactRecommendationPresentation(input:LlmWriteInput,answer:string):string{
   const intent=String(input.intent??'').toUpperCase();if(!['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent))return answer;
-  const question=trailingQuestion(answer)??(String(input.nextBestAction??'').toUpperCase()==='SOFT_CLOSE'?'¿Quieres que revise disponibilidad?':null);
+  const question=trailingQuestion(answer)??(String(input.nextBestAction??'').toUpperCase()==='SOFT_CLOSE'?softCloseQuestion(input):null);
   const product=String(input.recommendedProduct??input.state?.recommendedProduct??'').trim();const state:any=input.state??{};const budget=input.budget??state.budget??null;const useCase=compactUseCase(input.useCase??state.useCase??null);
   const technicalDump=answer.length>300||/\b(?:bandas?|802\.11|USB\s*Type|ranuras?|FDD-LTE|WCDMA|GSM)\b/i.test(answer)||/^\s*[-*•]\s+/m.test(answer);
   if(technicalDump&&product){
