@@ -32,12 +32,8 @@ function isFeatureQuestion(text:string):boolean {
 }
 
 function currentPriorityMentions(text:string):string[] {
-  // Mentioning a feature or describing a problem is not a need-payoff. A
-  // priority is stored only when the customer actually expresses preference,
-  // requirement, importance or repeated use that makes it a decision criterion.
   if(isFeatureQuestion(text)||!hasPriorityCue(text))return[];
   const found=PRIORITIES.filter(([,rx])=>rx.test(text)).map(([key])=>key);
-  // Specific hard requirements are more useful than their broad umbrella.
   if(found.includes('nfc')||found.includes('5g'))return unique(found.filter(key=>key!=='conectividad'));
   return unique(found);
 }
@@ -45,7 +41,9 @@ function currentPriorityMentions(text:string):string[] {
 function currentImplicationFacts(text:string):string[]{
   if(isFeatureQuestion(text))return[];
   const facts:string[]=[];
-  if(/\b(?:pierdo|perdemos|me hace perder|nos hace perder)\s+tiempo\b|\btengo\s+que\s+(?:parar|detener)\b|\bme\s+interrumpe\b/.test(text))facts.push('implicacion:perdida_tiempo_interrupcion');
+  const losesTime=/\b(?:pierdo|perdemos|me\s+hace\s+perder|nos\s+hace\s+perder)\s+(?:tiempo|(?:\d+\s+)?horas?(?:\s+de\s+trabajo)?)\b/.test(text);
+  const mustStop=/\btengo\s+que\s+(?:parar|detener)\b|\bme\s+interrumpe\b/.test(text);
+  if(losesTime||mustStop)facts.push('implicacion:perdida_tiempo_interrupcion');
   if(/\b(?:pierdo|perdemos)\s+(?:ventas?|clientes?|pedidos?)\b/.test(text))facts.push('implicacion:perdida_comercial');
   if(/\b(?:no puedo|no podemos)\s+(?:trabajar|continuar|seguir)\b/.test(text))facts.push('implicacion:interrupcion_operativa');
   return unique(facts);
@@ -116,13 +114,13 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
   else if (/\bdelivery\b|\brepart(?:o|idor|iendo)\b/.test(t)) useCase = 'delivery';
   else if (/\btrabaj(?:o|an|amos)\s+en\s+campo\b/.test(t)) useCase = 'trabajo_en_campo';
   else if (/\buso\s+diario\b/.test(t)) useCase = 'uso_diario';
-  else if (/\btrabajo\b/.test(t)) useCase = 'trabajo';
+  else if (/\btrabajo\b/.test(t) && !useCase) useCase = 'trabajo';
 
   let problem = previous.problem ?? null;
   if(!featureQuestion){
     if (/\b(se\s+me|se\s+nos|se\s+les)\s+cae[n]?\b|\bcaidas?\s+(?:frecuentes?|seguidas?|constantes?)\b/.test(t)) problem = 'caidas_frecuentes';
     else if (/\bbateria\b[^.!?]{0,50}\b(se\s+acaba|no\s+aguanta|dura\s+poco)\b|\bcasi\s+no\s+tengo\s+donde\s+cargar/.test(t)) problem = 'autonomia_insuficiente';
-    else if (/\bse\s+rompe[n]?\b|\b(?:es|me\s+resulta)\s+fragil\b/.test(t)) problem = 'durabilidad';
+    else if (/\bse\s+rompe[n]?\b|\b(?:es|me\s+resulta)\s+fragil\b/.test(t) && !problem) problem = 'durabilidad';
   }
 
   const priorities = unique([...(previous.priorities ?? []), ...currentPriorityMentions(t), ...(explicitBudgetRecommendation(t)?['precio']:[])]);
