@@ -73,3 +73,11 @@ test('comparison uses remembered customer priority before generic catalog differ
   assert.match(result!.answer,/6320/);
   assert.doesNotMatch(result!.answer,/64 MP principal/i);
 });
+
+test('gaming comparison uses processor, RAM and display instead of collapsing gaming into processor only',()=>{
+  const result=buildFullRagAnswer({message:'De los dos cuál conviene para Free Fire?',intent:'COMPARE',state:{comparisonProducts:['Armor 22','Armor X13']},rag:[...armor22,...armorX13]} as any);
+  assert.ok(result);
+  assert.match(result!.answer,/Helio G96/i);
+  assert.match(result!.answer,/8 GB de RAM física/i);
+  assert.match(result!.answer,/120 Hz/i);
+});
