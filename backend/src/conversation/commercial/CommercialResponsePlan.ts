@@ -10,8 +10,8 @@ const FORBIDDEN_CLAIMS = [
 ] as const;
 
 const SIMPLE_HUMAN_LANGUAGE = 'Usa lenguaje cotidiano y palabras simples que cualquier cliente entienda. Evita jerga interna o palabras técnicas si puedes decirlo de forma común: di batería en vez de autonomía cuando no haga falta el término técnico, quedarse sin celular o perder horas en vez de interrupción operativa, y golpes/agua/polvo antes que recitar certificaciones si el cliente no las pidió.';
-const GROUNDED_PAIN_EMPATHY = 'Si el cliente contó un problema o una consecuencia real, háblale como una persona que aterriza la situación: no digas “te entiendo”, “ahí duele”, “y ahí está el verdadero problema”, “el verdadero problema es” ni frases parecidas. Puedes usar como máximo una mini-escena cotidiana de una oración basada solo en lo que ya contó, por ejemplo “si justo te pasa a media jornada…” o “imagina que estás coordinando algo y te quedas sin equipo…”. Haz tangible la molestia, las horas perdidas, el gasto o la tranquilidad que sí se desprenden del contexto. No inventes que te pasó a ti, a un amigo, a otros clientes ni digas “nos suele pasar” sin evidencia explícita.';
-const NATURAL_NEUROSALES = 'Aplica persuasión sin nombrarla ni sonar a curso de ventas: ayuda a visualizar la situación, contrasta seguir con el mismo problema frente a usar un equipo adecuado, traduce el hecho verificado a un beneficio fácil de imaginar y reduce el riesgo de decidir. No uses miedo exagerado, urgencia falsa ni presión.';
+const GROUNDED_PAIN_EMPATHY = 'Si el cliente contó un problema o una consecuencia real, háblale como una persona que aterriza la situación: no digas “te entiendo”, “ahí duele”, “y ahí está el verdadero problema”, “el verdadero problema es” ni frases parecidas. Usa como máximo una mini-escena cotidiana breve basada solo en lo que ya contó: por ejemplo que una caída ocurra en plena jornada, que termine buscando cargador a media tarde o que vuelva a gastar en una reparación. No hace falta empezar con “imagina”. Haz tangible la molestia, las horas perdidas, el gasto o la tranquilidad que sí se desprenden del contexto. No inventes que te pasó a ti, a un amigo, a otros clientes ni digas “nos suele pasar” sin evidencia explícita.';
+const NATURAL_NEUROSALES = 'Aplica persuasión sin nombrarla ni sonar a curso de ventas: ayuda a visualizar la situación, contrasta seguir con el mismo problema frente a usar un equipo adecuado, traduce el hecho verificado a un beneficio fácil de imaginar y muestra el alivio práctico de resolverlo. No uses miedo exagerado, urgencia falsa ni presión.';
 
 function unique(values: Array<string | null | undefined>): string[] {
   return [...new Set(values.map(value => String(value ?? '').trim()).filter(Boolean))];
@@ -53,6 +53,7 @@ function closePurpose(input:LlmWriteInput,nba:string):CommercialResponsePlan['cl
   const intent=String(input.resolvedCurrentIntent??input.intent??'').toUpperCase();
   if(intent==='POLICY'&&String(input.state?.pendingCommercialAction??input.state?.lastNba??'').toUpperCase()==='SOFT_CLOSE')return'RESERVATION';
   if(['PRICE','PRICE_AVAILABILITY','STOCK'].includes(intent))return'FULFILLMENT';
+  if(['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent))return'PRICE_AVAILABILITY';
   return'FULFILLMENT';
 }
 
@@ -92,6 +93,7 @@ function authorizedActionInstruction(plan:CommercialResponsePlan): string {
   if (exactNba === 'OFFER_ALTERNATIVE') return 'ofrece solo la alternativa ya autorizada';
   if (exactNba === 'COMPARE') return 'presenta solo la comparación autorizada';
   if (exactNba === 'RECOMMEND') return 'verbaliza únicamente la recomendación ya autorizada';
+  if (exactNba === 'SOFT_CLOSE'&&plan.closePurpose==='PRICE_AVAILABILITY') return 'haz una sola pregunta breve: “¿Quieres que te pase precio y disponibilidad?”';
   if (exactNba === 'SOFT_CLOSE'&&plan.closePurpose==='RESERVATION') return 'haz una sola pregunta breve para saber si quiere que le reserves el equipo';
   if (exactNba === 'SOFT_CLOSE') return 'haz una sola pregunta breve para que elija entre envío y recogerlo en el local';
   if (exactNba === 'COLLECT_RESERVATION_DATA') return 'solicita únicamente el dato de reserva que falta';
@@ -118,6 +120,9 @@ export function buildCommercialResponseInstruction(plan: CommercialResponsePlan)
     return `Conserva RESPUESTA_DIRECTA. ${SIMPLE_HUMAN_LANGUAGE} Responde al precio como una persona, sin “te entiendo la objeción”, “ahí duele”, “el verdadero problema” ni repetir literalmente al cliente. Si ayuda, usa una sola escena cotidiana basada en el contexto (${context}) para mostrar qué gasto, molestia o riesgo práctico puede evitar una característica relevante, sin inventar experiencias personales. Responde con hechos verificados y luego ${action}. No mezcles alternativa y cierre en el mismo turno salvo que la acción lo autorice. No seas defensivo ni presiones. ${safety}`;
   }
   if (plan.mode === 'SOFT_CLOSE') {
+    if(plan.closePurpose==='PRICE_AVAILABILITY'){
+      return `Usa RESPUESTA_DIRECTA solo como fuente de hechos, no como texto para recitar. Ya hay suficiente contexto para avanzar (${context}); no vuelvas a SPIN. ${SIMPLE_HUMAN_LANGUAGE} ${GROUNDED_PAIN_EMPATHY} ${NATURAL_NEUROSALES} Haz visible una mini-escena humana solo si existe dolor real, conecta como máximo 1 o 2 hechos verificados con lo que el cliente vive y explica el beneficio en palabras normales. No hagas una ficha técnica. Después ejecuta un solo +1: ${action}. Todavía no inventes ni muestres precio o stock si SQL no fue consultado. ${safety}`;
+    }
     if(plan.closePurpose==='RESERVATION'){
       return `Conserva y responde primero la información de envío/recojo solicitada. ${SIMPLE_HUMAN_LANGUAGE} No vuelvas a preguntar stock, disponibilidad, uso ni presupuesto. Después ejecuta un solo +1: ${action}. La pregunta debe sonar natural, por ejemplo “¿Quieres que te lo reserve?”. No pidas DNI, dirección de compra ni pago todavía. ${safety}`;
     }
