@@ -58,9 +58,9 @@ const stiffSalesLanguage=/\b(?:el\s+verdadero\s+problema|y\s+ah[ií]\s+est[aá]\
 const internalJargon=/\b(?:SPIN|FAB|LAER|N\+1|commercial\s+readiness|implicaci[oó]n\s+operativa)\b/i;
 const explicitPain=/\b(?:romp|cae|ca[ií]da|malogr|bater[ií]a|cargador|polvo|lluvia|arreglo|repar|pierdo\s+horas|gastar)\b/i;
 const storyPain=/\b(?:romp|se\s+me\s+cae|ca[ií]das?|malogr|no\s+llega\s+a\s+la\s+tarde|repar|arregl|pierdo\s+horas|polvo|lluvia|seguir\s+gastando)\b/i;
-const humanSceneCue=/\b(?:en\s+obra|en\s+plena\s+jornada|a\s+media\s+jornada|a\s+media\s+tarde|cuando\s+est[aá]s|si\s+justo|mientras\s+trabajas|terminas\s+(?:sin|buscando|otra\s+vez)|te\s+quedas\s+sin|quedarte\s+sin|volver\s+a\s+(?:reparar|gastar)|estar\s+pendiente|cada\s+vez\s+que|otra\s+reparaci[oó]n|mismo\s+gasto)\b/i;
-const practicalValueCue=/\b(?:aguant|resist|evit|protege|menos\s+pendiente|sin\s+estar\s+pendiente|hecho\s+para|preparado\s+para|te\s+ayuda|te\s+sirve|tranquilidad|ahorr|dejar\s+de\s+gastar|seguir\s+trabajando|durar\s+m[aá]s|m[aá]s\s+margen)\b/i;
-const technicalToken=/\b(?:IP68|IP69K|MIL-STD|GLONASS|Galileo|BeiDou|Mali|Helio|GHz|GPU)\b/gi;
+const humanSceneCue=/\b(?:en\s+obra|en\s+plena\s+jornada|a\s+media\s+jornada|a\s+media\s+tarde|cuando\s+est[aá]s|si\s+justo|mientras\s+trabajas|terminas\s+(?:sin|buscando|otra\s+vez)|te\s+quedas\s+sin|quedarte\s+sin|volver\s+a\s+(?:reparar|gastar)|estar\s+pendiente|cada\s+vez\s+que|otra\s+reparaci[oó]n|mismo\s+gasto|cada\s+nueva\s+ca[ií]da)\b/i;
+const practicalValueCue=/\b(?:aguant|resist|evit|protege|menos\s+pendiente|sin\s+estar\s+pendiente|hecho\s+para|preparado\s+para|te\s+ayuda|te\s+sirve|tranquilidad|ahorr|dejar\s+de\s+gastar|seguir\s+trabajando|durar\s+m[aá]s|m[aá]s\s+margen|reducir\s+el\s+riesgo)\b/i;
+const noisyTechnicalToken=/\b(?:GLONASS|Galileo|BeiDou|Mali|Helio|GHz|GPU)\b/gi;
 
 function add(scenarioId:string,turn:number,level:'RED'|'YELLOW',code:string,message:string,answer:string){findings.push({scenarioId,turn,level,code,message,answer});}
 function answerOf(scenario:any,index:number):string{return String(scenario?.turns?.[index]?.observation?.response?.answer??'');}
@@ -76,6 +76,15 @@ function requireReservationThenPurchase(scenario:any,fulfillmentIndex:number,con
   if(confirmedState.purchaseSignal!==true)add(scenario.id,confirmIndex+1,'RED','AFFIRMATIVE_NOT_PURCHASE','Un sí/dale a la pregunta explícita de reserva debe activar purchaseSignal.',answerOf(scenario,confirmIndex));
   if(String(confirmedState.lastNba??'').toUpperCase()!=='COLLECT_RESERVATION_DATA')add(scenario.id,confirmIndex+1,'RED','PURCHASE_DID_NOT_COLLECT_DATA','Después de confirmar reserva debe avanzar a datos de compra.',answerOf(scenario,confirmIndex));
 }
+function requireRuggedFab(scenario:any,index:number){
+  const answer=answerOf(scenario,index);
+  const hasCoreCertification=/\bIP68\b/i.test(answer)&&/(?:\bIP69K\b|MIL-STD-810H)/i.test(answer);
+  const hasAdvantage=/golpes?|ca[ií]das?/i.test(answer)&&/agua|polvo/i.test(answer);
+  const hasBenefit=/riesgo|repar|quedarte|aguantar|preparado|pendiente/i.test(answer);
+  if(!hasCoreCertification)add(scenario.id,index+1,'RED','RUGGED_CERTIFICATION_EVIDENCE_MISSING','En dolor por caídas/obra debe mencionar evidencia rugged relevante (IP68 y al menos IP69K o MIL-STD-810H), no solo decir “es resistente”.',answer);
+  if(!hasAdvantage)add(scenario.id,index+1,'RED','RUGGED_FAB_ADVANTAGE_MISSING','Debe traducir las certificaciones a la ventaja práctica frente a golpes, agua y polvo.',answer);
+  if(!hasBenefit)add(scenario.id,index+1,'RED','RUGGED_FAB_BENEFIT_MISSING','Debe conectar esa ventaja con el beneficio del cliente: menos riesgo/preocupación/reparaciones.',answer);
+}
 
 for(const scenario of result.report.scenarios){
   scenario.turns.forEach((turn,index)=>{
@@ -85,8 +94,8 @@ for(const scenario of result.report.scenarios){
     if(stiffSalesLanguage.test(answer))add(scenario.id,index+1,'YELLOW','STIFF_SALES_LANGUAGE','La respuesta usó una frase de venta demasiado escrita/robotizada.',answer);
     if(internalJargon.test(answer))add(scenario.id,index+1,'RED','INTERNAL_JARGON','La respuesta expuso jerga interna.',answer);
     if(questionCount>1)add(scenario.id,index+1,'RED','MULTIPLE_QUESTIONS',`La respuesta hizo ${questionCount} preguntas visibles.`,answer);
-    if(explicitPain.test(message)&&answer.length>520)add(scenario.id,index+1,'YELLOW','PAIN_RESPONSE_TOO_LONG',`Respuesta de dolor demasiado larga (${answer.length} caracteres).`,answer);
-    if(explicitPain.test(message)&&(answer.match(technicalToken)??[]).length>2)add(scenario.id,index+1,'RED','PAIN_TECHNICAL_DUMP','Ante un dolor real se recitaron demasiadas especificaciones.',answer);
+    if(explicitPain.test(message)&&answer.length>620)add(scenario.id,index+1,'YELLOW','PAIN_RESPONSE_TOO_LONG',`Respuesta de dolor demasiado larga (${answer.length} caracteres).`,answer);
+    if(explicitPain.test(message)&&(answer.match(noisyTechnicalToken)??[]).length>0)add(scenario.id,index+1,'RED','PAIN_TECHNICAL_DUMP','Ante un dolor real aparecieron especificaciones no relacionadas con ese dolor.',answer);
     if(storyPain.test(message)&&!humanSceneCue.test(answer))add(scenario.id,index+1,'RED','PAIN_HUMAN_SCENE_MISSING','Ante un dolor real faltó una escena cotidiana y humana.',answer);
     if(storyPain.test(message)&&!practicalValueCue.test(answer))add(scenario.id,index+1,'RED','PAIN_PRACTICAL_VALUE_MISSING','Ante un dolor real faltó traducir el producto a un alivio práctico.',answer);
   });
@@ -96,10 +105,13 @@ for(const id of ['HUMAN-PAIN-DROPS','HUMAN-PAIN-BATTERY','HUMAN-PAIN-REPAIRS','H
   const scenario=result.report.scenarios.find(item=>item.id===id);if(!scenario)continue;
   requirePriceStockFulfillment(scenario,0);requireReservationThenPurchase(scenario,1,2);
 }
+for(const id of ['HUMAN-PAIN-DROPS','HUMAN-PAIN-REPAIRS','HUMAN-PAIN-WATER-DUST']){
+  const scenario=result.report.scenarios.find(item=>item.id===id);if(scenario)requireRuggedFab(scenario,0);
+}
 
 const impact=result.report.scenarios.find(item=>item.id==='HUMAN-PAIN-IMPACT');
 if(impact){
-  requirePriceStockFulfillment(impact,0);
+  requirePriceStockFulfillment(impact,0);requireRuggedFab(impact,0);
   const state=stateOf(impact,1);const answer=answerOf(impact,1);const implications=state?.customer?.implications??[];
   if(!Array.isArray(implications)||!implications.some((value:string)=>/perdida|tiempo|horas/i.test(String(value))))add(impact.id,2,'RED','EXPLICIT_IMPACT_NOT_STORED','“Pierdo horas de trabajo” debe quedar como implicación explícita.',answer);
   if(/cu[aá]nt[oa].*horas|cu[aá]nto tiempo.*pierdes/i.test(answer))add(impact.id,2,'RED','REASKED_KNOWN_IMPACT','No debe volver a preguntar cuánto tiempo pierde.',answer);
