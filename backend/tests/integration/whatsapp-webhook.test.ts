@@ -24,13 +24,17 @@ test('GET /webhooks/whatsapp returns 403 for invalid verify token',async()=>with
   assert.equal(response.status,403);
 }));
 
+const textEnvelope={entry:[{changes:[{value:{metadata:{phone_number_id:'1283086411554196'},messages:[{from:'51911111111',id:'wamid.IN1',timestamp:'1787600000',type:'text',text:{body:'Hola'}}]}}]}]};
+
 test('POST /webhooks/whatsapp accepts a text-message envelope without invoking chat API',async()=>withApp(async base=>{
   const response=await fetch(`${base}/webhooks/whatsapp`,{
-    method:'POST',headers:{'content-type':'application/json'},
-    body:JSON.stringify({entry:[{changes:[{value:{metadata:{phone_number_id:'1283086411554196'},messages:[{from:'51911111111',id:'wamid.IN1',timestamp:'1787600000',type:'text',text:{body:'Hola'}}]}}]}]}),
+    method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(textEnvelope),
   });
   assert.equal(response.status,200);
   assert.deepEqual(await response.json(),{received:true});
+  const session=await fetch(`${base}/api/sessions/${encodeURIComponent('whatsapp:51911111111')}`);
+  const sessionBody=await session.json() as any;
+  assert.equal(sessionBody.messages.length,0);
 }));
 
 test('POST /webhooks/whatsapp accepts statuses without creating a fake inbound message',async()=>withApp(async base=>{
@@ -40,6 +44,20 @@ test('POST /webhooks/whatsapp accepts statuses without creating a fake inbound m
   });
   assert.equal(response.status,200);
   assert.deepEqual(await response.json(),{received:true});
+  const session=await fetch(`${base}/api/sessions/${encodeURIComponent('whatsapp:51911111111')}`);
+  const sessionBody=await session.json() as any;
+  assert.equal(sessionBody.messages.length,0);
+}));
+
+test('repeated Meta delivery is side-effect-free during Gate 1',async()=>withApp(async base=>{
+  for(let i=0;i<2;i++){
+    const response=await fetch(`${base}/webhooks/whatsapp`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(textEnvelope)});
+    assert.equal(response.status,200);
+  }
+  const session=await fetch(`${base}/api/sessions/${encodeURIComponent('whatsapp:51911111111')}`);
+  const sessionBody=await session.json() as any;
+  assert.equal(sessionBody.messages.length,0);
+  assert.equal(sessionBody.state.turnCount??0,0);
 }));
 
 test('POST /webhooks/whatsapp rejects malformed JSON without crashing server',async()=>withApp(async base=>{
