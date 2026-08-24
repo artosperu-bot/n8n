@@ -77,8 +77,8 @@ function confirmsPriorPurchaseStep(message:string,previous:ConversationState):bo
   const prompt=fold(previous.lastAssistantMessage??'');
   // The affirmative is purchase only when the previous visible question was
   // explicitly about reserving/buying. A yes to delivery-vs-pickup is not purchase.
-  return /\bquieres\b[^?]{0,80}\b(?:reservar|separar|comprar)\b/.test(prompt)
-    || /\b(?:te\s+lo|lo|la)\s+(?:reservo|separo)\b/.test(prompt)
+  return /\bquieres\b[^?]{0,80}\b(?:reserv(?:ar|e)|separ(?:ar|e)|compr(?:ar|e))\b/.test(prompt)
+    || /\b(?:te\s+lo|lo|la)\s+(?:reserv(?:o|e)|separ(?:o|e))\b/.test(prompt)
     || /\b(?:avanzamos|seguimos|continuamos)\b[^?]{0,45}\b(?:con\s+la\s+)?(?:compra|reserva)\b/.test(prompt);
 }
 
