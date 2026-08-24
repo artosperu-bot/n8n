@@ -64,6 +64,7 @@ export type ConversationState = {
   recommendationChangeReason?: string|null;
   recommendationChangeCommunicated?: boolean;
   stageContinuityValid?: boolean;
+  exploredProducts?: string[];
   comparisonProducts?: string[];
   queryTarget?: string|null;
   explicitSwitch?: boolean;
