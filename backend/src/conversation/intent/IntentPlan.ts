@@ -70,6 +70,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(subcategorias?)\b/)) hits.push('SUBCATEGORIES');
   if (has(/\b(catalogo|que productos|que equipos|que modelos tienen|muestrame)\b/)) hits.push('CATALOG');
   const explicitComparison = has(/\b(compara|comparame|comparar|comparalo|comparalos|comparacion|versus|vs|diferencia)\b/)
+    || has(/\b(cual me conviene|con cual te quedarias|con cual te quedas|cual elegirias|cual escogerias|cual de los dos|cual de ambos)\b/)
     || hasDirectModelChoice(t)
     || hasComparativePriceQuestion(t)
     || has(/\bentre\b[^?.!]{0,90}\by\b[^?.!]{0,90}\b(?:cual|que)\b[^?.!]{0,45}\b(?:mejor|mayor|mas)\b/);
