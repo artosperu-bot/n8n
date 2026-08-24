@@ -43,9 +43,9 @@ function sanitize(text:string,input:LlmWriteInput):string{
   return clean;
 }
 function softCloseQuestion(input:LlmWriteInput):string{
-  return input.commercialResponsePlan?.closePurpose==='RESERVATION'
-    ?'¿Quieres que te lo reserve?'
-    :'¿Prefieres envío o recogerlo en nuestro local?';
+  if(input.commercialResponsePlan?.closePurpose==='PRICE_AVAILABILITY')return'¿Quieres que te pase precio y disponibilidad?';
+  if(input.commercialResponsePlan?.closePurpose==='RESERVATION')return'¿Quieres que te lo reserve?';
+  return'¿Prefieres envío o recogerlo en nuestro local?';
 }
 function humanizeKernel(text:string,input:LlmWriteInput,includeCommercialContinuation=true):string{
   let clean=String(text??'')
