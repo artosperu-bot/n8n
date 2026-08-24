@@ -106,13 +106,14 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
   const product=resolvedProduct(input);const recommended=input.recommendedProduct??input.state?.recommendedProduct??null;const featureEvidence=(input.verifiedFeatures??[]).length>0;
   const institutional=hasInstitutionalEvidence(input);const message=fold(input.message??'');const decisionImpact=input.decisionImpact===true;
   const matureCommercialContext=Number(input.levelOfInterest??input.state?.levelOfInterest??0)>=20&&Boolean(input.useCase||input.problem||(input.priorities??[]).length);
-  const interestContext=Boolean(input.interestSignal||input.purchaseSignal||input.selectedProduct||input.recommendedProduct||input.state?.selectedProduct||input.state?.recommendedProduct||matureCommercialContext);
+  const interestContext=Boolean(input.interestSignal||input.purchaseSignal||input.selectedProduct||input.recommendedProduct||input.activeProduct||input.state?.selectedProduct||input.state?.recommendedProduct||input.state?.activeProduct||matureCommercialContext);
   const implicationKnown=(input.implications??[]).length>0||String(input.state?.lastSpinContribution??'').toUpperCase()==='IMPLICACION'||(input.state?.spinFacts??[]).some(value=>/^(?:implicacion|impacto):/i.test(String(value)));
   const currentIntent=String(input.resolvedCurrentIntent??input.intent??'').toUpperCase();
   const currentStockKnown=sqlResolved(input)&&input.quote?.stock!=null;
   const previousStockKnown=priorStockKnown(input,product);
-  const fulfillmentProgression=['PRICE','PRICE_AVAILABILITY','STOCK'].includes(currentIntent)
-    || (currentIntent==='POLICY'&&String(input.state?.pendingCommercialAction??input.state?.lastNba??'').toUpperCase()==='SOFT_CLOSE');
+  const priorClose=String(input.state?.pendingCommercialAction??input.state?.lastNba??'').toUpperCase()==='SOFT_CLOSE';
+  const priceStockProgression=['PRICE','PRICE_AVAILABILITY','STOCK'].includes(currentIntent);
+  const fulfillmentSelectionProgression=currentIntent==='POLICY'&&priorClose&&Boolean(product);
   const fitOfferProgression=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(currentIntent)
     && Boolean(product&&featureEvidence&&(input.useCase||input.problem||(input.priorities??[]).length));
   return {
@@ -137,14 +138,14 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
     recommendProduct:base.recommendProduct&&Boolean(recommended&&allowed.some(item=>same(item,recommended))&&featureEvidence),
     showImages:base.showImages&&hasRealImages(input),
     offerAlternative:base.offerAlternative&&alternatives.length>0,
-    // SOFT_CLOSE has three result-first meanings:
-    // fit -> offer price+availability; price+stock -> fulfillment; fulfillment -> reservation.
+    // Seller-led progression: fit can close with current verified quote; a
+    // price/stock answer moves to fulfillment; a fulfillment choice can always
+    // move to reservation without re-querying stock in that same policy turn.
     softClose:base.softClose&&Boolean(product&&(
       fitOfferProgression
-      || (fulfillmentProgression&&(currentStockKnown||previousStockKnown||interestContext))
+      || fulfillmentSelectionProgression
+      || (priceStockProgression&&(currentStockKnown||previousStockKnown||interestContext))
     )),
-    // purchaseSignal is the authority. It may come from an explicit BUY intent
-    // or from a typed/contextual affirmative to a visible reservation question.
     collectReservationData:base.collectReservationData&&Boolean(product&&input.purchaseSignal),
     requestHumanHandoff:base.requestHumanHandoff&&String(input.intent).toUpperCase()==='HUMAN',
   };
