@@ -16,7 +16,7 @@ function isExplicitUseCase(message:string):boolean{
 function isExplicitDiscoveryFact(message:string):boolean{
   if(/[¿?]/.test(message))return false;
   const t=fold(message);
-  return /\b(?:se me cae|se me rompe|se me malogra|me falla|me dura poco|me quedo sin|pierdo tiempo|perdemos tiempo|tengo que parar|tengo que detener|me interrumpe|me hace perder)\b/.test(t)
+  return /\b(?:se me cae|se me rompe|se me malogra|me falla|me dura poco|me quedo sin|pierdo (?:tiempo|horas?)|perdemos (?:tiempo|horas?)|tengo que parar|tengo que detener|me interrumpe|me hace perder)\b/.test(t)
     || /\b(?:lo mas importante|mi prioridad|priorizo|me importa|necesito que|quiero que sea|busco que sea)\b/.test(t);
 }
 function isDirectTechnicalCapability(message:string):boolean{const t=fold(message);const feature=/\b(nfc|google pay|wifi|wi fi|bluetooth|infrarrojo|5g|4g|lte|dual sim|sim|audifono|audifonos|jack|ip68|ip69k|vision nocturna|camara nocturna|camara termica)\b/.test(t);const form=/\b(tiene|trae|soporta|funciona con|trabaja con|agarra|es|sirve para)\b/.test(t);return feature&&form&&!/\b(cual|que)\b[^?.!]{0,45}\b(recomiend|conviene|mejor)\b/.test(t);}
@@ -99,6 +99,19 @@ export class FullRagLlmProvider implements LlmProvider{
       if(hasFabricatedCommercialPressure(composed))return deterministicResult(factualCore,`full-rag-kernel-${kernel.mode.toLowerCase()}-pressure-fallback`);
       return{...result,text:composed};
     }
-    if(usesDocumentaryRag(enriched))enriched.deterministicAnswer=naturalSalesPlan(enriched);Object.assign(input,enriched);const result=await this.#delegate.write(enriched);return{...result,text:humanizeKernel(sanitize(result.text,enriched),enriched)};
+
+    const factualCore=String(enriched.directAnswer??'').trim();
+    const responsePlan=buildCommercialResponsePlan(enriched,factualCore);
+    enriched.commercialResponsePlan=responsePlan;
+    if(responsePlan.mode==='SOFT_CLOSE'&&factualCore){
+      enriched.deterministicAnswer=buildCommercialResponseInstruction(responsePlan);
+    }else if(usesDocumentaryRag(enriched)){
+      enriched.deterministicAnswer=naturalSalesPlan(enriched);
+    }
+    Object.assign(input,enriched);
+    const result=await this.#delegate.write(enriched);
+    const composed=humanizeKernel(sanitize(result.text,enriched),enriched);
+    if(hasFabricatedCommercialPressure(composed)&&factualCore)return deterministicResult(factualCore,'full-rag-commercial-pressure-fallback');
+    return{...result,text:composed};
   }
 }
