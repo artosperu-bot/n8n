@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCommercialResponsePlan } from '../../src/conversation/commercial/CommercialResponsePlan.ts';
+import { buildCommercialResponseInstruction, buildCommercialResponsePlan, hasFabricatedCommercialPressure } from '../../src/conversation/commercial/CommercialResponsePlan.ts';
 
 const base = {
   message: 'consulta', intent: 'CAPABILITY', state: { activeProduct: 'Armor 22' },
@@ -31,6 +31,42 @@ test('verified customer context selects contextual FAB', () => {
   assert.equal(plan.shouldUseLlm, true);
   assert.equal(plan.acknowledgeContext, true);
   assert.equal(plan.maxQuestions, 0);
+});
+
+test('pain implications are exposed to the writer context instead of being lost',()=>{
+  const plan=buildCommercialResponsePlan({
+    ...base,
+    state:{activeProduct:'Armor 22',commercialStrategy:'FAB_SPIN'},
+    useCase:'trabajo_construccion',problem:'caidas_frecuentes',
+    implications:['perdida_horas_trabajo'],priorities:['resistencia'],
+    verifiedFeatures:[{domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m'}],
+    commercialMove:{action:'RELATED_VALUE',kind:'CONTEXTUAL_BENEFIT',targetProduct:'Armor 22',intensity:'LIGHT',reason:'VERIFIED_FEATURE_WITH_CUSTOMER_CONTEXT',basis:['VERIFIED_PRODUCT_FEATURE','CUSTOMER_CONTEXT'],attribute:'RESISTENCIA',verifiedFacts:[],relevantCustomerContext:{}},
+    finalExecutableNba:'RELATED_VALUE',
+  } as any,'Resistencia verificada.');
+  assert.ok(plan.contextFocus.includes('perdida_horas_trabajo'));
+});
+
+test('contextual pain instruction asks for simple human language and a grounded mini-scene without fake personal anecdotes',()=>{
+  const plan=buildCommercialResponsePlan({
+    ...base,
+    state:{activeProduct:'Armor 22',commercialStrategy:'FAB_SPIN'},
+    useCase:'trabajo_construccion',problem:'caidas_frecuentes',implications:['perdida_horas_trabajo'],priorities:['resistencia'],
+    verifiedFeatures:[{domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m'}],
+    commercialMove:{action:'RELATED_VALUE',kind:'CONTEXTUAL_BENEFIT',targetProduct:'Armor 22',intensity:'LIGHT',reason:'VERIFIED_FEATURE_WITH_CUSTOMER_CONTEXT',basis:['VERIFIED_PRODUCT_FEATURE','CUSTOMER_CONTEXT'],attribute:'RESISTENCIA',verifiedFacts:[],relevantCustomerContext:{}},
+    finalExecutableNba:'RELATED_VALUE',
+  } as any,'Resistencia verificada.');
+  const instruction=buildCommercialResponseInstruction(plan);
+  assert.match(instruction,/lenguaje cotidiano|palabras simples/i);
+  assert.match(instruction,/mini[- ]escena|escena cotidiana/i);
+  assert.match(instruction,/no digas.*te entiendo/i);
+  assert.match(instruction,/no.*(?:a mí me pasó|amigo|experiencia personal)/i);
+  assert.match(instruction,/tiempo|molestia|riesgo|tranquilidad/i);
+});
+
+test('fabricated personal anecdotes are rejected as commercial pressure',()=>{
+  assert.equal(hasFabricatedCommercialPressure('A mí me pasó lo mismo con mi celular.'),true);
+  assert.equal(hasFabricatedCommercialPressure('A un amigo mío le pasó igual en obra.'),true);
+  assert.equal(hasFabricatedCommercialPressure('Nos suele pasar mucho con clientes de construcción.'),true);
 });
 
 test('only an executable missing fact opens SPIN discovery', () => {
