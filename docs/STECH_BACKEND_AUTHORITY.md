@@ -1,6 +1,6 @@
 # STECH Backend Authority
 
-Updated: 2026-08-21
+Updated: 2026-08-23
 Branch: `feat/stech-backend`
 
 ## Operational objective
@@ -9,13 +9,28 @@ The backend is prepared for isolated local CORE conversational QA. Production, p
 
 ## Runtime flow
 
-`HTTP → HybridConversationEngine → deterministic intent/reference/state authorities → SQL/RAG evidence → NBA → guarded writer → atomic persistence → optional n8n event`
+`HTTP → HybridConversationEngine → deterministic intent/reference/state authorities → SQL/RAG evidence → NBA → CommercialResponsePlan → guarded writer → atomic persistence → optional n8n event`
 
 - SQL/ERP owns product identity, price, stock, images, and authorized operational reads.
 - Product RAG owns documented specifications and product capabilities.
 - Institutional RAG owns warranty, delivery, payment, store, returns, post-sale, and policies.
 - Conversation state owns product focus, references, comparison, budget, interest, purchase, and reservation progression.
+- `CommercialResponsePlan` owns only the finite communication mode after factual truth/NBA are already resolved. It cannot create facts, change product truth, or create a new NBA.
 - The LLM assists semantic interpretation and wording; it is not factual authority.
+
+## Commercial response composition authority
+
+- `CommercialWriteContract` remains the bounded canonical writer input and continues to project the already-known customer/commercial context.
+- `FullRagAnswerKernel` remains the immutable factual core for supported FULL RAG routes.
+- `CommercialResponsePlan` selects one finite response mode: factual direct, SPIN discovery, contextual value/FAB, guided choice, objection handling, soft close, purchase progression, or handoff.
+- Isolated factual FULL RAG answers may bypass the LLM entirely.
+- Contextual FULL RAG answers may use the existing OpenAI writer through the already-existing `PLAN_DE_RESPUESTA` channel; no second writer or second memory was introduced.
+- The plan instruction is written as bounded human guidance and does not expose raw internal NBA labels to the writer.
+- The exact executable NBA remains the only commercial action authority.
+- The immutable direct answer does not include a soft-close CTA; continuation is executed by the commercial/NBA layer, preventing duplicate questions.
+- Fabricated scarcity, urgency, or social proof produced during FULL RAG composition is rejected and falls back to the immutable factual core.
+- Writer/LLM failure continues to prefer deterministic grounded fallback over an ungrounded retry.
+- No Supabase schema, SQL/RAG route, embedding, reservation, concurrency, or n8n production change is required by this composition layer.
 
 ## Current persistence contract
 
