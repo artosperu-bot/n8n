@@ -138,3 +138,36 @@ test('commercial write contract keeps a verified close executable',()=>{
   } as any);
   assert.equal(prepared.nextBestAction,'SOFT_CLOSE');
 });
+
+test('rugged pain keeps resistance certifications and translates them into FAB value',async()=>{
+  const delegate={
+    async write(input:any){
+      return{text:String(input.directAnswer??''),model:'test',usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},durationMs:0};
+    },
+  };
+  const provider=new FullRagLlmProvider(delegate as any);
+  const verifiedFeatures=[
+    {domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m',productId:'P-ARMOR-22-256G',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'IP68',value:'Sí',productId:'P-ARMOR-22-256G',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'IP69K',value:'Sí',productId:'P-ARMOR-22-256G',source:'TEST'},
+    {domain:'PRODUCT_RAG',key:'MIL_STD_810H',value:'Sí',productId:'P-ARMOR-22-256G',source:'TEST'},
+  ] as any;
+  const result=await provider.write({
+    message:'Ya mandé reparar mi celular dos veces por caídas.',intent:'EVALUATE_USE',
+    state:{activeProduct:'Armor 22',recommendedProduct:'Armor 22',useCase:'trabajo_construccion',problem:'reparaciones_repetidas'},
+    resolvedProduct:'Armor 22',recommendedProduct:'Armor 22',allowedProducts:['Armor 22'],
+    quote:{shortName:'Armor 22',product:'Armor 22',price:1399,stock:9,currency:'PEN'} as any,
+    verifiedFeatures,
+    verifiedFacts:[...verifiedFeatures,{domain:'SQL',key:'PRECIO',value:'1399',productId:'P-ARMOR-22-256G',source:'TEST'},{domain:'SQL',key:'DISPONIBILIDAD',value:'9',productId:'P-ARMOR-22-256G',source:'TEST'}] as any,
+    finalExecutableNba:'SOFT_CLOSE',nextBestAction:'SOFT_CLOSE',
+    directAnswer:'Armor 22 encaja para trabajo exigente.',
+  } as any);
+  assert.match(result.text,/IP68/i);
+  assert.match(result.text,/IP69K/i);
+  assert.match(result.text,/MIL-STD-810H/i);
+  assert.match(result.text,/golpes|ca[ií]das/i);
+  assert.match(result.text,/agua|polvo/i);
+  assert.match(result.text,/S\/\s*1399/i);
+  assert.match(result.text,/env[ií]o/i);
+  assert.match(result.text,/recoger|recojo|local/i);
+});
