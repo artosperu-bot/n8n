@@ -71,6 +71,16 @@ test('a declared implication is stored separately from problem and need',()=>{
   assert.deepEqual(f.priorities,[]);
 });
 
+test('a declared loss of work hours is persisted as implication without replacing prior use case/problem',()=>{
+  const f=extractCommercialFacts('Cuando se rompe pierdo horas de trabajo.',{
+    useCase:'trabajo_construccion',problem:'caidas_frecuentes',
+    spinFacts:['uso:trabajo_construccion','problema:caidas_frecuentes'],
+  });
+  assert.equal(f.useCase,'trabajo_construccion');
+  assert.equal(f.problem,'caidas_frecuentes');
+  assert.ok(f.spinFacts?.includes('implicacion:perdida_tiempo_interrupcion'));
+});
+
 test('a recurring drop plus explicit resistance requirement becomes both problem and need',()=>{
   const f=extractCommercialFacts('Se me cae seguido el celular y necesito que sea resistente.',{});
   assert.equal(f.problem,'caidas_frecuentes');
