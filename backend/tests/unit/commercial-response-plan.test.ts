@@ -61,6 +61,8 @@ test('contextual pain instruction asks for simple human language and a grounded 
   assert.match(instruction,/no digas.*te entiendo/i);
   assert.match(instruction,/no.*(?:a mí me pasó|amigo|experiencia personal)/i);
   assert.match(instruction,/tiempo|molestia|riesgo|tranquilidad/i);
+  assert.match(instruction,/1 o 2|uno o dos/i);
+  assert.match(instruction,/no uses.*verdadero problema/i);
 });
 
 test('fabricated personal anecdotes are rejected as commercial pressure',()=>{
@@ -89,6 +91,30 @@ test('purchase signal cannot restart discovery', () => {
   const plan = buildCommercialResponsePlan({ ...base, intent:'PURCHASE', purchaseSignal:true, finalExecutableNba:'COLLECT_RESERVATION_DATA' }, 'Continuemos con la compra.');
   assert.equal(plan.mode, 'PURCHASE_PROGRESS');
   assert.notEqual(plan.mode, 'DISCOVERY_SPIN');
+});
+
+test('price plus availability advances to fulfillment instead of asking stock again',()=>{
+  const plan=buildCommercialResponsePlan({
+    ...base,intent:'PRICE_AVAILABILITY',resolvedCurrentIntent:'PRICE_AVAILABILITY',
+    state:{activeProduct:'Armor 22'},finalExecutableNba:'SOFT_CLOSE',
+  },'Armor 22 está a S/ 1399. También está disponible.');
+  assert.equal(plan.mode,'SOFT_CLOSE');
+  assert.equal(plan.closePurpose,'FULFILLMENT');
+  const instruction=buildCommercialResponseInstruction(plan);
+  assert.match(instruction,/env[ií]o/i);
+  assert.match(instruction,/recoger|recojo|local/i);
+  assert.doesNotMatch(instruction,/revisar disponibilidad/i);
+});
+
+test('after customer chooses delivery or pickup the next close purpose is reservation',()=>{
+  const plan=buildCommercialResponsePlan({
+    ...base,message:'Prefiero envío a Ate.',intent:'POLICY',resolvedCurrentIntent:'POLICY',
+    state:{activeProduct:'Armor 22',pendingCommercialAction:'SOFT_CLOSE'},finalExecutableNba:'SOFT_CLOSE',
+  },'Sí, hacemos envíos a Ate.');
+  assert.equal(plan.closePurpose,'RESERVATION');
+  const instruction=buildCommercialResponseInstruction(plan);
+  assert.match(instruction,/reserv/i);
+  assert.doesNotMatch(instruction,/env[ií]o o recoger|revisar disponibilidad/i);
 });
 
 test('soft close exists only when exact NBA authorizes it', () => {
