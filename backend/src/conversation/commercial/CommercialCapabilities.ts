@@ -6,6 +6,7 @@ export type CommercialCapabilityAction =
   | 'ADD_RELATED_VALUE'
   | 'ASK_USE_CASE'
   | 'ASK_PROBLEM'
+  | 'ASK_IMPLICATION'
   | 'ASK_PRIORITY'
   | 'ASK_BUDGET'
   | 'ASK_PRODUCT'
@@ -20,6 +21,7 @@ export type CommercialCapabilityAction =
 export type CommercialCapabilities = {
   askUseCase:boolean;
   askProblem:boolean;
+  askImplication:boolean;
   askPriority:boolean;
   askBudget:boolean;
   askProduct:boolean;
@@ -48,7 +50,7 @@ export type CommercialCapabilities = {
 // Only operations implemented by the current backend. False entries are
 // intentional: they prevent the writer from promising aspirational workflows.
 export const IMPLEMENTED_COMMERCIAL_CAPABILITIES:Readonly<CommercialCapabilities>=Object.freeze({
-  askUseCase:true,askProblem:true,askPriority:true,askBudget:true,askProduct:true,addRelatedValue:true,
+  askUseCase:true,askProblem:true,askImplication:true,askPriority:true,askBudget:true,askProduct:true,addRelatedValue:true,
   checkPrice:true,checkStock:true,answerProductFeature:true,answerWarranty:true,answerDelivery:true,answerPayment:true,answerLocation:true,
   compareProducts:true,recommendProduct:true,showImages:true,offerAlternative:true,softClose:true,
   collectReservationData:true,requestHumanHandoff:true,
@@ -75,6 +77,7 @@ function sqlResolved(input:LlmWriteInput):boolean{
 export function missingFactCapability(missingFact:string|null|undefined):CommercialCapabilityAction|null{
   const value=fold(missingFact??'');
   if(/uso/.test(value))return 'ASK_USE_CASE';
+  if(/impacto|implicacion|consecuencia/.test(value))return 'ASK_IMPLICATION';
   if(/problema/.test(value))return 'ASK_PROBLEM';
   if(/prioridad|criterio/.test(value))return 'ASK_PRIORITY';
   if(/presupuesto|tope/.test(value))return 'ASK_BUDGET';
@@ -98,10 +101,12 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
   const institutional=hasInstitutionalEvidence(input);const message=fold(input.message??'');const decisionImpact=input.decisionImpact===true;
   const matureCommercialContext=Number(input.levelOfInterest??input.state?.levelOfInterest??0)>=20&&Boolean(input.useCase||input.problem||(input.priorities??[]).length);
   const interestContext=Boolean(input.interestSignal||input.purchaseSignal||input.selectedProduct||input.recommendedProduct||input.state?.selectedProduct||input.state?.recommendedProduct||matureCommercialContext);
+  const implicationKnown=(input.implications??[]).length>0||String(input.state?.lastSpinContribution??'').toUpperCase()==='IMPLICACION'||(input.state?.spinFacts??[]).some(value=>/^(?:implicacion|impacto):/i.test(String(value)));
   return {
     ...base,
     askUseCase:base.askUseCase&&decisionImpact&&!input.useCase,
     askProblem:base.askProblem&&decisionImpact&&!input.problem,
+    askImplication:base.askImplication&&decisionImpact&&Boolean(input.problem)&&!implicationKnown,
     askPriority:base.askPriority&&decisionImpact&&!(input.priorities??[]).length,
     askBudget:base.askBudget&&decisionImpact&&input.budget==null,
     askProduct:base.askProduct&&decisionImpact&&!product,
@@ -131,6 +136,7 @@ export function canExecuteCapability(action:CommercialCapabilityAction,capabilit
     case 'ADD_RELATED_VALUE':return capabilities.addRelatedValue;
     case 'ASK_USE_CASE':return decisionImpact&&capabilities.askUseCase;
     case 'ASK_PROBLEM':return decisionImpact&&capabilities.askProblem;
+    case 'ASK_IMPLICATION':return decisionImpact&&capabilities.askImplication;
     case 'ASK_PRIORITY':return decisionImpact&&capabilities.askPriority;
     case 'ASK_BUDGET':return decisionImpact&&capabilities.askBudget;
     case 'ASK_PRODUCT':return decisionImpact&&capabilities.askProduct;
