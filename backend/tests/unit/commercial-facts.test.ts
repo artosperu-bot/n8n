@@ -43,3 +43,15 @@ test('delivery is persisted as a use case so recommendation can infer battery re
   assert.equal(next.useCase,'delivery');
   assert.ok(next.priorities?.includes('conectividad'));
 });
+
+test('an isolated factual capability question does not become a customer priority or SPIN need',()=>{
+  const f=extractCommercialFacts('¿Tiene NFC?',{activeProduct:'Armor 22'});
+  assert.deepEqual(f.priorities,[]);
+  assert.equal(f.spinFacts?.some(value=>/prioridad:nfc|prioridad:conectividad/i.test(value)),false);
+});
+
+test('an explicit hard requirement still becomes a priority',()=>{
+  const f=extractCommercialFacts('Necesito NFC sí o sí porque pago con el celular.',{});
+  assert.ok(f.priorities?.includes('nfc'));
+  assert.ok(f.spinFacts?.includes('prioridad:nfc'));
+});
