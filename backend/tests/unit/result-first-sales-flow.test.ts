@@ -7,6 +7,7 @@ import { buildCommercialResponseInstruction, buildCommercialResponsePlan } from 
 import { extractCommercialFacts } from '../../src/conversation/commercial/CommercialFacts.ts';
 import { normalizeUseCaseSpinFact } from '../../src/conversation/commercial/UseCaseNormalizer.ts';
 import { priceResponse, stockResponse } from '../../src/conversation/commercial/ResponsePolicy.ts';
+import { FullRagLlmProvider } from '../../src/conversation/commercial/FullRagLlmProvider.ts';
 
 test('a known work pain with a resolved fit stops SPIN and opens the commercial close',()=>{
   const state={
@@ -77,6 +78,25 @@ test('a fulfillment selection advances to reservation',()=>{
   } as any,'Sí, hacemos envíos.');
   assert.equal(plan.closePurpose,'RESERVATION');
   assert.match(buildCommercialResponseInstruction(plan),/reserv/i);
+});
+
+test('a short yes after a visible reservation question is promoted to PURCHASE by the contextual planner guard',async()=>{
+  const delegate={
+    async decide(){
+      return{
+        decision:{primaryIntent:'OTHER',secondaryIntents:[],targetProduct:null,mentionedProducts:[],referenceType:'ACTIVE_PRODUCT_FALLBACK',explicitSwitch:false,selectedProduct:null,comparisonProducts:[],attributes:[],customerNeed:'invented need',customerProblem:'invented problem',priorities:['invented'],objection:null,commercialStage:null,spinContribution:'implication: invented',nextBestAction:'ASK_MISSING_FACT',needsSql:false,needsProductRag:false,needsInstitutionalRag:false,confidence:0.8},
+        model:'test',usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},durationMs:0,
+      } as any;
+    },
+    async write(){throw new Error('not used');},
+  };
+  const provider=new FullRagLlmProvider(delegate as any);
+  const result=await provider.decide({message:'Sí',state:{activeProduct:'Armor 22',lastNba:'SOFT_CLOSE',pendingCommercialAction:'SOFT_CLOSE',lastAssistantMessage:'¿Quieres que te lo reserve?'}} as any);
+  assert.equal(result.decision.primaryIntent,'PURCHASE');
+  assert.equal(result.decision.customerNeed,null);
+  assert.equal(result.decision.customerProblem,null);
+  assert.deepEqual(result.decision.priorities,[]);
+  assert.equal(result.decision.spinContribution,null);
 });
 
 test('repeated repair pain is captured as a customer problem instead of a neutral capability',()=>{
