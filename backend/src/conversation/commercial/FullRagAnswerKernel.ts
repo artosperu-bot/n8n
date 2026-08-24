@@ -283,7 +283,7 @@ function compareConclusion(a:ProductFactStore,b:ProductFactStore,f:Family):strin
 }
 function priorityFamilies(input:LlmWriteInput):Family[]{
   const state:any=input.state??{};
-  const q=fold((input.priorities??state.priorities??[]).join(' '));
+  const q=fold((state.explicitPriorities??[]).join(' '));
   const out:Family[]=[];
   if(/termic|thermal/.test(q))out.push('THERMAL');
   if(/bateria|autonomia/.test(q))out.push('BATTERY');
