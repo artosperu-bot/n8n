@@ -14,6 +14,12 @@ const scenarios:QaScenario[]=[
     ],
   },
   {
+    id:'HUMAN-FIT-YES-PRICE',family:'COMMERCIAL',title:'A short yes to the visible price-availability offer continues to SQL without becoming purchase',turns:[
+      {message:'Trabajo en construcción y se me cae seguido el celular.',expected:{queryTarget:'Armor 22'}},
+      {message:'Sí',expected:{queryTarget:'Armor 22'}},
+    ],
+  },
+  {
     id:'HUMAN-PAIN-BATTERY',family:'COMMERCIAL',title:'Battery pain becomes an everyday scene and useful recommendation',turns:[
       {message:'Trabajo todo el día afuera y la batería de mi celular no llega a la tarde.'},
       {message:'Quiero algo que me aguante todo el día sin estar buscando cargador.'},
@@ -91,7 +97,6 @@ for(const scenario of result.report.scenarios){
     if(questionCount>1)add(scenario.id,index+1,'RED','MULTIPLE_QUESTIONS',`La respuesta hizo ${questionCount} preguntas visibles.`,answer);
     if(explicitPain.test(message)&&answer.length>650)add(scenario.id,index+1,'YELLOW','PAIN_RESPONSE_TOO_LONG',`Respuesta de dolor demasiado larga (${answer.length} caracteres).`,answer);
     if(explicitPain.test(message)&&(answer.match(technicalToken)??[]).length>2)add(scenario.id,index+1,'YELLOW','PAIN_TECHNICAL_DUMP','Ante un dolor real se recitaron demasiadas especificaciones en vez de aterrizar el beneficio.',answer);
-    // Positive contract: pain empathy/neurosales must be visible, not merely absent from bad-language regexes.
     if(storyPain.test(message)&&!humanSceneCue.test(answer))add(scenario.id,index+1,'RED','PAIN_HUMAN_SCENE_MISSING','Ante un dolor real faltó una escena cotidiana que haga sentir la situación sin inventar una historia personal.',answer);
     if(storyPain.test(message)&&!practicalValueCue.test(answer))add(scenario.id,index+1,'RED','PAIN_PRACTICAL_VALUE_MISSING','Ante un dolor real faltó traducir el producto a un alivio o beneficio fácil de imaginar.',answer);
   });
@@ -107,6 +112,17 @@ for(const scenario of result.report.scenarios.filter(item=>item.id.startsWith('H
   if(!/reserv/i.test(a2))add(scenario.id,2,'RED','RESERVATION_NOT_OFFERED','Después de elegir envío/local debe preguntar si quiere reservar.',a2);
   if(s3.purchaseSignal!==true)add(scenario.id,3,'RED','AFFIRMATIVE_NOT_PURCHASE','Un sí/dale a la pregunta explícita de reserva debe activar purchaseSignal.',String(t3?.observation?.response?.answer??''));
   if(String(s3.lastNba??'').toUpperCase()!=='COLLECT_RESERVATION_DATA')add(scenario.id,3,'RED','PURCHASE_DID_NOT_COLLECT_DATA','Después de confirmar reserva debe avanzar a datos de compra.',String(t3?.observation?.response?.answer??''));
+}
+
+const yesPriceScenario=result.report.scenarios.find(item=>item.id==='HUMAN-FIT-YES-PRICE');
+if(yesPriceScenario){
+  const t1=yesPriceScenario.turns[0];const t2=yesPriceScenario.turns[1];
+  const a1=String(t1?.observation?.response?.answer??'');const a2=String(t2?.observation?.response?.answer??'');
+  const s2=t2?.observation?.response?.state??{};
+  if(!/precio/i.test(a1)||!/disponib/i.test(a1))add(yesPriceScenario.id,1,'RED','PRICE_AVAILABILITY_NOT_OFFERED','Con fit suficiente debe ofrecer precio + disponibilidad como un solo micro-paso.',a1);
+  if(!/S\/\s*\d/i.test(a2)||!/disponib|stock/i.test(a2))add(yesPriceScenario.id,2,'RED','AFFIRMATIVE_DID_NOT_FETCH_PRICE_STOCK','Un sí a la oferta visible de precio+disponibilidad debe ejecutar SQL y responder ambos juntos.',a2);
+  if(!/env[ií]o/i.test(a2)||!/recoger|recojo|local/i.test(a2))add(yesPriceScenario.id,2,'RED','AFFIRMATIVE_DID_NOT_ADVANCE_FULFILLMENT','Después de precio+disponibilidad debe ofrecer envío o recojo/local.',a2);
+  if(s2.purchaseSignal===true)add(yesPriceScenario.id,2,'RED','AFFIRMATIVE_PRICE_WRONGLY_MARKED_PURCHASE','Un sí a precio+disponibilidad no puede marcar compra.',a2);
 }
 
 const painScenario=result.report.scenarios.find(item=>item.id==='HUMAN-PAIN-DROPS');
