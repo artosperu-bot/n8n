@@ -20,6 +20,8 @@ export type CommercialResponseMode =
   | 'PURCHASE_PROGRESS'
   | 'HANDOFF';
 
+export type CommercialClosePurpose='FULFILLMENT'|'RESERVATION'|null;
+
 export type CommercialResponsePlan = {
   mode: CommercialResponseMode;
   strategy: string | null;
@@ -28,6 +30,7 @@ export type CommercialResponsePlan = {
   contextFocus: string[];
   factualCore: string;
   exactNba: string;
+  closePurpose: CommercialClosePurpose;
   maxQuestions: 0 | 1;
   allowedActions: string[];
   forbiddenClaims: string[];
@@ -48,7 +51,6 @@ export type CommercialMove = {
 export type LlmWriteInput = {
   message: string; intent: string; state: ConversationState; quote?: ProductQuote | null; rag?: RagEvidence[]; verifiedFacts?: VerifiedFact[];
   deterministicAnswer?: string | null;
-  /** Immutable grounded answer to the current question, composed before any commercial continuation. */
   directAnswer?: string | null;
   decision?: TurnDecision | null;
   allowedProducts?: string[]; alternatives?: string[]; candidateNba?: string | null; finalExecutableNba?: string | null; nextBestAction?: string | null;
