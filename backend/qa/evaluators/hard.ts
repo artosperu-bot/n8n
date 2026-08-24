@@ -42,8 +42,14 @@ export function evaluateHard(turn: QaTurn, observation: QaTurnObservation): QaFi
   }
 
   const verifiedInstitutionalAmount=debug.route==='RAG_INSTITUTIONAL'&&Array.isArray(debug.ragSources)&&debug.ragSources.length>0;
-  if (!verifiedInstitutionalAmount&&!['PRICE','BUDGET_CONSTRAINT','HANDLE_PRICE_OBJECTION','QUOTE'].includes(String(debug.intent)) && /S\/\s*[\d.,]+/i.test(answer)) {
-    findings.push({ level:'RED', code:'UNSOLICITED_PRICE', message:'Mencionó precio sin una solicitud explícita de precio/cotización.' });
+  const sellerLedVerifiedPrice=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(String(debug.intent??'').toUpperCase())
+    && String(state.lastNba??debug.decisionTrace?.nextBestAction??'').toUpperCase()==='SOFT_CLOSE'
+    && erp?.price!=null
+    && erp?.stock!=null
+    && containsNumber(answer,Number(erp.price))
+    && /disponib|stock/i.test(answer);
+  if (!verifiedInstitutionalAmount&&!sellerLedVerifiedPrice&&!['PRICE','BUDGET_CONSTRAINT','HANDLE_PRICE_OBJECTION','QUOTE'].includes(String(debug.intent)) && /S\/\s*[\d.,]+/i.test(answer)) {
+    findings.push({ level:'RED', code:'UNSOLICITED_PRICE', message:'Mencionó precio sin una solicitud explícita de precio/cotización ni un cierre seller-led autorizado con precio/stock ERP.' });
   }
 
   if (debug.intent === 'IMAGE') {
