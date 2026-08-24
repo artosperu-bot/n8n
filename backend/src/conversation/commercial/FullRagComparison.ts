@@ -40,7 +40,7 @@ function summary(row:RagEvidence):string|null{
     if(!yes(raw,/c[aá]mara\s+t[eé]rmica/))return null;const hz=first(raw,/frecuencia\s+t[eé]rmica\s*[:=]?\s*([0-9.,]+\s*Hz)/i);const x=first(raw,/resoluci[oó]n\s+t[eé]rmica\s+horizontal\s*[:=]?\s*([0-9]+)\s*px/i);const y=first(raw,/resoluci[oó]n\s+t[eé]rmica\s+vertical\s*[:=]?\s*([0-9]+)\s*px/i);return [`cámara térmica`,hz?`${hz}`:'',x&&y?`${x}×${y}`:''].filter(Boolean).join(', ');
   }
   if(sec==='CONECTIVIDAD'){
-    const nfc=yes(raw,/\bNFC\b);const wifi5=yes(raw,/Wi-?Fi\s+5\s*GHz/);const bt=first(raw,/Versi[oó]n\s+Bluetooth\s*[:=]?\s*([^\n.;]+)/i);return [nfc?'NFC':'',wifi5?'Wi‑Fi 5 GHz':'',bt?`Bluetooth ${bt}`:''].filter(Boolean).join(', ')||null;
+    const nfc=yes(raw,/\bNFC\b/);const wifi5=yes(raw,/Wi-?Fi\s+5\s*GHz/);const bt=first(raw,/Versi[oó]n\s+Bluetooth\s*[:=]?\s*([^\n.;]+)/i);return [nfc?'NFC':'',wifi5?'Wi‑Fi 5 GHz':'',bt?`Bluetooth ${bt}`:''].filter(Boolean).join(', ')||null;
   }
   if(sec==='REDES'){
     const five=yes(raw,/(?:conectividad\s+|red\s+|soporte\s+)?5G/);const four=/\b4G\b|\bLTE\b/i.test(raw);return five?'5G':four?'4G LTE':null;
