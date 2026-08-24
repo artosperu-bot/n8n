@@ -23,7 +23,7 @@ function isExplicitDiscoveryFact(message:string):boolean{
 }
 function isExplicitFulfillmentChoice(message:string,state:LlmDecisionInput['state']):boolean{
   const pending=String(state.pendingCommercialAction??state.lastNba??'').toUpperCase();
-  if(pending!=='SOFT_CLOSE')return false;
+  if(pending!=='SOFT_CLOSE'||/[¿?]/.test(message))return false;
   const t=fold(message);
   return /\b(?:envio|enviar|delivery|entrega)\b/.test(t)
     || /\b(?:prefiero|quiero|voy a|mejor)\b[^.!?]{0,35}\b(?:recoger|recojo|retirar|local|tienda)\b/.test(t)
@@ -127,15 +127,16 @@ function ruggedFabCore(input:LlmWriteInput,product:string):string|null{
   const certs=ruggedCertifications(input);
   const featureParts:string[]=[];
   if(drop)featureParts.push(simpleFactLabel(drop));
-  if(certs.length)featureParts.push(`protecciones y certificaciones ${naturalList(certs)}`);
+  if(certs.length)featureParts.push(`IP68, IP69K y MIL-STD-810H`.split(', ').filter(cert=>certs.includes(cert.replace(' y ',''))).length===certs.length?`certificaciones ${naturalList(certs)}`:`certificaciones ${naturalList(certs)}`);
   if(!featureParts.length)return null;
   const hasImpact=Boolean(drop||certs.includes('MIL-STD-810H'));
   const hasIngress=certs.includes('IP68')||certs.includes('IP69K');
   const protection=[hasImpact?'golpes y caídas':'',hasIngress?'agua y polvo':''].filter(Boolean);
+  const intro=/repar/.test(context)?`En ese caso me iría por ${product}`:`Para ese ritmo me iría por ${product}`;
   const benefit=protection.length
-    ?`En la práctica, está mejor preparado para ${naturalList(protection)}; si ya vienes de caídas o reparaciones, eso ayuda a reducir el riesgo de volver al mismo problema.`
-    :'En la práctica, esas protecciones sí tienen sentido para un uso más exigente.';
-  return`${product} tiene ${naturalList(featureParts)}. ${benefit}`;
+    ?`En palabras simples, está mucho mejor preparado para ${naturalList(protection)}; si lo usas para trabajar, eso ayuda a reducir el riesgo de volver al mismo ciclo de caída, reparación y quedarte sin equipo.`
+    :'En palabras simples, esas protecciones sí tienen sentido para un uso más exigente.';
+  return`${intro}: tiene ${naturalList(featureParts)}. ${benefit}`;
 }
 function compactContextualCore(input:LlmWriteInput,fallback:string):string{
   const intent=String(input.intent??'').toUpperCase();
@@ -152,13 +153,16 @@ function compactContextualCore(input:LlmWriteInput,fallback:string):string{
   const ruggedFab=product?ruggedFabCore(input,product):null;
   const fit=ruggedFab??(product&&selected.length?`${product}: ${selected.join(' y ')}.`:'');
   const commercial=input.quote?.price!=null&&input.quote?.stock!=null
-    ?`${product||'El equipo'} está a S/ ${input.quote.price} y ${input.quote.stock>0?'sí está disponible':'ahora no tiene stock disponible'}.`
+    ?`${product||'El equipo'} está a S/ ${input.quote.price} y ${input.quote.stock>0?'tenemos disponibilidad':'ahora no tiene stock disponible'}.`
     :'';
   return [fit,commercial].filter(Boolean).join(' ')||fallback;
 }
+function painContext(input:LlmWriteInput):boolean{
+  const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''}`);
+  return /caida|romp|repar|bateria|cargador|polvo|lluvia|agua|humedad|malogr|pierdo/.test(context);
+}
 function technicalDumpOnPain(text:string,input:LlmWriteInput):boolean{
-  const context=fold(`${input.message} ${input.problem??input.state?.problem??''}`);
-  if(!/caida|romp|repar|bateria|cargador|polvo|lluvia|agua|malogr|pierdo/.test(context))return false;
+  if(!painContext(input))return false;
   const noisy=(String(text).match(/\b(?:GLONASS|Galileo|BeiDou|Helio|Mali|GHz|GPU)\b/gi)??[]).length;
   const rugged=(String(text).match(/\b(?:IP68|IP69K|MIL-STD-810H)\b/gi)??[]).length;
   return noisy>0||rugged>3;
@@ -166,12 +170,16 @@ function technicalDumpOnPain(text:string,input:LlmWriteInput):boolean{
 function naturalFallback(input:LlmWriteInput,core:string):string{
   const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''}`);
   let lead='';
-  if(/repar/.test(context))lead='Si ya terminaste reparándolo varias veces, cada nueva caída puede significar volver a gastar y quedarte otra vez sin equipo.';
+  if(/repar/.test(context))lead='Si ya lo reparaste varias veces, cada nueva caída puede terminar otra vez en gasto y en quedarte sin celular justo cuando lo necesitas.';
   else if(/caida|construccion|obra/.test(context))lead='En obra una caída pasa en un segundo; la idea es que no estés pendiente del celular cada vez que lo sacas para trabajar.';
   else if(/bateria|cargador|no llega a la tarde/.test(context))lead='Si a media tarde ya estás buscando dónde cargarlo, terminas pendiente de la batería cuando deberías seguir con tu trabajo.';
   else if(/polvo|lluvia|agua|humedad/.test(context))lead='Si trabajas entre polvo o lluvia, estar cuidando el celular a cada rato termina siendo una preocupación más.';
   const question=input.commercialResponsePlan?.exactNba==='SOFT_CLOSE'?softCloseQuestion(input):'';
   return [lead,core,question].filter(Boolean).join(' ').trim();
+}
+function shouldForceHumanPainResponse(input:LlmWriteInput,core:string):boolean{
+  const intent=String(input.intent??'').toUpperCase();
+  return Boolean(core)&&painContext(input)&&['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
 }
 function missesRequiredCloseResult(text:string,input:LlmWriteInput):boolean{
   const plan=input.commercialResponsePlan;if(plan?.exactNba!=='SOFT_CLOSE')return false;
@@ -204,7 +212,7 @@ export class FullRagLlmProvider implements LlmProvider{
     if(!this.#delegate.decide)throw new Error('Wrapped LLM does not implement decide');
     const result=await this.#delegate.decide(input);let decision=result.decision;const intent=String(decision.primaryIntent).toUpperCase();
     if(isReservationAffirmative(input.message,input.state))decision={...decision,primaryIntent:'PURCHASE'};
-    else if(isExplicitFulfillmentChoice(input.message,input.state))decision={...decision,primaryIntent:'POLICY'};
+    else if(isExplicitFulfillmentChoice(input.message,input.state))decision={...decision,primaryIntent:'FULFILLMENT_SELECTION',nextBestAction:'SOFT_CLOSE',needsSql:false,needsProductRag:false,needsInstitutionalRag:false};
     else if(isExplicitUseCase(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY','PRICE','STOCK'].includes(intent))decision={...decision,primaryIntent:'EVALUATE_USE'};
     else if(isExplicitDiscoveryFact(input.message)&&!['PURCHASE','QUOTE','POLICY','WARRANTY','PRICE','STOCK'].includes(intent))decision={...decision,primaryIntent:'EVALUATE_USE'};
     else if(isBudgetRecommendationFollowup(input.message,input.state)&&!['PURCHASE','QUOTE','POLICY','WARRANTY'].includes(intent))decision={...decision,primaryIntent:'RECOMMEND_WITHIN_BUDGET'};
@@ -228,6 +236,7 @@ export class FullRagLlmProvider implements LlmProvider{
       plannedInput.commercialResponsePlan=responsePlan;
       plannedInput.deterministicAnswer=buildCommercialResponseInstruction(responsePlan);
       Object.assign(input,plannedInput);
+      if(shouldForceHumanPainResponse(plannedInput,factualCore))return deterministicResult(naturalFallback(plannedInput,factualCore),`full-rag-kernel-${kernel.mode.toLowerCase()}-human-pain`);
       if(!responsePlan.shouldUseLlm)return deterministicResult(factualCore,`full-rag-kernel-${kernel.mode.toLowerCase()}`);
       const result=await this.#delegate.write(plannedInput);
       const composed=humanizeKernel(sanitize(result.text,plannedInput),plannedInput);
@@ -243,6 +252,7 @@ export class FullRagLlmProvider implements LlmProvider{
     if(responsePlan.mode==='SOFT_CLOSE'&&factualCore)enriched.deterministicAnswer=buildCommercialResponseInstruction(responsePlan);
     else if(usesDocumentaryRag(enriched))enriched.deterministicAnswer=naturalSalesPlan(enriched);
     Object.assign(input,enriched);
+    if(shouldForceHumanPainResponse(enriched,factualCore))return deterministicResult(naturalFallback(enriched,factualCore),'full-rag-commercial-human-pain');
     const result=await this.#delegate.write(enriched);
     const composed=humanizeKernel(sanitize(result.text,enriched),enriched);
     if((hasFabricatedCommercialPressure(composed)||technicalDumpOnPain(composed,enriched)||missesRequiredCloseResult(composed,enriched)||missesRuggedFabEvidence(composed,enriched))&&factualCore)return deterministicResult(naturalFallback(enriched,factualCore),'full-rag-commercial-human-fallback');
