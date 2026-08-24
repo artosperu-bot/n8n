@@ -24,8 +24,8 @@ function unique(values: string[]): string[] { return [...new Set(values)]; }
 function isFeatureQuestion(text:string):boolean {
   const asks=/[¿?]/.test(text)
     || /^\s*(?:y\s+)?(?:tiene|trae|soporta|agarra|es|cuanto|cuanta|que|cual|de cuanto|a cuantos|hasta que)\b/.test(text);
-  const requirementCue=/\b(?:necesito|necesitamos|requiero|requerimos|busco|buscamos|quiero|queremos|priorizo|priorizamos|prefiero|preferimos|me importa|nos importa|si o si|debe tener|tiene que tener|que sea|que aguante|con buena|con buen|uso .* siempre|todo el tiempo)\b/.test(text);
-  return asks&&!requirementCue;
+  const customerContextCue=/\b(?:necesito|necesitamos|requiero|requerimos|busco|buscamos|quiero|queremos|priorizo|priorizamos|prefiero|preferimos|me importa|nos importa|si o si|debe tener|tiene que tener|que sea|que aguante|con buena|con buen|uso .* siempre|todo el tiempo|se me|se nos|se les|me pasa|nos pasa|me conviene|recomiend)\b/.test(text);
+  return asks&&!customerContextCue;
 }
 
 function currentPriorityMentions(text:string):string[] {
@@ -80,6 +80,7 @@ function explicitBudgetRecommendation(text:string):boolean {
 
 export function extractCommercialFacts(message: string, previous: ConversationState): CommercialFacts {
   const t = fold(message);
+  const featureQuestion=isFeatureQuestion(t);
   const business = /\b(empresa|corporativo|institucion|negocio|ruc|factura|tecnicos|personal|equipo\s+de\s+trabajo)\b/.test(t);
   const customerType = business ? 'BUSINESS' : (previous.customerType ?? null);
 
@@ -103,9 +104,11 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
   else if (/\btrabajo\b/.test(t)) useCase = 'trabajo';
 
   let problem = previous.problem ?? null;
-  if (/\b(se\s+me|se\s+les|se)\s+cae[n]?\b|\bcaidas\b/.test(t)) problem = 'caidas_frecuentes';
-  else if (/\bbateria\b[^.!?]{0,50}\b(se\s+acaba|no\s+aguanta|dura\s+poco)\b|\bcasi\s+no\s+tengo\s+donde\s+cargar/.test(t)) problem = 'autonomia_insuficiente';
-  else if (/\bse\s+rompe[n]?\b|\bfragil/.test(t)) problem = 'durabilidad';
+  if(!featureQuestion){
+    if (/\b(se\s+me|se\s+nos|se\s+les)\s+cae[n]?\b|\bcaidas?\s+(?:frecuentes?|seguidas?|constantes?)\b/.test(t)) problem = 'caidas_frecuentes';
+    else if (/\bbateria\b[^.!?]{0,50}\b(se\s+acaba|no\s+aguanta|dura\s+poco)\b|\bcasi\s+no\s+tengo\s+donde\s+cargar/.test(t)) problem = 'autonomia_insuficiente';
+    else if (/\bse\s+rompe[n]?\b|\b(?:es|me\s+resulta)\s+fragil\b/.test(t)) problem = 'durabilidad';
+  }
 
   const priorities = unique([...(previous.priorities ?? []), ...currentPriorityMentions(t), ...(explicitBudgetRecommendation(t)?['precio']:[])]);
   const invoiceRequired = /\bfactura\b|\bruc\b/.test(t) ? true : (previous.invoiceRequired ?? null);
