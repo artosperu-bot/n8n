@@ -48,8 +48,16 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
 
   if(/^CIERRE/.test(String(state.commercialStage??'').toUpperCase())&&current==='ASK_MISSING_FACT')return{level:'HIGH',candidateNba:'ANSWER_ONLY',reason:'CLOSING_STAGE_BLOCKS_DISCOVERY'};
 
+  // A broad product overview is discovery-friendly: if we still do not know
+  // enough about the customer's situation/need, ask exactly one useful missing
+  // fact after answering. This is intentionally different from a focused
+  // capability/attribute lookup such as "¿tiene NFC?".
+  if(intent==='PRODUCT_INFO'&&input.verifiedCurrentAnswer&&Boolean(input.resolvedProduct)){
+    return{level:'LOW',candidateNba:'ASK_MISSING_FACT',reason:'BROAD_PRODUCT_INFO_DISCOVERY'};
+  }
+
   // Without a qualified SPIN context, focused factual questions remain factual.
-  if(['PRODUCT_INFO','CAPABILITY','ATTRIBUTE'].includes(intent))return{level:'LOW',candidateNba:'ANSWER_ONLY',reason:'FACTUAL_ANSWER_COMPLETE'};
+  if(['CAPABILITY','ATTRIBUTE'].includes(intent))return{level:'LOW',candidateNba:'ANSWER_ONLY',reason:'FACTUAL_ANSWER_COMPLETE'};
 
   const explicitInterest=Boolean(state.interestSignal||state.selectedProduct);
   if(explicitInterest&&input.resolvedProduct&&PROGRESSABLE_ANSWERS.has(intent))return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'EXPLICIT_INTEREST'};
