@@ -17,7 +17,7 @@ import type { QaScenario } from '../types.ts';
  */
 export const commercial50Scenarios:QaScenario[]=[
   {
-    id:'C50-F01-FACTUAL-DIRECT',family:'COMMERCIAL',title:'Armor 22 factual continuity without artificial CTA',turns:[
+    id:'C50-F01-DISCOVERY-THEN-FACTS',family:'COMMERCIAL',title:'Broad product info opens one SPIN question; factual follow-ups stay direct',turns:[
       {message:'Hola, estoy viendo el Armor 22, qué tal es?',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},
       {message:'¿Tiene NFC?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},
       {message:'¿Y cuánto pesa?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},
