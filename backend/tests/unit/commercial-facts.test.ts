@@ -81,6 +81,20 @@ test('a declared loss of work hours is persisted as implication without replacin
   assert.ok(f.spinFacts?.includes('implicacion:perdida_tiempo_interrupcion'));
 });
 
+test('a short affirmative confirms purchase only after an explicit reservation question',()=>{
+  const confirmed=extractCommercialFacts('sí',{
+    activeProduct:'Armor 22',lastIntent:'POLICY',lastNba:'SOFT_CLOSE',pendingCommercialAction:'SOFT_CLOSE',
+    lastAssistantMessage:'Podemos enviarlo a Ate. ¿Quieres que te lo reserve?',purchaseSignal:false,
+  });
+  assert.equal(confirmed.purchaseSignal,true);
+
+  const fulfillmentOnly=extractCommercialFacts('sí',{
+    activeProduct:'Armor 22',lastIntent:'PRICE_AVAILABILITY',lastNba:'SOFT_CLOSE',pendingCommercialAction:'SOFT_CLOSE',
+    lastAssistantMessage:'Está a S/ 1399 y tenemos disponible. ¿Prefieres envío o recogerlo en nuestro local?',purchaseSignal:false,
+  });
+  assert.equal(fulfillmentOnly.purchaseSignal,false);
+});
+
 test('a recurring drop plus explicit resistance requirement becomes both problem and need',()=>{
   const f=extractCommercialFacts('Se me cae seguido el celular y necesito que sea resistente.',{});
   assert.equal(f.problem,'caidas_frecuentes');
