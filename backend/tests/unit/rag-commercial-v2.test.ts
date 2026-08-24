@@ -65,8 +65,15 @@ test('focused capability FAB remains part of N and does not become RELATED_VALUE
   assert.equal(result.candidateNba,'ANSWER_ONLY');
 });
 
-test('comparison uses remembered customer priority before generic catalog differences',()=>{
-  const result=buildFullRagAnswer({message:'Ya vi los dos, cuál me conviene?',intent:'COMPARE',state:{priorities:['bateria'],comparisonProducts:['Armor 22','Armor X13']},rag:[...armor22,...armorX13]} as any);
+test('queried attributes do not become explicit comparison priorities',()=>{
+  const queried=reduceState({}, {lastIntent:'CAPABILITY',lastRoute:'RAG_PRODUCT',lastUserMessage:'¿Qué Bluetooth trae el Armor 22?',queryTarget:'Armor 22',salientProduct:'Armor 22'} as any);
+  assert.deepEqual(queried.explicitPriorities,[]);
+  const preferred=reduceState(queried,{lastIntent:'OTHER',lastRoute:'COMMERCIAL_REASONING',lastUserMessage:'Para mí lo más importante es la batería'} as any);
+  assert.deepEqual(preferred.explicitPriorities,['bateria']);
+});
+
+test('comparison uses remembered explicit customer priority before generic catalog differences',()=>{
+  const result=buildFullRagAnswer({message:'Ya vi los dos, cuál me conviene?',intent:'COMPARE',state:{explicitPriorities:['bateria'],priorities:['conectividad','bateria'],comparisonProducts:['Armor 22','Armor X13']},rag:[...armor22,...armorX13]} as any);
   assert.ok(result);
   assert.match(result!.answer,/bater/i);
   assert.match(result!.answer,/6600/);
