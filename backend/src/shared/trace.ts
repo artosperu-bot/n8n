@@ -5,12 +5,18 @@ const TRACE_EVENTS=new Set([
   'STECH_REFERENCE_TRACE',
   'STECH_PRODUCT_FLOW',
   'STECH_TURN_ERROR',
+  'WHATSAPP_VERIFY',
+  'WHATSAPP_INBOUND',
+  'WHATSAPP_STATUS',
+  'WHATSAPP_DUPLICATE',
+  'WHATSAPP_ERROR',
 ]);
 
 const REDACT_KEYS=new Set([
   'message','lastusermessage','lastassistantmessage','email','correo','address','direccion','phone','telefono',
   'dni','document','documento','reservationdocument','reservationcustomername','reservationaddress','name','nombre',
-  'authorization','cookie','setcookie','password','apikey','token','secret','servicerolekey',
+  'authorization','cookie','setcookie','password','apikey','token','secret','servicerolekey','accesstoken',
+  'waid','phonenumberid','displayphonenumber','recipientid',
 ]);
 
 let sinkInstalled=false;
@@ -18,9 +24,9 @@ let sinkInstalled=false;
 function redactScalar(value:string):string{
   return value
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,'[REDACTED_EMAIL]')
-    .replace(/\b\d{8,12}\b/g,'[REDACTED_ID]')
+    .replace(/\b\d{8,15}\b/g,'[REDACTED_ID]')
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi,'Bearer [REDACTED]')
-    .replace(/\b(authorization|cookie|set-cookie|password|api[_-]?key|token)\s*[:=]\s*[^\s,;]+/gi,'$1=[REDACTED]');
+    .replace(/\b(authorization|cookie|set-cookie|password|api[_-]?key|access[_-]?token|token)\s*[:=]\s*[^\s,;]+/gi,'$1=[REDACTED]');
 }
 
 function sanitize(value:unknown,key=''):unknown{
