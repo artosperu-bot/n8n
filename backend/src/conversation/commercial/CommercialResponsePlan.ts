@@ -55,7 +55,9 @@ function hasVerifiedPriceAndStock(input:LlmWriteInput):boolean{
 function closePurpose(input:LlmWriteInput,nba:string):CommercialResponsePlan['closePurpose']{
   if(nba!=='SOFT_CLOSE')return null;
   const intent=String(input.resolvedCurrentIntent??input.intent??'').toUpperCase();
-  if(intent==='POLICY'&&String(input.state?.pendingCommercialAction??input.state?.lastNba??'').toUpperCase()==='SOFT_CLOSE')return'RESERVATION';
+  const priorClose=String(input.state?.pendingCommercialAction??input.state?.lastNba??'').toUpperCase()==='SOFT_CLOSE';
+  if(intent==='FULFILLMENT_SELECTION'&&priorClose)return'RESERVATION';
+  if(intent==='POLICY'&&priorClose)return'FULFILLMENT_RESUME';
   if(['PRICE','PRICE_AVAILABILITY','STOCK'].includes(intent))return'FULFILLMENT';
   if(['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent))return hasVerifiedPriceAndStock(input)?'FULFILLMENT':'PRICE_AVAILABILITY';
   return'FULFILLMENT';
@@ -99,6 +101,7 @@ function authorizedActionInstruction(plan:CommercialResponsePlan): string {
   if (exactNba === 'RECOMMEND') return 'verbaliza únicamente la recomendación ya autorizada';
   if (exactNba === 'SOFT_CLOSE'&&plan.closePurpose==='PRICE_AVAILABILITY') return 'haz una sola pregunta breve para confirmar si quiere que revises precio y disponibilidad';
   if (exactNba === 'SOFT_CLOSE'&&plan.closePurpose==='RESERVATION') return 'haz una sola pregunta breve para saber si quiere que le reserves el equipo';
+  if (exactNba === 'SOFT_CLOSE'&&plan.closePurpose==='FULFILLMENT_RESUME') return 'vuelve a una sola pregunta breve para que elija entre envío y recogerlo en el local';
   if (exactNba === 'SOFT_CLOSE') return 'haz una sola pregunta breve para que elija entre envío y recogerlo en el local';
   if (exactNba === 'COLLECT_RESERVATION_DATA') return 'solicita únicamente el dato de reserva que falta';
   if (exactNba === 'EXECUTE_RESERVATION') return 'continúa únicamente con el paso de reserva autorizado, sin afirmar éxito antes de confirmación';
@@ -128,7 +131,10 @@ export function buildCommercialResponseInstruction(plan: CommercialResponsePlan)
       return `Usa RESPUESTA_DIRECTA solo como fuente de hechos, no como texto para recitar. Ya hay suficiente contexto para avanzar (${context}); no vuelvas a SPIN. ${SIMPLE_HUMAN_LANGUAGE} ${GROUNDED_PAIN_EMPATHY} ${NATURAL_NEUROSALES} Haz visible una mini-escena humana solo si existe dolor real, conecta como máximo 1 o 2 hechos verificados con lo que el cliente vive y explica el beneficio en palabras normales. No hagas una ficha técnica. Después ejecuta un solo +1: ${action}. Todavía no inventes ni muestres precio o stock si SQL no fue consultado. ${safety}`;
     }
     if(plan.closePurpose==='RESERVATION'){
-      return `Conserva y responde primero la información de envío/recojo solicitada. ${SIMPLE_HUMAN_LANGUAGE} No vuelvas a preguntar stock, disponibilidad, uso ni presupuesto. Después ejecuta un solo +1: ${action}. La pregunta debe sonar natural, por ejemplo “¿Quieres que te lo reserve?”. No pidas DNI, dirección de compra ni pago todavía. ${safety}`;
+      return `Confirma primero la modalidad de entrega o recojo que el cliente acaba de elegir. ${SIMPLE_HUMAN_LANGUAGE} No vuelvas a consultar política institucional, stock, disponibilidad, uso ni presupuesto. Después ejecuta un solo +1: ${action}. La pregunta debe sonar natural, por ejemplo “¿Quieres que te lo reserve?”. No pidas DNI, dirección de compra ni pago todavía. ${safety}`;
+    }
+    if(plan.closePurpose==='FULFILLMENT_RESUME'){
+      return `Responde primero la política consultada con la evidencia institucional disponible. No cambies la etapa comercial y no conviertas la pregunta de política en una elección que el cliente no hizo. No repitas precio ni stock, no vuelvas a discovery y no preguntes datos que el cliente ya dio. Después ${action}. ${SIMPLE_HUMAN_LANGUAGE} ${safety}`;
     }
     return `Da el resultado comercial completo en este mismo mensaje. Si existe dolor/contexto (${context}), ${GROUNDED_PAIN_EMPATHY} ${NATURAL_NEUROSALES} Usa como máximo 1 o 2 hechos relevantes, no una ficha técnica. Incluye el precio y la disponibilidad/stock ya verificados juntos; no esperes a que el cliente los pregunte ni le preguntes si quiere conocerlos. ${SIMPLE_HUMAN_LANGUAGE} Después ejecuta un solo +1: ${action}. La pregunta debe sonar natural, por ejemplo “¿Prefieres envío o recogerlo en nuestro local?”. No ofrezcas reserva, pago ni pidas datos en este mismo turno. ${safety}`;
   }
