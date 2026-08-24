@@ -47,6 +47,12 @@ const scenarios:QaScenario[]=[
     {message:'Prefiero recogerlo en su local.',expected:{queryTarget:'Armor X13'}},
     {message:'Dale',expected:{queryTarget:'Armor X13'}},
   ]},
+  {id:'HUMAN-POLICY-OVERLAY-PICKUP',family:'CLOSING',title:'Policy question answers and resumes fulfillment without losing purchase flow',turns:[
+    {message:'¿Cuánto está el Armor 22?',expected:{queryTarget:'Armor 22'}},
+    {message:'¿Dónde queda su local?',expected:{queryTarget:'Armor 22'}},
+    {message:'Prefiero recogerlo en su local.',expected:{queryTarget:'Armor 22'}},
+    {message:'Dale',expected:{queryTarget:'Armor 22'}},
+  ]},
 ];
 
 type StyleFinding={scenarioId:string;turn:number;level:'RED'|'YELLOW';code:string;message:string;answer:string};
@@ -78,11 +84,11 @@ function requireReservationThenPurchase(scenario:any,fulfillmentIndex:number,con
 }
 function requireRuggedFab(scenario:any,index:number){
   const answer=answerOf(scenario,index);
-  const hasCoreCertification=/\bIP68\b/i.test(answer)&&/(?:\bIP69K\b|MIL-STD-810H)/i.test(answer);
-  const hasAdvantage=/golpes?|ca[ií]das?/i.test(answer)&&/agua|polvo/i.test(answer);
+  const hasCoreCertification=/\bIP68\b/i.test(answer)&&/\bIP69K\b/i.test(answer)&&/MIL-STD-810H/i.test(answer);
+  const hasAdvantage=/golpes?|ca[ií]das?/i.test(answer)&&/agua/i.test(answer)&&/polvo/i.test(answer);
   const hasBenefit=/riesgo|repar|quedarte|aguantar|preparado|pendiente/i.test(answer);
-  if(!hasCoreCertification)add(scenario.id,index+1,'RED','RUGGED_CERTIFICATION_EVIDENCE_MISSING','En dolor por caídas/obra debe mencionar evidencia rugged relevante (IP68 y al menos IP69K o MIL-STD-810H), no solo decir “es resistente”.',answer);
-  if(!hasAdvantage)add(scenario.id,index+1,'RED','RUGGED_FAB_ADVANTAGE_MISSING','Debe traducir las certificaciones a la ventaja práctica frente a golpes, agua y polvo.',answer);
+  if(!hasCoreCertification)add(scenario.id,index+1,'RED','RUGGED_CERTIFICATION_EVIDENCE_MISSING','En dolor por caídas/obra debe conservar la evidencia verificada IP68, IP69K y MIL-STD-810H cuando esté disponible.',answer);
+  if(!hasAdvantage)add(scenario.id,index+1,'RED','RUGGED_FAB_ADVANTAGE_MISSING','Debe traducir las certificaciones a la ventaja práctica frente a golpes, caídas, agua y polvo.',answer);
   if(!hasBenefit)add(scenario.id,index+1,'RED','RUGGED_FAB_BENEFIT_MISSING','Debe conectar esa ventaja con el beneficio del cliente: menos riesgo/preocupación/reparaciones.',answer);
 }
 
@@ -120,6 +126,16 @@ if(impact){
 for(const id of ['HUMAN-CLOSE-DELIVERY','HUMAN-CLOSE-PICKUP']){
   const scenario=result.report.scenarios.find(item=>item.id===id);if(!scenario)continue;
   requirePriceStockFulfillment(scenario,0);requireReservationThenPurchase(scenario,1,2);
+}
+
+const policyOverlay=result.report.scenarios.find(item=>item.id==='HUMAN-POLICY-OVERLAY-PICKUP');
+if(policyOverlay){
+  requirePriceStockFulfillment(policyOverlay,0);
+  const policyAnswer=answerOf(policyOverlay,1);
+  if(!/local|direcci[oó]n|ubicaci[oó]n/i.test(policyAnswer))add(policyOverlay.id,2,'RED','POLICY_OVERLAY_NOT_ANSWERED','La pregunta de política debe responderse antes de retomar el cierre.',policyAnswer);
+  if(!/env[ií]o/i.test(policyAnswer)||!/recoger|recojo|local/i.test(policyAnswer))add(policyOverlay.id,2,'RED','POLICY_OVERLAY_DID_NOT_RESUME_FULFILLMENT','Después de responder la política debe retomar la elección envío/recojo sin volver a discovery.',policyAnswer);
+  if(/reserv/i.test(policyAnswer))add(policyOverlay.id,2,'RED','POLICY_OVERLAY_JUMPED_TO_RESERVATION','Una pregunta de política no debe interpretarse como si el cliente ya hubiera elegido modalidad.',policyAnswer);
+  requireReservationThenPurchase(policyOverlay,2,3);
 }
 
 const objection=result.report.scenarios.find(item=>item.id==='HUMAN-PRICE-OBJECTION');
