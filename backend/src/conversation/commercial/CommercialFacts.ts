@@ -79,6 +79,8 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
 
   let useCase = normalizeGenuineUseCase(previous.useCase);
   if (/\b(free\s*fire|pubg|cod\s*mobile|call\s+of\s+duty|gaming|jugar|juegos?)\b/.test(t)) useCase = 'gaming';
+  else if (/\b(construccion|obra)\b/.test(t)) useCase = 'trabajo_construccion';
+  else if (/\b(mineria|minero)\b/.test(t)) useCase = 'trabajo_mineria';
   else if (/\bdelivery\b|\brepart(?:o|idor|iendo)\b/.test(t)) useCase = 'delivery';
   else if (/\btrabaj(?:o|an|amos)\s+en\s+campo\b/.test(t)) useCase = 'trabajo_en_campo';
   else if (/\buso\s+diario\b/.test(t)) useCase = 'uso_diario';
