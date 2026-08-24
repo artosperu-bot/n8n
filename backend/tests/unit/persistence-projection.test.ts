@@ -34,7 +34,7 @@ test('ANSWER_ONLY creates no pending action and ASK_MISSING_FACT creates a typed
   assert.equal(answer.context.pendingAction,null);
 
   const ask=projectCommercialPersistence({}, {lastNba:'ASK_MISSING_FACT',pendingMissingFact:'impacto del problema',pendingCommercialAction:'ASK_MISSING_FACT'}, {messageId:'m2'});
-  assert.deepEqual(ask.turn.pregunta_pendiente_turno,{kind:'DISCOVERY',target:'IMPLICATION',status:'PENDING',createdMessageId:'m2'});
+  assert.deepEqual(ask.turn.pregunta_pendiente_turno,{kind:'DISCOVERY',target:'IMPLICATION',missingFact:'impacto del problema',status:'PENDING',createdMessageId:'m2'});
   assert.equal(ask.turn.accion_pendiente_turno,null);
 });
 
@@ -42,4 +42,11 @@ test('purchase signal remains a current-state fact and is not inferred from inte
   const p=projectCommercialPersistence({}, {levelOfInterest:90,interestEvents:['PRICE:X','STOCK:X'],purchaseSignal:false,lastNba:'SOFT_CLOSE'}, {messageId:'m1'});
   assert.equal(p.context.commercial.purchaseSignal,false);
   assert.equal(p.context.commercial.interestLevel,90);
+});
+
+test('typed pending contracts keep legacy keys during migration',()=>{
+  const ask=projectCommercialPersistence({}, {lastNba:'ASK_MISSING_FACT',pendingMissingFact:'uso principal',pendingCommercialAction:'ASK_MISSING_FACT'}, {messageId:'m3'});
+  assert.equal(ask.turn.pregunta_pendiente_turno?.missingFact,'uso principal');
+  const action=projectCommercialPersistence({}, {lastNba:'SOFT_CLOSE',pendingCommercialAction:'SOFT_CLOSE'}, {messageId:'m4'});
+  assert.equal(action.turn.accion_pendiente_turno?.accion,'SOFT_CLOSE');
 });
