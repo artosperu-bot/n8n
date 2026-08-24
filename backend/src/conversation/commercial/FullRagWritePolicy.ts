@@ -10,14 +10,14 @@ function overviewAnswer(product:string,highlights:NonNullable<LlmWriteInput['pro
   const camera=byFamily(highlights,'CAMERA')?.summary;
   const display=byFamily(highlights,'DISPLAY')?.summary;
   const sentences:string[]=[];
-  if(memory)sentences.push(`En memoria viene con ${memory}`);
-  if(battery)sentences.push(`En autonomía equipa ${battery}`);
-  if(resistance)sentences.push(`En resistencia destaca por ${resistance}`);
-  if(camera)sentences.push(`En cámaras ofrece ${camera}`);
-  if(display)sentences.push(`La pantalla es de ${display}`);
+  if(memory)sentences.push(`en memoria viene con ${memory}`);
+  if(battery)sentences.push(`en autonomía equipa ${battery}`);
+  if(resistance)sentences.push(`en resistencia destaca por ${resistance}`);
+  if(camera)sentences.push(`en cámaras ofrece ${camera}`);
+  if(display)sentences.push(`la pantalla es de ${display}`);
   if(!sentences.length)return null;
-  const body=sentences.map((s,i)=>`${i===0?`${product}: `:''}${s.charAt(0).toLocaleLowerCase('es')+s.slice(1)}.`).join(' ');
-  return body.replace(/\s+/g,' ').trim();
+  const selected=sentences.slice(0,3);
+  return `${product}: ${selected.join('; ')}.`.replace(/\s+/g,' ').trim();
 }
 function mode(input:LlmWriteInput):RagPresentationMode{
   const intent=String(input.intent??'').toUpperCase();
@@ -28,7 +28,7 @@ function mode(input:LlmWriteInput):RagPresentationMode{
 }
 export function applyFullRagWritePolicy(input:LlmWriteInput):LlmWriteInput{
   const presentationMode=mode(input);
-  const productHighlights=selectProductHighlights({intent:input.intent,attribute:input.attribute??null,facts:input.verifiedFacts??[],limit:presentationMode==='PRODUCT_OVERVIEW'?5:2});
+  const productHighlights=selectProductHighlights({intent:input.intent,attribute:input.attribute??null,facts:input.verifiedFacts??[],limit:presentationMode==='PRODUCT_OVERVIEW'?3:2});
   let directAnswer=input.directAnswer??null;
   if(presentationMode==='PRODUCT_OVERVIEW'){
     const product=String(input.resolvedProduct??input.activeProduct??input.quote?.shortName??input.quote?.product??'Este equipo').trim();
