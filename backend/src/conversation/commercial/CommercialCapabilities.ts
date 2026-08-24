@@ -113,6 +113,8 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
   const previousStockKnown=priorStockKnown(input,product);
   const fulfillmentProgression=['PRICE','PRICE_AVAILABILITY','STOCK'].includes(currentIntent)
     || (currentIntent==='POLICY'&&String(input.state?.pendingCommercialAction??input.state?.lastNba??'').toUpperCase()==='SOFT_CLOSE');
+  const fitOfferProgression=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(currentIntent)
+    && Boolean(product&&featureEvidence&&(input.useCase||input.problem||(input.priorities??[]).length));
   return {
     ...base,
     askUseCase:base.askUseCase&&decisionImpact&&!input.useCase,
@@ -135,7 +137,12 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
     recommendProduct:base.recommendProduct&&Boolean(recommended&&allowed.some(item=>same(item,recommended))&&featureEvidence),
     showImages:base.showImages&&hasRealImages(input),
     offerAlternative:base.offerAlternative&&alternatives.length>0,
-    softClose:base.softClose&&Boolean(product&&fulfillmentProgression&&(currentStockKnown||previousStockKnown||interestContext)),
+    // SOFT_CLOSE has three result-first meanings:
+    // fit -> offer price+availability; price+stock -> fulfillment; fulfillment -> reservation.
+    softClose:base.softClose&&Boolean(product&&(
+      fitOfferProgression
+      || (fulfillmentProgression&&(currentStockKnown||previousStockKnown||interestContext))
+    )),
     // purchaseSignal is the authority. It may come from an explicit BUY intent
     // or from a typed/contextual affirmative to a visible reservation question.
     collectReservationData:base.collectReservationData&&Boolean(product&&input.purchaseSignal),
