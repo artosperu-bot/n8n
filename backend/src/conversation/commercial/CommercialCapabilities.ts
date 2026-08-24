@@ -135,11 +135,10 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
     recommendProduct:base.recommendProduct&&Boolean(recommended&&allowed.some(item=>same(item,recommended))&&featureEvidence),
     showImages:base.showImages&&hasRealImages(input),
     offerAlternative:base.offerAlternative&&alternatives.length>0,
-    // SOFT_CLOSE now means one commercial progression step. It may use current
-    // SQL stock evidence or a prior confirmed STOCK event when the customer has
-    // already moved on to delivery/pickup.
     softClose:base.softClose&&Boolean(product&&fulfillmentProgression&&(currentStockKnown||previousStockKnown||interestContext)),
-    collectReservationData:base.collectReservationData&&Boolean(product&&input.purchaseSignal&&String(input.intent).toUpperCase()==='PURCHASE'),
+    // purchaseSignal is the authority. It may come from an explicit BUY intent
+    // or from a typed/contextual affirmative to a visible reservation question.
+    collectReservationData:base.collectReservationData&&Boolean(product&&input.purchaseSignal),
     requestHumanHandoff:base.requestHumanHandoff&&String(input.intent).toUpperCase()==='HUMAN',
   };
 }
