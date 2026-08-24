@@ -3,6 +3,14 @@ import type { ConversationState } from '../../domain/types.ts';
 type ProjectionMeta={messageId:string};
 type PendingQuestion={kind:'DISCOVERY';target:string;missingFact:string;status:'PENDING';createdMessageId:string};
 type PendingAction={type:string;accion:string;status:'PENDING';createdMessageId:string};
+export type CommercialReadiness=
+  | 'EXPLORING'
+  | 'DISCOVERY_NEEDED'
+  | 'FIT_READY'
+  | 'OFFER_READY'
+  | 'EVALUATING_PURCHASE'
+  | 'CLOSE_READY'
+  | 'PURCHASE';
 
 function clean(values:string[]|undefined):string[]{
   return [...new Set((values??[]).filter(v=>typeof v==='string').map(v=>v.trim()).filter(Boolean))];
@@ -54,6 +62,18 @@ function spinPhase(state:ConversationState):string|null{
   if(state.useCase||state.sector) return 'SITUACION';
   return null;
 }
+function commercialReadiness(state:ConversationState):CommercialReadiness{
+  if(state.purchaseSignal) return 'PURCHASE';
+  const action=String(state.pendingCommercialAction??state.lastNba??'').toUpperCase();
+  if(['COLLECT_RESERVATION_DATA','START_PURCHASE','CONFIRM_PURCHASE','ASK_TO_BUY','OFFER_PURCHASE'].includes(action)) return 'CLOSE_READY';
+  if(state.objection) return 'EVALUATING_PURCHASE';
+  if(['SHOW_PRICE_AVAILABILITY','ANSWER_PRICE','ANSWER_STOCK'].includes(action)) return 'EVALUATING_PURCHASE';
+  if(['OFFER_PRICE_AVAILABILITY','SOFT_CLOSE'].includes(action)) return 'OFFER_READY';
+  const hasFit=Boolean(state.recommendedProduct||state.selectedProduct)||(Boolean(state.activeProduct)&&Boolean(state.useCase||state.problem||clean(state.priorities).length));
+  if(hasFit) return 'FIT_READY';
+  const hasDiscovery=Boolean(state.useCase||state.sector||state.problem||clean(state.priorities).length||state.budget!=null);
+  return hasDiscovery?'DISCOVERY_NEEDED':'EXPLORING';
+}
 
 export function projectCommercialPersistence(previous:ConversationState,current:ConversationState,meta:ProjectionMeta){
   const question=pendingQuestion(current,meta);
@@ -64,6 +84,7 @@ export function projectCommercialPersistence(previous:ConversationState,current:
   const problemDelta=changed(previous.problem,current.problem);
   const priorityDelta=added(previous.priorities,current.priorities);
   const implicationDelta=added(previousImplications,currentImplications);
+  const readiness=commercialReadiness(current);
 
   return {
     turn:{
@@ -88,6 +109,7 @@ export function projectCommercialPersistence(previous:ConversationState,current:
         priorities:clean(current.priorities),
       },
       commercial:{
+        readiness,
         stage:current.commercialStage??null,
         strategy:current.commercialStrategy??null,
         interestLevel:current.levelOfInterest??0,
