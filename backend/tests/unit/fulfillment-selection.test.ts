@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { validateTurnDecision } from '../../src/conversation/decision/DecisionValidator.ts';
 import { nextBestAction } from '../../src/conversation/nba/NextBestAction.ts';
 import { isNbaCompatible } from '../../src/conversation/nba/NbaCompatibility.ts';
+import { resolveIntentPlan } from '../../src/conversation/intent/IntentPlan.ts';
 
 test('FULFILLMENT_SELECTION survives decision validation and stays on reservation close',()=>{
   const state={
@@ -26,4 +27,11 @@ test('FULFILLMENT_SELECTION is compatible only with the reservation soft close',
   assert.equal(nextBestAction('FULFILLMENT_SELECTION',state),'SOFT_CLOSE');
   assert.equal(isNbaCompatible('FULFILLMENT_SELECTION','SOFT_CLOSE',state),true);
   assert.equal(isNbaCompatible('FULFILLMENT_SELECTION','ASK_MISSING_FACT',state),false);
+});
+
+test('deterministic intent separates fulfillment choices from policy questions',()=>{
+  assert.equal(resolveIntentPlan('Envío a Ate.').primary,'FULFILLMENT_SELECTION');
+  assert.equal(resolveIntentPlan('Prefiero recogerlo en su local.').primary,'FULFILLMENT_SELECTION');
+  assert.equal(resolveIntentPlan('¿Hacen envíos a Ate?').primary,'POLICY');
+  assert.equal(resolveIntentPlan('¿Dónde queda su local?').primary,'POLICY');
 });
