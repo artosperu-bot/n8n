@@ -50,3 +50,10 @@ test('typed pending contracts keep legacy keys during migration',()=>{
   const action=projectCommercialPersistence({}, {lastNba:'SOFT_CLOSE',pendingCommercialAction:'SOFT_CLOSE'}, {messageId:'m4'});
   assert.equal(action.turn.accion_pendiente_turno?.accion,'SOFT_CLOSE');
 });
+
+test('canonical context exposes RPC compatibility aliases without changing authority',()=>{
+  const p=projectCommercialPersistence({}, {useCase:'trabajo_construccion',problem:'caidas_frecuentes',purchaseSignal:false}, {messageId:'m5'});
+  assert.equal(p.context.actividad_activa,'trabajo_construccion');
+  assert.equal(p.context.problema_activo,'caidas_frecuentes');
+  assert.equal(p.context.senal_compra,false);
+});
