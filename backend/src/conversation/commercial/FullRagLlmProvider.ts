@@ -50,7 +50,8 @@ export class FullRagLlmProvider implements LlmProvider{
     const kernelInput:LlmWriteInput=isRecommendation?enriched:{...enriched,recommendedProduct:null};
     const kernel=['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent)?buildFullRagAnswer(kernelInput):null;
     if(kernel){
-      const factualCore=humanizeKernel(kernel.answer,enriched,false);
+      const overviewCore=kernel.mode==='OVERVIEW'&&String(enriched.directAnswer??'').trim()?String(enriched.directAnswer).trim():kernel.answer;
+      const factualCore=humanizeKernel(overviewCore,enriched,false);
       const plannedInput:LlmWriteInput={...enriched,directAnswer:factualCore,deterministicAnswer:factualCore};
       const responsePlan=buildCommercialResponsePlan(plannedInput,factualCore);
       plannedInput.commercialResponsePlan=responsePlan;
