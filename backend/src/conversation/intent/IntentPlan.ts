@@ -97,7 +97,8 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const attributes = unique(ATTRS.filter(([rx]) => rx.test(t)).map(([, name]) => name));
   const hasProductLike=has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);
   const explicitProductInfo = (has(/\b(info|informacion|caracteristicas|especificaciones|ficha|cuentame|hablame|dime\s+(?:del|de\s+la|sobre))\b/) && hasProductLike)
-    || (has(/\b(que\s+tal\s+es|como\s+es|que\s+tal\s+esta)\b/) && hasProductLike);
+    || (has(/\b(que\s+tal\s+es|como\s+es|que\s+tal\s+esta)\b/) && hasProductLike)
+    || (has(/\bque\s+tal\b/) && hasProductLike && attributes.length===0);
   const browsingProduct = has(/\b(estoy viendo|quiero ver|revisando|ahora si quiero ver|muestrame el)\b/) && hasProductLike;
   const requirementFollowup = has(/\b(cumple|cumpliria|cumple\s+con\s+eso|tiene\s+eso)\b/);
   const productInfo = explicitProductInfo || browsingProduct;
