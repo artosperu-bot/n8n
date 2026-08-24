@@ -67,3 +67,13 @@ test('fabricated scarcity urgency or social proof falls back to factual core',as
   assert.doesNotMatch(result.text,/poqu[ií]simas|aprovecha hoy|todos lo est[aá]n comprando/i);
   assert.match(result.model,/pressure-fallback/i);
 });
+
+test('soft close is not embedded inside immutable factual core before composition',async()=>{
+  const spy=spyDelegate('Por la resistencia verificada encaja con ese uso. ¿Quieres que revisemos disponibilidad?');
+  const llm=new FullRagLlmProvider(spy.provider as any);
+  const input:any={...contextualInput(),finalExecutableNba:'SOFT_CLOSE',nextBestAction:'SOFT_CLOSE',commercialMove:null};
+  await llm.write(input);
+  assert.equal(spy.calls(),1);
+  assert.doesNotMatch(String(spy.received()?.directAnswer),/[¿?]|stock|disponibilidad/i);
+  assert.equal(spy.received()?.commercialResponsePlan?.mode,'SOFT_CLOSE');
+});
