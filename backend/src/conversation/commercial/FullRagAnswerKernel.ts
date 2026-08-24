@@ -24,7 +24,7 @@ function familyFromText(input:LlmWriteInput):Family|null{
   if(/ram|memoria|almacen|micro.?sd|rom/.test(q))return'MEMORY';
   if(/bateria|autonomia|carga|cargar/.test(q))return'BATTERY';
   if(/pantalla|display|hz|pulgadas|resolucion/.test(q))return'DISPLAY';
-  if(/procesador|rendimiento|cpu|gpu|gaming|jugar|juego|free fire|pubg|cod mobile/.test(q))return'PERFORMANCE';
+  if(/procesador|rendimiento|cpu|gpu/.test(q))return'PERFORMANCE';
   if(/gps|galileo|glonass|beidou|posicionamiento/.test(q))return'POSITIONING';
   return null;
 }
