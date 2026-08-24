@@ -55,6 +55,37 @@ test('broad PRODUCT_INFO opens one useful SPIN question while a focused capabili
   assert.equal(isNbaCompatible('PRODUCT_INFO','ASK_MISSING_FACT',{}),true);
 });
 
+test('price or stock for a resolved product advances to fulfillment instead of asking availability twice',()=>{
+  assert.equal(nextBestAction('PRICE_AVAILABILITY',{activeProduct:'Armor 22'}),'SOFT_CLOSE');
+  assert.equal(nextBestAction('PRICE',{activeProduct:'Armor 22'}),'SOFT_CLOSE');
+  assert.equal(nextBestAction('STOCK',{activeProduct:'Armor 22'}),'SOFT_CLOSE');
+  assert.equal(nextBestAction('PRICE_AVAILABILITY',{}),'ANSWER_ONLY');
+});
+
+test('a fulfillment choice after a commercial close advances to reservation',()=>{
+  assert.equal(nextBestAction('POLICY',{activeProduct:'Armor 22',pendingCommercialAction:'SOFT_CLOSE'}),'SOFT_CLOSE');
+  assert.equal(nextBestAction('POLICY',{activeProduct:'Armor 22'}),'ANSWER_ONLY');
+});
+
+test('SOFT_CLOSE is executable from current SQL price-stock evidence without requiring a prior interest score',()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'Precio del Armor 22',intent:'PRICE_AVAILABILITY',
+    state:{activeProduct:'Armor 22'},decision:{nextBestAction:'SOFT_CLOSE'} as any,
+    quote:{product:'Smartphone Armor 22',shortName:'Armor 22',price:1399,stock:9,currency:'PEN',source:'SQL_BRIDGE'},
+    resolvedProduct:'Armor 22',allowedProducts:['Armor 22'],
+  });
+  assert.equal(prepared.nextBestAction,'SOFT_CLOSE');
+});
+
+test('SOFT_CLOSE can continue from a previously confirmed-stock fulfillment step without requerying stock',()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'Prefiero envío a Ate',intent:'POLICY',
+    state:{activeProduct:'Armor 22',pendingCommercialAction:'SOFT_CLOSE',interestEvents:['PRICE:ARMOR_22','STOCK:ARMOR_22']},
+    decision:{nextBestAction:'SOFT_CLOSE'} as any,resolvedProduct:'Armor 22',allowedProducts:['Armor 22'],
+  });
+  assert.equal(prepared.nextBestAction,'SOFT_CLOSE');
+});
+
 test('deterministic N+1 outranks a conflicting compatible planner proposal',()=>{
   const plannerOverview=decision({primaryIntent:'PRODUCT_INFO',nextBestAction:'ANSWER_ONLY',targetProduct:'Armor 22'});
   const deterministicOverview=decision({primaryIntent:'PRODUCT_INFO',nextBestAction:'ASK_MISSING_FACT',targetProduct:'Armor 22'});
