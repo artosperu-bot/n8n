@@ -1,4 +1,5 @@
 import type { ConversationState } from '../../domain/types.ts';
+import { evaluateSpinReadiness } from './SpinProgression.ts';
 
 /**
  * Bounded commercial next-best-action catalog.
@@ -20,8 +21,6 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
       return state.selectedProduct || (state.interestSignal && state.activeProduct) ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
     case 'PRODUCT_INFO':
-      // Browsing a product is not a request to advance the sale. Answer the
-      // overview well, remember the product, and let the customer keep exploring.
       return 'ANSWER_ONLY';
 
     case 'ATTRIBUTE':
@@ -33,10 +32,14 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'ORDER_STATUS':
       return 'ANSWER_ONLY';
 
-    case 'EVALUATE_USE':
-      if (!state.problem && !state.useCase && !(state.priorities?.length)) return 'ASK_MISSING_FACT';
-      if (!state.recommendedProduct && !state.activeProduct) return 'RECOMMEND';
-      return 'SOFT_CLOSE';
+    case 'EVALUATE_USE': {
+      const spin=evaluateSpinReadiness(state);
+      if(!spin.hasSituation||!spin.hasNeed)return'ASK_MISSING_FACT';
+      if(!state.recommendedProduct&&!state.activeProduct)return'RECOMMEND';
+      // The actual stock CTA is decided after the grounded answer, once the
+      // product fit has been verified. Do not jump to stock before evidence.
+      return'ANSWER_ONLY';
+    }
 
     case 'BUDGET_CONSTRAINT':
       return state.problem || state.useCase || (state.priorities?.length ?? 0) > 0
@@ -45,10 +48,6 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
 
     case 'RECOMMEND':
     case 'RECOMMEND_WITHIN_BUDGET':
-      // The recommendation itself resolves the current consultative question.
-      // Do not automatically turn every documentary recommendation into a stock CTA.
-      // PostAnswerCommercialProgression may still promote a later step when real
-      // interest, purchase intent or mature decision context justifies it.
       return 'ANSWER_ONLY';
 
     case 'COMPARE':
