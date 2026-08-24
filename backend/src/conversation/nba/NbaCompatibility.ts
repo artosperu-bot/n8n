@@ -16,6 +16,7 @@ const ALLOWED: Record<string, Set<string>> = {
   COMPARE:new Set(['COMPARE','RECOMMEND','SOFT_CLOSE','ANSWER_ONLY']),
   OBJECTION:new Set(['ASK_MISSING_FACT','OFFER_ALTERNATIVE','RECOMMEND','SOFT_CLOSE']),
   HANDLE_PRICE_OBJECTION:new Set(['ASK_MISSING_FACT','OFFER_ALTERNATIVE','RECOMMEND','SOFT_CLOSE']),
+  FULFILLMENT_SELECTION:new Set(['SOFT_CLOSE','ANSWER_ONLY']),
   CATALOG:new Set(['OFFER_ALTERNATIVE','ANSWER_ONLY','ASK_MISSING_FACT']),
   CATEGORIES:new Set(['OFFER_ALTERNATIVE','ANSWER_ONLY','ASK_MISSING_FACT']),
   SUBCATEGORIES:new Set(['OFFER_ALTERNATIVE','ANSWER_ONLY','ASK_MISSING_FACT']),
@@ -43,8 +44,6 @@ export function compatibleNba(
   const i=String(intent).toUpperCase();
   if (state.purchaseSignal===true || i==='PURCHASE') return purchaseAction(state);
   if (['HUMAN','QUOTE'].includes(i)) return 'ASSISTED_HANDOFF';
-  // N+1 is deterministic authority. The planner may help only when the
-  // deterministic action is incompatible with the final semantic intent.
   if (isNbaCompatible(intent,fallback,state)) return fallback;
   if (isNbaCompatible(intent,proposed,state)) return proposed;
   if (FACTUAL.has(i)) return 'ANSWER_ONLY';
