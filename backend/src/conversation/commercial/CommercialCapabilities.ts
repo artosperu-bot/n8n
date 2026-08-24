@@ -47,8 +47,6 @@ export type CommercialCapabilities = {
   prepareAccessories:boolean;
 };
 
-// Only operations implemented by the current backend. False entries are
-// intentional: they prevent the writer from promising aspirational workflows.
 export const IMPLEMENTED_COMMERCIAL_CAPABILITIES:Readonly<CommercialCapabilities>=Object.freeze({
   askUseCase:true,askProblem:true,askImplication:true,askPriority:true,askBudget:true,askProduct:true,addRelatedValue:true,
   checkPrice:true,checkStock:true,answerProductFeature:true,answerWarranty:true,answerDelivery:true,answerPayment:true,answerLocation:true,
@@ -72,6 +70,14 @@ function hasRealImages(input:LlmWriteInput):boolean{return (input.imageUrls??[])
 function sqlResolved(input:LlmWriteInput):boolean{
   const product=resolvedProduct(input);const quoteName=input.quote?.shortName??input.quote?.product??null;
   return Boolean(product&&input.quote&&same(product,quoteName));
+}
+function priorStockKnown(input:LlmWriteInput,product:string|null):boolean{
+  if(!product)return false;
+  const token=fold(product).replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').toUpperCase();
+  return (input.state?.interestEvents??[]).some(event=>{
+    const value=String(event??'').toUpperCase();
+    return value.startsWith('STOCK:')&&(value.includes(token)||fold(value.slice(6))===fold(product));
+  });
 }
 
 export function missingFactCapability(missingFact:string|null|undefined):CommercialCapabilityAction|null{
@@ -102,6 +108,11 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
   const matureCommercialContext=Number(input.levelOfInterest??input.state?.levelOfInterest??0)>=20&&Boolean(input.useCase||input.problem||(input.priorities??[]).length);
   const interestContext=Boolean(input.interestSignal||input.purchaseSignal||input.selectedProduct||input.recommendedProduct||input.state?.selectedProduct||input.state?.recommendedProduct||matureCommercialContext);
   const implicationKnown=(input.implications??[]).length>0||String(input.state?.lastSpinContribution??'').toUpperCase()==='IMPLICACION'||(input.state?.spinFacts??[]).some(value=>/^(?:implicacion|impacto):/i.test(String(value)));
+  const currentIntent=String(input.resolvedCurrentIntent??input.intent??'').toUpperCase();
+  const currentStockKnown=sqlResolved(input)&&input.quote?.stock!=null;
+  const previousStockKnown=priorStockKnown(input,product);
+  const fulfillmentProgression=['PRICE','PRICE_AVAILABILITY','STOCK'].includes(currentIntent)
+    || (currentIntent==='POLICY'&&String(input.state?.pendingCommercialAction??input.state?.lastNba??'').toUpperCase()==='SOFT_CLOSE');
   return {
     ...base,
     askUseCase:base.askUseCase&&decisionImpact&&!input.useCase,
@@ -124,7 +135,10 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
     recommendProduct:base.recommendProduct&&Boolean(recommended&&allowed.some(item=>same(item,recommended))&&featureEvidence),
     showImages:base.showImages&&hasRealImages(input),
     offerAlternative:base.offerAlternative&&alternatives.length>0,
-    softClose:base.softClose&&Boolean(product&&interestContext&&sqlResolved(input)&&input.quote?.stock!=null),
+    // SOFT_CLOSE now means one commercial progression step. It may use current
+    // SQL stock evidence or a prior confirmed STOCK event when the customer has
+    // already moved on to delivery/pickup.
+    softClose:base.softClose&&Boolean(product&&fulfillmentProgression&&(currentStockKnown||previousStockKnown||interestContext)),
     collectReservationData:base.collectReservationData&&Boolean(product&&input.purchaseSignal&&String(input.intent).toUpperCase()==='PURCHASE'),
     requestHumanHandoff:base.requestHumanHandoff&&String(input.intent).toUpperCase()==='HUMAN',
   };
