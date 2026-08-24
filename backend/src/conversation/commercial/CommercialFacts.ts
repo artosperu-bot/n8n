@@ -75,8 +75,6 @@ function confirmsPriorPurchaseStep(message:string,previous:ConversationState):bo
   const lastNba=String(previous.lastNba??previous.pendingCommercialAction??'').toUpperCase();
   if(lastNba!=='SOFT_CLOSE')return false;
   const prompt=fold(previous.lastAssistantMessage??'');
-  // The affirmative is purchase only when the previous visible question was
-  // explicitly about reserving/buying. A yes to delivery-vs-pickup is not purchase.
   return /\bquieres\b[^?]{0,80}\b(?:reserv(?:ar|e)|separ(?:ar|e)|compr(?:ar|e))\b/.test(prompt)
     || /\b(?:te\s+lo|lo|la)\s+(?:reserv(?:o|e)|separ(?:o|e))\b/.test(prompt)
     || /\b(?:avanzamos|seguimos|continuamos)\b[^?]{0,45}\b(?:con\s+la\s+)?(?:compra|reserva)\b/.test(prompt);
@@ -120,8 +118,10 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
 
   let problem = previous.problem ?? null;
   if(!featureQuestion){
-    if (/\b(se\s+me|se\s+nos|se\s+les)\s+cae[n]?\b|\bcaidas?\s+(?:frecuentes?|seguidas?|constantes?)\b/.test(t)) problem = 'caidas_frecuentes';
-    else if (/\bbateria\b[^.!?]{0,50}\b(se\s+acaba|no\s+aguanta|dura\s+poco)\b|\bcasi\s+no\s+tengo\s+donde\s+cargar/.test(t)) problem = 'autonomia_insuficiente';
+    if(/\b(?:mande|mandé|he\s+mandado|tuve\s+que)\s+reparar\b|\brepar(?:e|é|ado|aciones?)\b[^.!?]{0,55}\b(?:dos|2|varias|otra)\s+veces?\b|\b(?:dos|2|varias)\s+reparaciones?\b/.test(t)) problem='reparaciones_repetidas';
+    else if (/\b(se\s+me|se\s+nos|se\s+les)\s+cae[n]?\b|\bcaidas?\s+(?:frecuentes?|seguidas?|constantes?)\b/.test(t)) problem = 'caidas_frecuentes';
+    else if (/\bbateria\b[^.!?]{0,65}\b(se\s+acaba|no\s+aguanta|dura\s+poco|no\s+llega\s+a\s+la\s+tarde)\b|\bno\s+llega\s+a\s+la\s+tarde\b[^.!?]{0,30}\bbateria\b|\bcasi\s+no\s+tengo\s+donde\s+cargar/.test(t)) problem = 'autonomia_insuficiente';
+    else if(/\b(?:polvo|lluvia|agua|humedad)\b[^.!?]{0,70}\b(?:malogro|malogró|malogra|daño|dan[oó]|rompio|rompió)\b|\b(?:malogro|malogró|daño|dan[oó])\b[^.!?]{0,70}\b(?:polvo|lluvia|agua|humedad)\b/.test(t)) problem='exposicion_agua_polvo';
     else if (/\bse\s+rompe[n]?\b|\b(?:es|me\s+resulta)\s+fragil\b/.test(t) && !problem) problem = 'durabilidad';
   }
 
