@@ -43,14 +43,8 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
   const contextualPurchaseContinuation=state.purchaseSignal===true&&String(state.lastIntent??'').toUpperCase()==='STOCK'&&String(state.lastNba??state.pendingCommercialAction??'').toUpperCase()==='SOFT_CLOSE'&&['OTHER',null].includes(plannerIntent as any)&&fallbackIntent==='OTHER';
   if(contextualPurchaseContinuation)primaryIntent='PURCHASE';
 
-  // Interest and curiosity are not purchase authority. The semantic planner may
-  // recognize tone, but only deterministic current-turn purchase evidence (or a
-  // previously confirmed purchase continuation) can enter reservation flow.
   if(primaryIntent==='PURCHASE'&&fallbackIntent!=='PURCHASE'&&state.purchaseSignal!==true)primaryIntent=fallbackIntent??'OTHER';
 
-  // Current deterministic intent outranks stale comparison history. This keeps a
-  // new use case or an inherited-budget recommendation from being pulled back to
-  // COMPARE merely because a pair exists in memory.
   if(primaryIntent==='COMPARE'&&fallbackIntent&&['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','BUDGET_CONSTRAINT'].includes(fallbackIntent))primaryIntent=fallbackIntent;
 
   const comparisonAuthority=fallbackIntent==='COMPARE'||(state.comparisonProducts?.length??0)>=2;
@@ -112,7 +106,8 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
   const normalizedMentions=currentTurnTarget&&!sameStringListContains(currentMentions,currentTurnTarget)&&uniqueNewCatalogTarget&&sameProduct(currentTurnTarget,uniqueNewCatalogTarget)?unique([...currentMentions,currentTurnTarget]):currentMentions;
   const commercialStage=strongStage(primaryIntent)??canonicalStage(decision.commercialStage)??canonicalStage(fallbackDecision?.commercialStage);
   const deterministicPriorities=unique(fallbackDecision?.priorities??state.priorities??[]);
-  const factual=factualSemanticIntent(primaryIntent);
+  const neutralOtherWithoutPendingSpin=primaryIntent==='OTHER'&&fallbackIntent==='OTHER'&&!state.pendingMissingFact;
+  const factual=factualSemanticIntent(primaryIntent)||neutralOtherWithoutPendingSpin;
   const customerNeed=factual?null:decision.customerNeed;
   const customerProblem=factual?null:decision.customerProblem;
   const spinContribution=factual?null:(typeof decision.spinContribution==='string'&&decision.spinContribution.trim()&&!decision.spinContribution.includes('[object Object]')?decision.spinContribution.trim().slice(0,240):null);
