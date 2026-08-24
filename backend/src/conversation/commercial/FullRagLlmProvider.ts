@@ -17,7 +17,7 @@ function isDirectTechnicalCapability(message:string):boolean{const t=fold(messag
 function isBroadComparison(message:string):boolean{const t=fold(message);const compare=/\b(compara|comparame|comparar|comparacion|diferencia|vs|versus)\b/.test(t);const criterion=/\b(bateria|autonomia|carga|resistencia|resistente|caida|golpe|camara|foto|video|ram|memoria|almacenamiento|procesador|rendimiento|gaming|jugar|free fire|pantalla|hz|nfc|5g|termica|peso|tamano)\b/.test(t);return compare&&!criterion;}
 function naturalSalesPlan(input:LlmWriteInput):string{const original=String(input.deterministicAnswer??'').trim();const style=['FULL_RAG_STYLE:','Habla como asesor comercial humano, no como ficha técnica ni evaluador.','No cambies hechos verificados ni sustituyas el atributo solicitado por otro relacionado.','No inventes benchmarks, FPS, compatibilidades ni ventajas de procesador/GPU no verificadas.','No repitas la respuesta factual ni agregues especificaciones ajenas a la pregunta.','Nunca escribas etiquetas internas como Ejecutar:, N+1:, NBA:, FULL_RAG_STYLE:, ANSWER_ONLY, RELATED_VALUE, COMPARE o RECOMMEND.'].join(' ');return [original,style].filter(Boolean).join('\n');}
 function sanitize(text:string,input:LlmWriteInput):string{let clean=String(text??'').replace(/(?:^|\n)\s*(?:Ejecutar|N\+1|NBA|FULL_RAG_STYLE)\s*:\s*[A-Z_ -]+\.?\s*/gi,'\n').replace(/\b(?:ANSWER_ONLY|RELATED_VALUE|ASK_MISSING_FACT|SOFT_CLOSE|OFFER_ALTERNATIVE|COLLECT_RESERVATION_DATA|EXECUTE_RESERVATION)\b[.!]?/g,'').replace(/\n{3,}/g,'\n\n').trim();const intent=String(input.intent??'').toUpperCase();const nba=String(input.nextBestAction??input.decision?.nextBestAction??'').toUpperCase();if(['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent)&&nba==='ANSWER_ONLY')clean=clean.replace(/^\s*Te recomiendo\s+([^.:\n]+)(\s*[:.]?)/i,(_m,product)=>`Para lo que buscas, me iría por ${String(product).trim()}.`);return clean;}
-function humanizeKernel(text:string,input:LlmWriteInput):string{
+function humanizeKernel(text:string,input:LlmWriteInput,includeCommercialContinuation=true):string{
   let clean=String(text??'')
     .replace(/protecci[oó]n\s+IP68\s+hasta\s+([^,.;\n]+)\s+durante\s+([^,.;\n]+)/gi,'protección frente al agua con IP68 hasta $1 de profundidad durante $2')
     .replace(/protecci[oó]n\s+hasta\s+([^,.;\n]+)\s+durante\s+([^,.;\n]+)/gi,'protección frente al agua hasta $1 de profundidad durante $2');
@@ -27,7 +27,7 @@ function humanizeKernel(text:string,input:LlmWriteInput):string{
     clean=clean.replace(/^Para lo que buscas, me iría por /,`Dentro de tu presupuesto de S/ ${budget}, me iría por `);
   }
   const nba=String(input.nextBestAction??input.finalExecutableNba??input.decision?.nextBestAction??'').toUpperCase();
-  if(nba==='SOFT_CLOSE'&&!/[¿?]/.test(clean))clean=`${clean.trim()} ¿Quieres que te revise stock y disponibilidad?`;
+  if(includeCommercialContinuation&&nba==='SOFT_CLOSE'&&!/[¿?]/.test(clean))clean=`${clean.trim()} ¿Quieres que te revise stock y disponibilidad?`;
   return clean.trim();
 }
 function deterministicResult(text:string,model:string):LlmResult{return{text,model,usage:{inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0},durationMs:0};}
@@ -50,12 +50,13 @@ export class FullRagLlmProvider implements LlmProvider{
     const kernelInput:LlmWriteInput=isRecommendation?enriched:{...enriched,recommendedProduct:null};
     const kernel=['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent)?buildFullRagAnswer(kernelInput):null;
     if(kernel){
-      const factualCore=humanizeKernel(kernel.answer,enriched);
+      const factualCore=humanizeKernel(kernel.answer,enriched,false);
       const plannedInput:LlmWriteInput={...enriched,directAnswer:factualCore,deterministicAnswer:factualCore};
-      plannedInput.commercialResponsePlan=buildCommercialResponsePlan(plannedInput,factualCore);
-      plannedInput.deterministicAnswer=buildCommercialResponseInstruction(plannedInput.commercialResponsePlan);
+      const responsePlan=buildCommercialResponsePlan(plannedInput,factualCore);
+      plannedInput.commercialResponsePlan=responsePlan;
+      plannedInput.deterministicAnswer=buildCommercialResponseInstruction(responsePlan);
       Object.assign(input,plannedInput);
-      if(!plannedInput.commercialResponsePlan.shouldUseLlm)return deterministicResult(factualCore,`full-rag-kernel-${kernel.mode.toLowerCase()}`);
+      if(!responsePlan.shouldUseLlm)return deterministicResult(factualCore,`full-rag-kernel-${kernel.mode.toLowerCase()}`);
       const result=await this.#delegate.write(plannedInput);
       const composed=humanizeKernel(sanitize(result.text,plannedInput),plannedInput);
       if(hasFabricatedCommercialPressure(composed))return deterministicResult(factualCore,`full-rag-kernel-${kernel.mode.toLowerCase()}-pressure-fallback`);
