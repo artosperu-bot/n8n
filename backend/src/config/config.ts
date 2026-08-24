@@ -32,6 +32,11 @@ export type AppConfig = {
   n8nWebhookUrl?: string;
   n8nWebhookToken?: string;
   n8nStrict: boolean;
+  whatsappVerifyToken?: string;
+  whatsappAccessToken?: string;
+  whatsappPhoneNumberId?: string;
+  whatsappAppId?: string;
+  whatsappGraphApiVersion: string;
 };
 
 type EnvLike = Record<string, string | undefined>;
@@ -78,5 +83,10 @@ export function loadConfig(env: EnvLike = process.env): AppConfig {
     n8nWebhookUrl: env.N8N_WEBHOOK_URL,
     n8nWebhookToken: env.N8N_WEBHOOK_TOKEN,
     n8nStrict: bool(env.N8N_STRICT, false),
+    whatsappVerifyToken: env.WHATSAPP_VERIFY_TOKEN,
+    whatsappAccessToken: env.WHATSAPP_ACCESS_TOKEN,
+    whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
+    whatsappAppId: env.WHATSAPP_APP_ID,
+    whatsappGraphApiVersion: env.WHATSAPP_GRAPH_API_VERSION ?? 'v25.0',
   };
 }
