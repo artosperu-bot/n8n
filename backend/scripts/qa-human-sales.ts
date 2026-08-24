@@ -72,6 +72,9 @@ const roboticEmpathy=/^\s*(?:te\s+entiendo|entiendo\s+(?:tu|lo|que)|comprendo\s+
 const stiffSalesLanguage=/\b(?:el\s+verdadero\s+problema|y\s+ah[ií]\s+est[aá]\s+el\s+verdadero\s+problema|reduce\s+el\s+riesgo\s+de\s+interrupciones|interrupci[oó]n\s+operativa|para\s+ese\s+uso,?\s+\w+\s+cuenta\s+con)\b/i;
 const internalJargon=/\b(?:SPIN|FAB|LAER|N\+1|commercial\s+readiness|implicaci[oó]n\s+operativa)\b/i;
 const explicitPain=/\b(?:romp|cae|ca[ií]da|malogr|bater[ií]a|cargador|polvo|lluvia|arreglo|repar|pierdo\s+horas|gastar)\b/i;
+const storyPain=/\b(?:romp|se\s+me\s+cae|ca[ií]das?|malogr|no\s+llega\s+a\s+la\s+tarde|repar|arregl|pierdo\s+horas|polvo|lluvia|seguir\s+gastando)\b/i;
+const humanSceneCue=/\b(?:en\s+obra|en\s+plena\s+jornada|a\s+media\s+jornada|a\s+media\s+tarde|cuando\s+est[aá]s|si\s+justo|mientras\s+trabajas|terminas\s+(?:sin|buscando|otra\s+vez)|te\s+quedas\s+sin|quedarte\s+sin|volver\s+a\s+(?:reparar|gastar)|estar\s+pendiente|cada\s+vez\s+que)\b/i;
+const practicalValueCue=/\b(?:aguant|resist|evit|protege|menos\s+pendiente|sin\s+estar\s+pendiente|hecho\s+para|preparado\s+para|te\s+ayuda|te\s+sirve|te\s+da\s+tranquilidad|ahorr|dejar\s+de\s+gastar|seguir\s+trabajando|durar\s+m[aá]s)\b/i;
 const technicalToken=/\b(?:IP68|IP69K|MIL-STD|GLONASS|Galileo|BeiDou|Mali|Helio|GHz|GPU)\b/gi;
 
 function add(scenarioId:string,turn:number,level:'RED'|'YELLOW',code:string,message:string,answer:string){findings.push({scenarioId,turn,level,code,message,answer});}
@@ -88,6 +91,9 @@ for(const scenario of result.report.scenarios){
     if(questionCount>1)add(scenario.id,index+1,'RED','MULTIPLE_QUESTIONS',`La respuesta hizo ${questionCount} preguntas visibles.`,answer);
     if(explicitPain.test(message)&&answer.length>650)add(scenario.id,index+1,'YELLOW','PAIN_RESPONSE_TOO_LONG',`Respuesta de dolor demasiado larga (${answer.length} caracteres).`,answer);
     if(explicitPain.test(message)&&(answer.match(technicalToken)??[]).length>2)add(scenario.id,index+1,'YELLOW','PAIN_TECHNICAL_DUMP','Ante un dolor real se recitaron demasiadas especificaciones en vez de aterrizar el beneficio.',answer);
+    // Positive contract: pain empathy/neurosales must be visible, not merely absent from bad-language regexes.
+    if(storyPain.test(message)&&!humanSceneCue.test(answer))add(scenario.id,index+1,'RED','PAIN_HUMAN_SCENE_MISSING','Ante un dolor real faltó una escena cotidiana que haga sentir la situación sin inventar una historia personal.',answer);
+    if(storyPain.test(message)&&!practicalValueCue.test(answer))add(scenario.id,index+1,'RED','PAIN_PRACTICAL_VALUE_MISSING','Ante un dolor real faltó traducir el producto a un alivio o beneficio fácil de imaginar.',answer);
   });
 }
 
@@ -105,6 +111,10 @@ for(const scenario of result.report.scenarios.filter(item=>item.id.startsWith('H
 
 const painScenario=result.report.scenarios.find(item=>item.id==='HUMAN-PAIN-DROPS');
 if(painScenario){
+  const firstTurn=painScenario.turns[0];
+  const firstAnswer=String(firstTurn?.observation?.response?.answer??'');
+  if(!/precio/i.test(firstAnswer)||!/disponib/i.test(firstAnswer))add(painScenario.id,1,'RED','PRICE_AVAILABILITY_NOT_OFFERED','Con fit suficiente, el siguiente micro-paso debe ser ofrecer precio + disponibilidad juntos.',firstAnswer);
+
   const implicationTurn=painScenario.turns[1];const state=implicationTurn?.observation?.response?.state??{};const answer=String(implicationTurn?.observation?.response?.answer??'');
   const implications=state?.customer?.implications??[];
   if(!Array.isArray(implications)||!implications.some((value:string)=>/perdida|tiempo|horas/i.test(String(value))))add(painScenario.id,2,'RED','EXPLICIT_IMPACT_NOT_STORED','“Pierdo horas de trabajo” debe quedar como implicación explícita.',answer);
