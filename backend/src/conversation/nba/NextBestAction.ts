@@ -1,21 +1,24 @@
 import type { ConversationState } from '../../domain/types.ts';
+import { fold } from '../../shared/text.ts';
 import { evaluateSpinReadiness } from './SpinProgression.ts';
+
+function specificActionablePain(problem:string|null|undefined):boolean{
+  const value=fold(problem??'');
+  return /reparaciones repetidas|reparaciones_repetidas|caidas frecuentes|caidas_frecuentes|autonomia insuficiente|autonomia_insuficiente|exposicion agua polvo|exposicion_agua_polvo|polvo|humedad|lluvia|bateria.*(?:no dura|no llega)|(?:no dura|no llega).*bateria/.test(value);
+}
 
 /**
  * Bounded commercial next-best-action catalog.
  * Facts still come from SQL/RAG authorities; this layer only controls the one
  * executable +1 after the current customer request is answered.
- *
- * SPIN is a separate authority: it says which discovery fact is missing. N+1
- * decides whether the current turn should ask that one fact or perform another
- * commercial action. Never execute two independent continuations in one turn.
  */
 export function nextBestAction(intent: string, state: ConversationState = {}): string | null {
   const normalized=String(intent??'').toUpperCase();
   const multiUnit=(state.quantity??1)>=2;
   const resolvedProduct=Boolean(state.activeProduct||state.selectedProduct||state.recommendedProduct);
   const actionableFit=Boolean(
-    (state.useCase&&state.problem)
+    specificActionablePain(state.problem)
+    || (state.useCase&&state.problem)
     || (state.priorities?.length??0)>0
     || (state.explicitPriorities?.length??0)>0
   );
