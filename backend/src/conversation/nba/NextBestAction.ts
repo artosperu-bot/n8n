@@ -20,9 +20,9 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
       return state.selectedProduct || (state.interestSignal && state.activeProduct) ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
     case 'PRODUCT_INFO':
-      return state.useCase || state.problem || (state.priorities?.length ?? 0) > 0
-        ? 'ANSWER_ONLY'
-        : 'ASK_MISSING_FACT';
+      // Browsing a product is not a request to advance the sale. Answer the
+      // overview well, remember the product, and let the customer keep exploring.
+      return 'ANSWER_ONLY';
 
     case 'ATTRIBUTE':
     case 'CAPABILITY':
