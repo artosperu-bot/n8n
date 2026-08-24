@@ -126,31 +126,37 @@ function naturalList(values:string[]):string{
   if(clean.length===2)return`${clean[0]} y ${clean[1]}`;
   return`${clean.slice(0,-1).join(', ')} y ${clean.at(-1)}`;
 }
-function ruggedCertificationName(fact:{key:string;value:string}):string|null{
-  const text=fold(`${fact.key} ${fact.value}`);
-  if(/ip69k/.test(text))return'IP69K';
-  if(/ip68/.test(text))return'IP68';
-  if(/mil[- _]?std[- _]?810h|mil.*810h/.test(text))return'MIL-STD-810H';
-  return null;
+function ruggedCertifications(input:LlmWriteInput):string[]{
+  const evidence=fold((input.verifiedFeatures??[]).map(fact=>`${fact.key} ${fact.value}`).join(' '));
+  const result:string[]=[];
+  if(/\bip68\b/.test(evidence))result.push('IP68');
+  if(/\bip69k\b/.test(evidence))result.push('IP69K');
+  if(/mil[- _]?std[- _]?810h|mil[^a-z0-9]{0,6}810h/.test(evidence))result.push('MIL-STD-810H');
+  return result;
 }
-function ruggedCertifications(input:LlmWriteInput):string[]{return[...new Set((input.verifiedFeatures??[]).map(ruggedCertificationName).filter((value):value is string=>Boolean(value)))];}
+function ruggedDropLabel(input:LlmWriteInput):string|null{
+  const raw=(input.verifiedFeatures??[]).map(fact=>`${fact.key} ${fact.value}`).join(' ');
+  const normalized=fold(raw);
+  if(!/caida/.test(normalized))return null;
+  const after=normalized.match(/caida(?:s)?[^0-9]{0,35}(\d+(?:[.,]\d+)?)\s*m\b/);
+  const before=normalized.match(/(\d+(?:[.,]\d+)?)\s*m\b[^.!;]{0,35}caida(?:s)?/);
+  const value=(after?.[1]??before?.[1]??'').replace(',','.');
+  return value?`resistencia a caídas de ${value} m`:null;
+}
 function ruggedFabCore(input:LlmWriteInput,product:string):string|null{
   const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''} ${(input.priorities??input.state?.priorities??[]).join(' ')}`);
   if(!/caida|golpe|construccion|obra|campo|repar|polvo|lluvia|agua|humedad/.test(context))return null;
-  const features=input.verifiedFeatures??[];
-  const drop=features.find(fact=>/resisten.*caida|caida/.test(fold(`${fact.key} ${fact.value}`)));
+  const dropLabel=ruggedDropLabel(input);
   const certs=ruggedCertifications(input);
   const featureParts:string[]=[];
-  if(drop)featureParts.push(simpleFactLabel(drop));
+  if(dropLabel)featureParts.push(dropLabel);
   if(certs.length)featureParts.push(`certificaciones ${naturalList(certs)}`);
   if(!featureParts.length)return null;
-  const hasImpact=Boolean(drop||certs.includes('MIL-STD-810H'));
+  const hasImpact=Boolean(dropLabel||certs.includes('MIL-STD-810H'));
   const hasIngress=certs.includes('IP68')||certs.includes('IP69K');
-  const protection=[hasImpact?'golpes y caídas':'',hasIngress?'agua y polvo':''].filter(Boolean);
+  const protection=hasImpact&&hasIngress?'golpes, caídas, agua y polvo':hasImpact?'golpes y caídas':hasIngress?'agua y polvo':'uso exigente';
   const intro=/repar/.test(context)?`En ese caso me iría por ${product}`:`Para ese ritmo me iría por ${product}`;
-  const benefit=protection.length
-    ?`En palabras simples, está mucho mejor preparado para ${naturalList(protection)}; si lo usas para trabajar, eso ayuda a reducir el riesgo de volver al mismo ciclo de caída, reparación y quedarte sin equipo.`
-    :'En palabras simples, esas protecciones sí tienen sentido para un uso más exigente.';
+  const benefit=`En palabras simples, está mucho mejor preparado para ${protection}; si lo usas para trabajar, eso ayuda a reducir el riesgo de volver al mismo ciclo de caída, reparación y quedarte sin equipo.`;
   return`${intro}: tiene ${naturalList(featureParts)}. ${benefit}`;
 }
 function compactContextualCore(input:LlmWriteInput,fallback:string):string{
@@ -195,6 +201,7 @@ function missesRequiredCloseResult(text:string,input:LlmWriteInput):boolean{
   const value=String(text??'');
   if(plan.closePurpose==='RESERVATION')return !/reserv|separ/i.test(value);
   if(plan.closePurpose==='PRICE_AVAILABILITY')return !(/precio/i.test(value)&&/disponib|stock/i.test(value));
+  if(plan.closePurpose==='FULFILLMENT_RESUME')return !(/env[ií]o/i.test(value)&&/recoger|recojo|local/i.test(value));
   if(plan.closePurpose==='FULFILLMENT'){
     const needsPrice=input.quote?.price!=null;const needsAvailability=input.quote?.stock!=null;
     const priceOk=!needsPrice||/S\/\s*\d/i.test(value);const stockOk=!needsAvailability||/disponib|stock/i.test(value);
