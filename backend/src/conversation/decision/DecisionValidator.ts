@@ -4,7 +4,7 @@ import { fold } from '../../shared/text.ts';
 import { compatibleNba } from '../nba/NbaCompatibility.ts';
 import { nextBestAction as deterministicNextBestAction } from '../nba/NextBestAction.ts';
 
-const INTENTS=new Set(['GREETING','PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','BUDGET_CONSTRAINT','RECOMMEND','RECOMMEND_WITHIN_BUDGET','COMPARE','PRICE_AVAILABILITY','PRICE','STOCK','IMAGES','IMAGE','POLICY','WARRANTY','OBJECTION','HANDLE_PRICE_OBJECTION','PURCHASE','HUMAN','QUOTE','CATALOG','CATEGORIES','SUBCATEGORIES','ORDER_STATUS','OTHER']);
+const INTENTS=new Set(['GREETING','PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','BUDGET_CONSTRAINT','RECOMMEND','RECOMMEND_WITHIN_BUDGET','COMPARE','PRICE_AVAILABILITY','PRICE','STOCK','IMAGES','IMAGE','POLICY','FULFILLMENT_SELECTION','WARRANTY','OBJECTION','HANDLE_PRICE_OBJECTION','PURCHASE','HUMAN','QUOTE','CATALOG','CATEGORIES','SUBCATEGORIES','ORDER_STATUS','OTHER']);
 const INTENT_ALIASES:Record<string,string>={
   PURCHASE_INTENT:'PURCHASE',BUY_PRODUCT:'PURCHASE',PURCHASE_CONFIRMATION:'PURCHASE',CONFIRM_PURCHASE:'PURCHASE',
   STOCK_CHECK:'STOCK',CHECK_AVAILABILITY:'STOCK',AVAILABILITY_QUERY:'STOCK',
@@ -30,7 +30,7 @@ function forcedInstitutionalRag(intent:string):boolean{return['POLICY','WARRANTY
 function sameStringListContains(values:string[],target:string):boolean{return values.some(value=>fold(value)===fold(target));}
 function sameProduct(a:string|null|undefined,b:string|null|undefined):boolean{return Boolean(a&&b&&fold(a)===fold(b));}
 function strongStage(intent:string):string|null{if(intent==='PURCHASE')return'CIERRE';if(['HUMAN','QUOTE'].includes(intent))return'CIERRE_ASISTIDO';return null;}
-function factualSemanticIntent(intent:string):boolean{return['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','PRICE_AVAILABILITY','PRICE','STOCK','IMAGES','IMAGE','POLICY','WARRANTY','ORDER_STATUS'].includes(intent);}
+function factualSemanticIntent(intent:string):boolean{return['PRODUCT_INFO','ATTRIBUTE','CAPABILITY','PRICE_AVAILABILITY','PRICE','STOCK','IMAGES','IMAGE','POLICY','FULFILLMENT_SELECTION','WARRANTY','ORDER_STATUS'].includes(intent);}
 
 export function validateTurnDecision(decision:TurnDecision,state:ConversationState,catalogCandidates:string[]=[],fallbackDecision?:TurnDecision):TurnDecision{
   const universe=unique([...catalogCandidates,state.activeProduct,state.queryTarget,state.salientProduct,state.selectedProduct,state.recommendedProduct,...(state.comparisonProducts??[])]);
@@ -61,7 +61,7 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
 
   if(currentMentions.length===1){targetProduct=currentMentions[0];authorityReason='CURRENT_MENTION';if(!(fallbackDecision?.explicitSwitch===true)&&fallbackReference!=='COMPARISON_ALTERNATIVE')referenceType='NAMED_QUERY_TARGET';}
 
-  const factualFallback=['PRICE','STOCK','CAPABILITY','IMAGE','PRODUCT_INFO'].includes(String(fallbackIntent??''));
+  const factualFallback=['PRICE','STOCK','CAPABILITY','IMAGE','PRODUCT_INFO','FULFILLMENT_SELECTION'].includes(String(fallbackIntent??''));
   if(currentMentions.length===0&&fallbackReference==='ACTIVE_PRODUCT_FALLBACK'&&knownFallbackTarget&&factualFallback){targetProduct=knownFallbackTarget;referenceType='ACTIVE_PRODUCT_FALLBACK';authorityReason='ACTIVE_FACTUAL_FALLBACK';}
 
   if(currentMentions.length===0&&!knownDecisionTarget&&knownFallbackTarget&&['ACTIVE_PRODUCT_FALLBACK','RECOMMENDED_FALLBACK','RECOMMENDED_REFERENT','COMPARISON_ALTERNATIVE','SELECTION_REFERENT'].includes(String(fallbackReference??''))){targetProduct=knownFallbackTarget;referenceType=fallbackReference;authorityReason='CONTEXT_FALLBACK';}
