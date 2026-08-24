@@ -2,7 +2,7 @@ import type { ConversationState } from '../../domain/types.ts';
 import { fold } from '../../shared/text.ts';
 
 type IntentLike = { primary: string; attributes?: string[] };
-const FICHA = ['PANTALLA','RENDIMIENTO','MEMORIA','CAMARA','BATERIA','RESISTENCIA'];
+const FICHA = ['PANTALLA','RENDIMIENTO','MEMORIA','CAMARA','BATERIA','RESISTENCIA','TERMICA'];
 const SECTIONS = new Set(['AUDIO','BATERIA','CAMARA','CONECTIVIDAD','FISICO','FUNCIONES','IDENTIFICACION','LANZAMIENTO','MEMORIA','PANTALLA','POSICIONAMIENTO','REDES','RENDIMIENTO','RESISTENCIA','SEGURIDAD','SENSORES','SIM','SISTEMA','TERMICA']);
 function unique(values: string[]): string[] { return [...new Set(values.filter(Boolean))]; }
 
