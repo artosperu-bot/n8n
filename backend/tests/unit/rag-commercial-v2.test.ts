@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { extractCommercialFacts } from '../../src/conversation/commercial/CommercialFacts.ts';
 import { buildFullRagAnswer } from '../../src/conversation/commercial/FullRagAnswerKernel.ts';
 import { resolveIntentPlan } from '../../src/conversation/intent/IntentPlan.ts';
 import { evaluatePostAnswerCommercialProgression } from '../../src/conversation/nba/PostAnswerCommercialProgression.ts';
@@ -70,6 +71,14 @@ test('queried attributes do not become explicit comparison priorities',()=>{
   assert.deepEqual(queried.explicitPriorities,[]);
   const preferred=reduceState(queried,{lastIntent:'OTHER',lastRoute:'COMMERCIAL_REASONING',lastUserMessage:'Para mí lo más importante es la batería'} as any);
   assert.deepEqual(preferred.explicitPriorities,['bateria']);
+});
+
+test('construction is persisted as a genuine use context for a later comparison',()=>{
+  const facts=extractCommercialFacts('Lo quiero para trabajar en construcción.',{});
+  assert.equal(facts.useCase,'trabajo_construccion');
+  const result=buildFullRagAnswer({message:'Ya vi los dos, cuál me conviene?',intent:'COMPARE',state:{useCase:facts.useCase,comparisonProducts:['Armor 22','Armor X13']},rag:[...armor22,...armorX13]} as any);
+  assert.ok(result);
+  assert.match(result!.answer,/resistencia|batería/i);
 });
 
 test('comparison uses remembered explicit customer priority before generic catalog differences',()=>{
