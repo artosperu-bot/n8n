@@ -89,6 +89,22 @@ test('construction problem does not jump to budget as the next SPIN question',()
   assert.equal(prepared.missingFact,'impacto del problema');
 });
 
+test('writer contract uses only explicit customer implications, never ones derived from a problem label',()=>{
+  const onlyProblem=prepareCommercialWriteInput({
+    message:'Se me cae seguido el celular.',intent:'EVALUATE_USE',
+    state:{useCase:'trabajo_construccion',problem:'caidas_frecuentes'},decision:{nextBestAction:'ASK_MISSING_FACT'} as any,
+    allowedProducts:[],
+  });
+  assert.deepEqual(onlyProblem.implications,[]);
+
+  const explicit=prepareCommercialWriteInput({
+    message:'Cuando se rompe pierdo horas de trabajo.',intent:'EVALUATE_USE',
+    state:{useCase:'trabajo_construccion',problem:'caidas_frecuentes',spinFacts:['implicacion:perdida_tiempo_interrupcion']},decision:{nextBestAction:'RECOMMEND'} as any,
+    allowedProducts:[],
+  });
+  assert.deepEqual(explicit.implications,['perdida_tiempo_interrupcion']);
+});
+
 test('writer executes the authorized implication question and only one question',async()=>{
   const prepared=prepareCommercialWriteInput({
     message:'Se me cae seguido el celular.',intent:'EVALUATE_USE',
