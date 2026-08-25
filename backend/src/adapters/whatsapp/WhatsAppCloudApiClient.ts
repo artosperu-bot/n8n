@@ -27,17 +27,42 @@ export class WhatsAppCloudApiClient{
     this.#retryBaseDelayMs=Math.max(0,Math.min(5000,Math.floor(options.retryBaseDelayMs??250)));
     this.#sleeper=options.sleeper??(ms=>new Promise(resolve=>setTimeout(resolve,ms)));
   }
-  async sendText(to:string,text:string):Promise<{messageId:string|null}>{
+  #messageUrl():string{return`https://graph.facebook.com/${encodeURIComponent(this.#version)}/${encodeURIComponent(this.#phoneNumberId)}/messages`;}
+  #messagePayload(to:string,text:string){return{messaging_product:'whatsapp',recipient_type:'individual',to,type:'text',text:{preview_url:false,body:text}};}
+  #validateText(to:string,text:string):{recipient:string;bodyText:string}{
     const recipient=String(to??'').trim();const bodyText=String(text??'').trim();
     if(!recipient)throw new Error('WHATSAPP_RECIPIENT_REQUIRED');
     if(!bodyText)throw new Error('WHATSAPP_TEXT_REQUIRED');
-    const url=`https://graph.facebook.com/${encodeURIComponent(this.#version)}/${encodeURIComponent(this.#phoneNumberId)}/messages`;
+    return{recipient,bodyText};
+  }
+  async sendTextOnce(to:string,text:string):Promise<{messageId:string|null}>{
+    const {recipient,bodyText}=this.#validateText(to,text);
+    let response:Response;
+    try{
+      response=await this.#fetcher(this.#messageUrl(),{
+        method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${this.#accessToken}`},
+        body:JSON.stringify(this.#messagePayload(recipient,bodyText)),
+      });
+    }catch(error){
+      const diagnostic=safeDiagnostic(error instanceof Error?error.message:String(error));
+      throw new Error(`WHATSAPP_AMBIGUOUS_SEND${diagnostic?`: ${diagnostic}`:''}`);
+    }
+    if(!response.ok){
+      const diagnostic=safeDiagnostic(await response.text().catch(()=>''));
+      throw new Error(`WhatsApp Graph API HTTP ${response.status}${diagnostic?`: ${diagnostic}`:''}`);
+    }
+    const json=await response.json().catch(()=>({})) as any;
+    return{messageId:typeof json?.messages?.[0]?.id==='string'?json.messages[0].id:null};
+  }
+  async sendText(to:string,text:string):Promise<{messageId:string|null}>{
+    const {recipient,bodyText}=this.#validateText(to,text);
+    const url=this.#messageUrl();
     let response:Response|null=null;let networkError:unknown=null;
     for(let attempt=1;attempt<=this.#retryMaxAttempts;attempt+=1){
       try{
         response=await this.#fetcher(url,{
           method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${this.#accessToken}`},
-          body:JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',to:recipient,type:'text',text:{preview_url:false,body:bodyText}}),
+          body:JSON.stringify(this.#messagePayload(recipient,bodyText)),
         });
         networkError=null;
       }catch(error){networkError=error;response=null;}
