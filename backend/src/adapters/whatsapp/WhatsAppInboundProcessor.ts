@@ -8,7 +8,8 @@ type EngineLike={processTurn(input:{sessionId:string;message:string;messageId?:s
 type WhatsAppSender={sendText(to:string,text:string):Promise<{messageId:string|null}>};
 
 type ProcessResult={processed:boolean;duplicate?:boolean;suppressed?:boolean};
-type Options={crm:CrmRepository;engine:EngineLike;whatsapp:WhatsAppSender|null;automationScheduler?:Pick<AutomationScheduler,'onCustomerMessage'>|null;burstWindowMs?:number;persistenceRetryAttempts?:number;retryBaseDelayMs?:number;sleeper?:(ms:number)=>Promise<void>};
+type AutomationSchedulerLike=Pick<AutomationScheduler,'onCustomerMessage'|'onBotMessage'>;
+type Options={crm:CrmRepository;engine:EngineLike;whatsapp:WhatsAppSender|null;automationScheduler?:AutomationSchedulerLike|null;burstWindowMs?:number;persistenceRetryAttempts?:number;retryBaseDelayMs?:number;sleeper?:(ms:number)=>Promise<void>};
 
 function duplicateError(error:unknown):boolean{
   const value=error instanceof Error?error.message:String(error);
@@ -25,11 +26,12 @@ export class WhatsAppInboundProcessor{
   readonly #crm:CrmRepository;
   readonly #engine:EngineLike;
   readonly #whatsapp:WhatsAppSender|null;
-  readonly #automationScheduler:Pick<AutomationScheduler,'onCustomerMessage'>|null;
+  readonly #automationScheduler:AutomationSchedulerLike|null;
   readonly #aggregator:WhatsAppTurnAggregator<WhatsAppInboundMessage,ProcessResult>;
   readonly #persistenceRetryAttempts:number;
   readonly #retryBaseDelayMs:number;
   readonly #sleeper:(ms:number)=>Promise<void>;
+  readonly #duplicateInboundIds=new Set<string>();
   constructor(options:Options){
     this.#crm=options.crm;this.#engine=options.engine;this.#whatsapp=options.whatsapp;this.#automationScheduler=options.automationScheduler??null;
     this.#persistenceRetryAttempts=Math.max(1,Math.min(5,Math.floor(options.persistenceRetryAttempts??3)));
@@ -65,15 +67,16 @@ export class WhatsAppInboundProcessor{
     const sessionId=`whatsapp:${message.waId}`;
     const sourceSentAt=providerTimestampIso(message.timestamp);
     const inbound=await this.#crm.recordInbound({sessionId,messageId:message.waMessageId,content:message.text,contactName:message.contactName,waId:message.waId,sourceSentAt});
-    if(inbound.duplicate)writeTrace({event:'WHATSAPP_DUPLICATE',stage:'CRM_INBOUND_CONTINUE_TO_ENGINE'});
+    if(inbound.duplicate){this.#duplicateInboundIds.add(message.waMessageId);writeTrace({event:'WHATSAPP_DUPLICATE',stage:'CRM_INBOUND_CONTINUE_TO_ENGINE'});}
     if(this.#automationScheduler){
       try{
         await this.#automationScheduler.onCustomerMessage({sessionId,messageId:message.waMessageId,recipient:message.waId,sourceSentAt,duplicate:Boolean(inbound.duplicate),attentionMode:inbound.mode});
       }catch(error){
-        writeTrace({event:'WHATSAPP_AUTOMATION_ERROR',stage:'SCHEDULE_AFTER_INBOUND',error:error instanceof Error?error.message:String(error)},'error');
+        writeTrace({event:'WHATSAPP_AUTOMATION_ERROR',stage:'CANCEL_AFTER_CUSTOMER_INBOUND',error:error instanceof Error?error.message:String(error)},'error');
       }
     }
     if(inbound.mode!=='BOT'){
+      this.#duplicateInboundIds.delete(message.waMessageId);
       writeTrace({event:'WHATSAPP_INBOUND',status:'STORED_NO_BOT',attentionMode:inbound.mode});
       return{processed:false,suppressed:true};
     }
@@ -82,6 +85,8 @@ export class WhatsAppInboundProcessor{
 
   async #processLogicalBatch(batch:WhatsAppLogicalBatch<WhatsAppInboundMessage>):Promise<ProcessResult|{superseded:true}>{
     const messages=batch.values;const latest=messages.at(-1)!;const content=messages.map(message=>message.text?.trim()).filter(Boolean).join('\n');
+    const suppressAutomation=messages.some(message=>this.#duplicateInboundIds.has(message.waMessageId));
+    for(const message of messages)this.#duplicateInboundIds.delete(message.waMessageId);
     await this.#auditAggregation({sessionId:batch.sessionId,messageIds:batch.physicalMessageIds,logicalMessageId:batch.logicalMessageId,status:batch.status});
     writeTrace({event:'WHATSAPP_AGGREGATION',status:batch.status,physicalCount:messages.length,logicalMessageId:batch.logicalMessageId});
     let result:any;
@@ -106,6 +111,13 @@ export class WhatsAppInboundProcessor{
     const sent=await this.#whatsapp.sendText(latest.waId,answer);
     if(!sent.messageId)throw new Error('WHATSAPP_MESSAGE_ID_REQUIRED');
     await this.#recordBotWithRetry({sessionId:batch.sessionId,messageId:sent.messageId,content:answer,waId:latest.waId});
+    if(this.#automationScheduler&&!suppressAutomation){
+      try{
+        await this.#automationScheduler.onBotMessage({sessionId:batch.sessionId,customerMessageId:latest.waMessageId,recipient:latest.waId,botSentAt:new Date().toISOString(),attentionMode:'BOT'});
+      }catch(error){
+        writeTrace({event:'WHATSAPP_AUTOMATION_ERROR',stage:'SCHEDULE_AFTER_BOT_REPLY',error:error instanceof Error?error.message:String(error)},'error');
+      }
+    }
     return{processed:true};
   }
 
