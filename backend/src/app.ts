@@ -144,19 +144,19 @@ export function createStechApp(options:AppOptions = {}) {
       const takeMatch=url.pathname.match(/^\/api\/whatsapp\/conversations\/([^/]+)\/take$/);
       if(takeMatch&&req.method==='POST'){
         const who=await actor(req);const body=await readJson(req);const version=number(body.version);if(version===null)throw new Error('VERSION_REQUIRED');
-        const id=decodeURIComponent(takeMatch[1]);return send(res,200,await requireCrm().changeMode({sessionId:id,mode:'HUMANO',version,actorId:who.id,reason:String(body.reason??'Tomada desde CRM')}));
+        const id=decodeURIComponent(takeMatch[1]);return send(res,200,await requireCrm().changeMode({sessionId:id,mode:'HUMANO',version,actorId:who.userId,reason:String(body.reason??'Tomada desde CRM')}));
       }
       const returnBotMatch=url.pathname.match(/^\/api\/whatsapp\/conversations\/([^/]+)\/return-bot$/);
       if(returnBotMatch&&req.method==='POST'){
         const who=await actor(req);const body=await readJson(req);const version=number(body.version);if(version===null)throw new Error('VERSION_REQUIRED');
-        const id=decodeURIComponent(returnBotMatch[1]);return send(res,200,await requireCrm().changeMode({sessionId:id,mode:'BOT',version,actorId:who.id,reason:String(body.reason??'Devuelta a BOT desde CRM')}));
+        const id=decodeURIComponent(returnBotMatch[1]);return send(res,200,await requireCrm().changeMode({sessionId:id,mode:'BOT',version,actorId:who.userId,reason:String(body.reason??'Devuelta a BOT desde CRM')}));
       }
       if(crmMessagesMatch&&req.method==='POST'){
         const who=await actor(req);const repository=requireCrm();const body=await readJson(req);const version=number(body.version);const content=String(body.content??'').trim();
         if(version===null||!content)throw new Error('MESSAGE_AND_VERSION_REQUIRED');if(!whatsapp)throw new Error('WHATSAPP_NOT_CONFIGURED');
         const id=decodeURIComponent(crmMessagesMatch[1]);const detail=await repository.getConversation(id);if(!detail.recipient)throw new Error('WHATSAPP_RECIPIENT_REQUIRED');
         if(String(detail.session?.modo_atencion??'').toUpperCase()==='CERRADO')throw new Error('SESSION_CLOSED');
-        const mode=await repository.changeMode({sessionId:id,mode:'HUMANO',version,actorId:who.id,reason:'Mensaje enviado por asesor desde CRM'});
+        const mode=await repository.changeMode({sessionId:id,mode:'HUMANO',version,actorId:who.userId,reason:'Mensaje enviado por asesor desde CRM'});
         const sent=await whatsapp.sendText(detail.recipient,content);if(!sent.messageId)throw new Error('WHATSAPP_MESSAGE_ID_REQUIRED');
         await repository.recordAdvisorMessage({sessionId:id,messageId:sent.messageId,content,actor:who});
         return send(res,200,{messageId:sent.messageId,modo_atencion:mode?.modo_atencion??'HUMANO',version:mode?.version??null});
