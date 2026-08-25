@@ -33,10 +33,22 @@ test('HUMANO or ESPERANDO_ASESOR inbound is stored but never invokes bot or send
   }
 });
 
+test('CRM message duplicate still reaches engine so unfinished first delivery can recover',async()=>{
+  let engineCalls=0;
+  const processor=new WhatsAppInboundProcessor({
+    crm:{async recordInbound(){return{mode:'BOT',version:1,duplicate:true};},async recordBotMessage(){}} as any,
+    engine:{async processTurn(){engineCalls+=1;return{answer:'Recuperada',state:{blockAutomaticReply:false}};}} as any,
+    whatsapp:{async sendText(){return{messageId:'wamid.RECOVERED'};}} as any,
+  });
+  const result=await processor.processMessage(message as any);
+  assert.equal(engineCalls,1);
+  assert.equal(result.processed,true);
+});
+
 test('duplicate acquire from engine is treated as ignored webhook duplicate, not a second reply',async()=>{
   let sends=0;
   const processor=new WhatsAppInboundProcessor({
-    crm:{async recordInbound(){return{mode:'BOT',version:1};},async recordBotMessage(){}} as any,
+    crm:{async recordInbound(){return{mode:'BOT',version:1,duplicate:true};},async recordBotMessage(){}} as any,
     engine:{async processTurn(){throw new Error('Supabase turn acquire rejected: ALREADY_DONE');}} as any,
     whatsapp:{async sendText(){sends+=1;return{messageId:'x'};}} as any,
   });
