@@ -37,6 +37,7 @@ export type AppConfig = {
   whatsappPhoneNumberId?: string;
   whatsappAppId?: string;
   whatsappGraphApiVersion: string;
+  crmAllowedOrigins:string[];
 };
 
 type EnvLike = Record<string, string | undefined>;
@@ -44,6 +45,10 @@ type EnvLike = Record<string, string | undefined>;
 function bool(value: string | undefined, fallback = false): boolean {
   if (value == null || value === '') return fallback;
   return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+}
+function csv(value:string|undefined,fallback:string[]):string[]{
+  const items=String(value??'').split(',').map(item=>item.trim()).filter(Boolean);
+  return items.length?[...new Set(items)]:fallback;
 }
 
 export function loadConfig(env: EnvLike = process.env): AppConfig {
@@ -88,5 +93,6 @@ export function loadConfig(env: EnvLike = process.env): AppConfig {
     whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
     whatsappAppId: env.WHATSAPP_APP_ID,
     whatsappGraphApiVersion: env.WHATSAPP_GRAPH_API_VERSION ?? 'v25.0',
+    crmAllowedOrigins:csv(env.CRM_ALLOWED_ORIGINS,['http://localhost:5173','http://127.0.0.1:5173']),
   };
 }
