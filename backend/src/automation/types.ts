@@ -1,4 +1,4 @@
-export type AutomationEventType='CUSTOMER_MESSAGE_RECEIVED';
+export type AutomationEventType='CUSTOMER_MESSAGE_RECEIVED'|'BOT_MESSAGE_SENT';
 export type AutomationActionType='SEND_TEXT';
 export type AutomationJobStatus='PENDING'|'PROCESSING'|'SENT'|'CANCELLED'|'SKIPPED'|'FAILED'|'AMBIGUOUS';
 
