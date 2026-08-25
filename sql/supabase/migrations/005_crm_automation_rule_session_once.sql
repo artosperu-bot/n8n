@@ -106,6 +106,8 @@ end;
 $$;
 
 revoke all on function public.crm_schedule_automation_job_once(uuid,text,text,text,text,timestamptz) from public;
+revoke all on function public.crm_schedule_automation_job_once(uuid,text,text,text,text,timestamptz) from anon;
+revoke all on function public.crm_schedule_automation_job_once(uuid,text,text,text,text,timestamptz) from authenticated;
 grant execute on function public.crm_schedule_automation_job_once(uuid,text,text,text,text,timestamptz) to service_role;
 
 commit;
