@@ -38,4 +38,15 @@ export class WhatsAppCloudApiClient{
     const json=await response.json().catch(()=>({})) as any;
     return{messageId:typeof json?.messages?.[0]?.id==='string'?json.messages[0].id:null};
   }
+  async getStatus():Promise<{configured:true;reachable:true;phoneNumberId:string;displayPhoneNumber:string|null;verifiedName:string|null;qualityRating:string|null;graphApiVersion:string}>{
+    const url=new URL(`https://graph.facebook.com/${encodeURIComponent(this.#version)}/${encodeURIComponent(this.#phoneNumberId)}`);
+    url.searchParams.set('fields','id,display_phone_number,verified_name,quality_rating');
+    const response=await this.#fetcher(url,{headers:{authorization:`Bearer ${this.#accessToken}`}});
+    if(!response.ok){
+      const diagnostic=safeDiagnostic(await response.text().catch(()=>''));
+      throw new Error(`WhatsApp Graph API HTTP ${response.status}${diagnostic?`: ${diagnostic}`:''}`);
+    }
+    const json=await response.json().catch(()=>({})) as any;
+    return{configured:true,reachable:true,phoneNumberId:String(json?.id??this.#phoneNumberId),displayPhoneNumber:typeof json?.display_phone_number==='string'?json.display_phone_number:null,verifiedName:typeof json?.verified_name==='string'?json.verified_name:null,qualityRating:typeof json?.quality_rating==='string'?json.quality_rating:null,graphApiVersion:this.#version};
+  }
 }
