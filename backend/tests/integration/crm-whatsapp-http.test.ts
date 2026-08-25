@@ -67,3 +67,19 @@ test('separate WhatsApp status endpoint reports backend-to-Meta connectivity',as
   assert.equal(body.reachable,true);
   assert.equal(body.configured,true);
 }));
+
+test('CRM HTTP response never returns internal secret text from thrown adapter errors',async()=>{
+  const crmAuth={async authenticate(){return{id:'crm-user-1',userId:'auth-user-1',email:'admin@s-tech.com.pe',name:'Admin',role:'ADMIN'};}} as any;
+  const crm={async listWhatsAppConversations(){throw new Error('SUPABASE_SERVICE_ROLE_KEY=SUPER-SECRET-TOKEN Authorization: Bearer ALSO-SECRET');}} as any;
+  const app=createStechApp({env:{STECH_PROFILE:'test'},crmAuth,crm});
+  await app.listen(0,'127.0.0.1');
+  try{
+    const address=app.address();if(!address||typeof address==='string')throw new Error('no address');
+    const response=await fetch(`http://127.0.0.1:${address.port}/api/whatsapp/conversations`,{headers:{authorization:'Bearer user-jwt'}});
+    assert.equal(response.status,500);
+    const text=await response.text();
+    assert.ok(!text.includes('SUPER-SECRET-TOKEN'));
+    assert.ok(!text.includes('ALSO-SECRET'));
+    assert.match(text,/INTERNAL_ERROR/);
+  }finally{await app.close();}
+});
