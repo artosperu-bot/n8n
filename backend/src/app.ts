@@ -42,6 +42,23 @@ function applyCors(req:IncomingMessage,res:ServerResponse,allowedOrigins:string[
   return allowed;
 }
 function validMode(value:string|null):CrmAttentionMode|null{const mode=String(value??'').toUpperCase();return['BOT','ESPERANDO_ASESOR','HUMANO','CERRADO'].includes(mode)?mode as CrmAttentionMode:null;}
+function whatsappPayloadSummary(body:any,parsed:{messages:any[];statuses:any[];changeCount:number}){
+  const entries=Array.isArray(body?.entry)?body.entry:[];
+  const changes=entries.flatMap((entry:any)=>Array.isArray(entry?.changes)?entry.changes:[]);
+  const fields=[...new Set(changes.map((change:any)=>typeof change?.field==='string'?change.field:null).filter(Boolean))];
+  const hasMessages=changes.some((change:any)=>Array.isArray(change?.value?.messages)&&change.value.messages.length>0);
+  const hasStatuses=changes.some((change:any)=>Array.isArray(change?.value?.statuses)&&change.value.statuses.length>0);
+  return{
+    object:typeof body?.object==='string'?body.object:null,
+    entryCount:entries.length,
+    changeCount:parsed.changeCount,
+    fields,
+    hasMessages,
+    hasStatuses,
+    parsedMessages:parsed.messages.length,
+    parsedStatuses:parsed.statuses.length,
+  };
+}
 
 export function createStechApp(options:AppOptions = {}) {
   const runtime = buildRuntime(options.env ?? process.env);
@@ -57,6 +74,18 @@ export function createStechApp(options:AppOptions = {}) {
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
+      if(req.method==='POST'&&url.pathname.toLowerCase().includes('whatsapp')){
+        writeTrace({
+          event:'[WHATSAPP][HTTP_IN]',
+          method:req.method,
+          url:url.pathname,
+          routeMatched:url.pathname==='/webhooks/whatsapp',
+          contentType:req.headers['content-type']??null,
+          userAgent:req.headers['user-agent']??null,
+          contentLength:req.headers['content-length']??null,
+          timestamp:new Date().toISOString(),
+        });
+      }
       applyCors(req,res,runtime.config.crmAllowedOrigins);
       if(req.method==='OPTIONS'&&url.pathname.startsWith('/api/'))return sendEmpty(res,204);
 
@@ -67,8 +96,17 @@ export function createStechApp(options:AppOptions = {}) {
         return sendText(res,200,verification.challenge??'');
       }
       if (url.pathname === '/webhooks/whatsapp' && req.method === 'POST') {
-        const body=await readJson(req);
-        const parsed=parseWhatsAppWebhook(body);
+        let body:any;
+        try{body=await readJson(req);}catch(error){
+          writeTrace({event:'[WHATSAPP][BODY_ERROR]',stage:'READ_JSON',status:400,error:error instanceof SyntaxError?'INVALID_JSON':'BODY_READ_ERROR',timestamp:new Date().toISOString()},'error');
+          return send(res,400,{error:'INVALID_JSON'});
+        }
+        let parsed;
+        try{parsed=parseWhatsAppWebhook(body);}catch(error){
+          writeTrace({event:'[WHATSAPP][BODY_ERROR]',stage:'WEBHOOK_PARSER',status:400,error:'PARSER_ERROR',timestamp:new Date().toISOString()},'error');
+          return send(res,400,{error:'INVALID_WEBHOOK_PAYLOAD'});
+        }
+        writeTrace({event:'[WHATSAPP][PAYLOAD_ACCEPTED]',...whatsappPayloadSummary(body,parsed),timestamp:new Date().toISOString()});
         send(res,200,{received:true});
         queueMicrotask(()=>{
           if(parsed.messages.length)writeTrace({event:'WHATSAPP_INBOUND',count:parsed.messages.length,types:[...new Set(parsed.messages.map(message=>message.type))]});
