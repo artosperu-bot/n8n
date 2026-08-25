@@ -107,6 +107,6 @@ export class SupabaseCrmRepository implements CrmRepository{
   async recordAdvisorMessage(input:{sessionId:string;messageId:string;content:string;actor:CrmActor}):Promise<void>{
     await this.#ensureWhatsAppSession(input.sessionId);
     await this.#markWhatsAppContext(input.sessionId);
-    await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'ASESOR',contenido:input.content,canal:'whatsapp',asesor_id:input.actor.id,metadata:{source:'stech_crm',actor_email:input.actor.email,actor_name:input.actor.name,actor_role:input.actor.role}}],'CRM advisor message');
+    await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'ASESOR',contenido:input.content,canal:'whatsapp',asesor_id:input.actor.userId,metadata:{source:'stech_crm',actor_email:input.actor.email,actor_name:input.actor.name,actor_role:input.actor.role}}],'CRM advisor message');
   }
 }
