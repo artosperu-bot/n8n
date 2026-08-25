@@ -58,6 +58,13 @@ export type CreateAutomationRuleInput={
   priority:number;
 };
 
+export type UpdateAutomationRuleInput={
+  name:string;
+  delaySeconds:number;
+  messageTemplate:string;
+  priority:number;
+};
+
 export interface AutomationRepository{
   listActiveRules(eventType:AutomationEventType):Promise<AutomationRule[]>;
   cancelPending(sessionId:string,reason:string):Promise<number>;
@@ -68,6 +75,7 @@ export interface AutomationRepository{
   recordExecution(input:AutomationExecutionOutcome):Promise<void>;
   listRules():Promise<AutomationRule[]>;
   createRule(input:CreateAutomationRuleInput):Promise<AutomationRule>;
+  updateRule(id:string,input:UpdateAutomationRuleInput):Promise<AutomationRule>;
   setRuleActive(id:string,active:boolean):Promise<AutomationRule>;
   listJobs(filters?:{sessionId?:string|null;limit?:number|null}):Promise<AutomationJob[]>;
 }

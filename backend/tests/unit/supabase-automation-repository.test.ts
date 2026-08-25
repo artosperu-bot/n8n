@@ -40,7 +40,7 @@ test('once-per-session scheduling RPC maps the single newly created job',async()
   assert.equal(result?.eventType,'BOT_MESSAGE_SENT');
 });
 
-test('claims due jobs through transactional RPC and includes rule message template',async()=>{
+test('claims due jobs through transactional RPC and includes frozen message template',async()=>{
   const calls:any[]=[];
   const fetcher:any=async(url:any,init:any={})=>{calls.push({url:String(url),body:init.body?JSON.parse(init.body):null});return response([{id:'j1',rule_id:'r1',session_id:'whatsapp:51999',event_type:'BOT_MESSAGE_SENT',basis_message_id:'wamid.customer.1',recipient:'51999',execute_at:'2026-08-25T20:00:00Z',status:'PROCESSING',attempt_count:1,lease_owner:'w1',lease_until:'2026-08-25T20:01:00Z',message_template:'¿Sigues interesado?'}]);};
   const repo=new SupabaseAutomationRepository({url:'https://example.supabase.co',serviceRoleKey:'service',fetcher});
@@ -49,6 +49,23 @@ test('claims due jobs through transactional RPC and includes rule message templa
   assert.deepEqual(calls[0].body,{p_worker_id:'w1',p_batch_size:20,p_lease_seconds:60});
   assert.equal(jobs[0].messageTemplate,'¿Sigues interesado?');
   assert.equal(jobs[0].attemptCount,1);
+});
+
+test('updates editable rule fields without mutating identity, trigger or active state',async()=>{
+  const calls:any[]=[];
+  const fetcher:any=async(url:any,init:any={})=>{
+    calls.push({url:String(url),method:init.method??'GET',body:init.body?JSON.parse(init.body):null});
+    return response([{id:'r1',name:'Editada',event_type:'BOT_MESSAGE_SENT',delay_seconds:7200,action_type:'SEND_TEXT',message_template:'Nuevo',active:true,priority:50}]);
+  };
+  const repo=new SupabaseAutomationRepository({url:'https://example.supabase.co',serviceRoleKey:'service',fetcher});
+  const rule=await repo.updateRule('r1',{name:'Editada',delaySeconds:7200,messageTemplate:'Nuevo',priority:50});
+  assert.equal(calls[0].method,'PATCH');
+  assert.match(calls[0].url,/crm_automation_rules/);
+  assert.match(calls[0].url,/id=eq\.r1/);
+  assert.deepEqual(Object.keys(calls[0].body).sort(),['delay_seconds','message_template','name','priority','updated_at'].sort());
+  assert.equal(rule.id,'r1');
+  assert.equal(rule.active,true);
+  assert.equal(rule.eventType,'BOT_MESSAGE_SENT');
 });
 
 test('terminal update clears lease and stores reason',async()=>{

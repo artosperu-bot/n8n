@@ -7,6 +7,7 @@ import type { WhatsAppInboundProcessor } from './adapters/whatsapp/WhatsAppInbou
 import type { CrmActor, CrmAttentionMode, CrmAuthProvider, CrmRepository } from './ports/Crm.ts';
 import type { AutomationRepository } from './automation/types.ts';
 import { writeTrace } from './shared/trace.ts';
+import { sanitizeHttpErrorMessage } from './shared/httpErrorSanitizer.ts';
 
 type EnvLike = Record<string,string|undefined>;
 type WorkerLifecycle={start():void;stop():void};
@@ -18,9 +19,8 @@ function sendText(res: ServerResponse,status:number,body:string){const data=Stri
 function sendEmpty(res:ServerResponse,status:number){res.statusCode=status;res.end();}
 function runtimeBuildId():string { try { return execFileSync('git',['rev-parse','--short','HEAD'],{encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim()||'unknown'; } catch { return process.env.STECH_BUILD_ID??'unknown'; } }
 function number(value:unknown):number|null{const parsed=Number(value);return Number.isInteger(parsed)&&parsed>=0?parsed:null;}
-function sanitizeMessage(value:string):string{return value.replace(/Bearer\s+\S+/gi,'Bearer [REDACTED]').replace(/(?:token|api[_-]?key|password|secret)\s*[:=]\s*\S+/gi,'$1=[REDACTED]').replace(/\b\d{8,15}\b/g,'[REDACTED_ID]').slice(0,180);}
 function publicError(error:unknown):{status:number;code:string}{
-  const raw=sanitizeMessage(error instanceof Error?error.message:String(error));
+  const raw=sanitizeHttpErrorMessage(error instanceof Error?error.message:String(error));
   if(error instanceof SyntaxError)return{status:400,code:'INVALID_JSON'};
   if(/CRM_AUTH_REQUIRED|CRM_AUTH_INVALID/.test(raw))return{status:401,code:'CRM_UNAUTHORIZED'};
   if(/CRM_ACCESS_DENIED/.test(raw))return{status:403,code:'CRM_FORBIDDEN'};
@@ -38,7 +38,7 @@ function applyCors(req:IncomingMessage,res:ServerResponse,allowedOrigins:string[
   if(allowed){
     res.setHeader('access-control-allow-origin',origin);
     res.setHeader('vary','Origin');
-    res.setHeader('access-control-allow-methods','GET,POST,DELETE,OPTIONS');
+    res.setHeader('access-control-allow-methods','GET,POST,PATCH,DELETE,OPTIONS');
     res.setHeader('access-control-allow-headers','Content-Type, Authorization');
     res.setHeader('access-control-max-age','600');
   }
@@ -140,8 +140,15 @@ export function createStechApp(options:AppOptions = {}) {
         const who=await actor(req);requireAdmin(who);const body=await readJson(req);
         const name=String(body.name??'').trim();const messageTemplate=String(body.messageTemplate??'').trim();const delaySeconds=number(body.delaySeconds);const priority=body.priority==null?100:number(body.priority);
         if(!name||!messageTemplate||delaySeconds===null||priority===null)throw new Error('INVALID_AUTOMATION_RULE');
-        const rule=await requireAutomation().createRule({name,eventType:'CUSTOMER_MESSAGE_RECEIVED',delaySeconds,actionType:'SEND_TEXT',messageTemplate,active:body.active!==false,priority});
+        const rule=await requireAutomation().createRule({name,eventType:'BOT_MESSAGE_SENT',delaySeconds,actionType:'SEND_TEXT',messageTemplate,active:body.active!==false,priority});
         return send(res,201,{rule});
+      }
+      const automationRuleEdit=url.pathname.match(/^\/api\/automations\/rules\/([^/]+)$/);
+      if(automationRuleEdit&&req.method==='PATCH'){
+        const who=await actor(req);requireAdmin(who);const body=await readJson(req);const id=decodeURIComponent(automationRuleEdit[1]);
+        const name=String(body.name??'').trim();const messageTemplate=String(body.messageTemplate??'').trim();const delaySeconds=number(body.delaySeconds);const priority=body.priority==null?100:number(body.priority);
+        if(!name||!messageTemplate||delaySeconds===null||priority===null)throw new Error('INVALID_AUTOMATION_RULE');
+        return send(res,200,{rule:await requireAutomation().updateRule(id,{name,delaySeconds,messageTemplate,priority})});
       }
       const automationRuleToggle=url.pathname.match(/^\/api\/automations\/rules\/([^/]+)\/(enable|disable)$/);
       if(automationRuleToggle&&req.method==='POST'){
