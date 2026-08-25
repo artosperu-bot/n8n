@@ -23,6 +23,21 @@ test('WhatsAppCloudApiClient sends text through configured Graph API endpoint',a
   });
 });
 
+test('WhatsAppCloudApiClient checks configured phone number against Graph API without exposing token',async()=>{
+  const calls:Array<{url:string;init:RequestInit}> = [];
+  const client=new WhatsAppCloudApiClient({
+    accessToken:'secret-token',phoneNumberId:'1283086411554196',version:'v25.0',
+    fetcher:async(url,init)=>{calls.push({url:String(url),init:init??{}});return new Response(JSON.stringify({id:'1283086411554196',display_phone_number:'+51 999 999 999',verified_name:'STECH',quality_rating:'GREEN'}),{status:200,headers:{'content-type':'application/json'}});},
+  });
+  const status=await client.getStatus();
+  assert.equal(status.configured,true);
+  assert.equal(status.reachable,true);
+  assert.equal(status.phoneNumberId,'1283086411554196');
+  assert.equal(status.verifiedName,'STECH');
+  assert.match(calls[0].url,/fields=id%2Cdisplay_phone_number%2Cverified_name%2Cquality_rating/);
+  assert.equal((calls[0].init.headers as Record<string,string>).authorization,'Bearer secret-token');
+});
+
 test('WhatsAppCloudApiClient errors are bounded and never leak access token',async()=>{
   const client=new WhatsAppCloudApiClient({
     accessToken:'VERY-SECRET-TOKEN',phoneNumberId:'1283086411554196',version:'v25.0',
