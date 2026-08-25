@@ -4,6 +4,11 @@ type Options={url:string;serviceRoleKey:string;fetcher?:typeof fetch};
 
 function digits(value:unknown):string|null{const clean=String(value??'').replace(/\D/g,'');return clean||null;}
 function row(value:any):any{return Array.isArray(value)?value[0]??null:value??null;}
+function enrichWhatsappSession(session:any):any{
+  const sessionId=String(session?.session_id??'');
+  const derived=sessionId.startsWith('whatsapp:')?digits(sessionId.slice('whatsapp:'.length)):null;
+  return{...session,cliente_telefono:digits(session?.cliente_telefono)??derived};
+}
 
 export class SupabaseCrmRepository implements CrmRepository{
   readonly #url:string;
@@ -46,7 +51,7 @@ export class SupabaseCrmRepository implements CrmRepository{
       params.or=`(session_id.ilike.*${term}*,cliente_nombre.ilike.*${term}*,cliente_telefono.ilike.*${term}*,ultimo_mensaje.ilike.*${term}*,producto_nombre.ilike.*${term}*)`;
     }
     const rows=await this.#get('crm_v_inbox',params,'CRM inbox');
-    const sessions=rows.filter(session=>String(session?.canal??'').toLowerCase()==='whatsapp'||String(session?.session_id??'').startsWith('whatsapp:'));
+    const sessions=rows.filter(session=>String(session?.canal??'').toLowerCase()==='whatsapp'||String(session?.session_id??'').startsWith('whatsapp:')).map(enrichWhatsappSession);
     const stats={bot:0,human:0,waiting:0,closed:0};
     for(const session of sessions){const mode=String(session.modo_atencion??'').toUpperCase();if(mode==='BOT')stats.bot+=1;else if(mode==='HUMANO')stats.human+=1;else if(mode==='ESPERANDO_ASESOR')stats.waiting+=1;else if(mode==='CERRADO')stats.closed+=1;}
     return{sessions,stats};
@@ -59,7 +64,8 @@ export class SupabaseCrmRepository implements CrmRepository{
       this.#get('ia_contexto',{session_id:`eq.${sessionId}`,select:'session_id,canal,ultima_intencion,ultima_accion,ultima_ruta,contexto,etapa_conversacion,producto_activo_id,actividad_activa,problema_activo,presupuesto_activo,cantidad_activa,objecion_activa,senal_compra,accion_pendiente,memoria_resumen',limit:'1'},'CRM context'),
       this.#get('ia_conversaciones',{session_id:`eq.${sessionId}`,select:'intencion,categoria,ruta,objetivo,producto_detectado,marca_detectada,presupuesto_detectado,etapa_comercial,nivel_interes,objecion_principal,estrategia_recomendada,siguiente_accion,producto_id_resuelto,atributo_detectado,actividad_detectada,problemas_detectados,implicaciones_detectadas,prioridades_detectadas,fecha',order:'fecha.desc,id.desc',limit:'1'},'CRM insight'),
     ]);
-    const session=sessions[0];if(!session)throw new Error('CRM_SESSION_NOT_FOUND');
+    const rawSession=sessions[0];if(!rawSession)throw new Error('CRM_SESSION_NOT_FOUND');
+    const session=enrichWhatsappSession(rawSession);
     const recipient=digits(session.cliente_telefono)??(sessionId.startsWith('whatsapp:')?digits(sessionId.slice('whatsapp:'.length)):null);
     return{session,messages,context:contexts[0]??{},insight:insights[0]??{},recipient};
   }
