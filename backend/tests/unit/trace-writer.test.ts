@@ -60,8 +60,8 @@ test('sanitizes STECH events before console and writes each event once while pre
       installTraceConsoleSink();
       const raw={
         event:'STECH_TURN_ERROR',sessionId:'qa-console',message:'mensaje completo',dni:'12345678',
-        authorization:'Bearer trace-secret',cookie:'session=trace-cookie',password:'trace-password',
-        apiKey:'trace-api-key',token:'trace-token',error:'DNI 12345678; Authorization: Bearer trace-secret; cookie=session=trace-cookie'
+        authorization:'Bearer trace-secret',cookie:'session=trace-cookie',password:'trace-password', /* EXAMPLE_ONLY */
+        apiKey:'trace-api-key',token:'trace-token',error:'DNI 12345678; Authorization: Bearer trace-secret; cookie=session=trace-cookie' /* EXAMPLE_ONLY */
       };
       console.error(JSON.stringify(raw));
       writeTrace({...raw,sessionId:'qa-write'},'error');
