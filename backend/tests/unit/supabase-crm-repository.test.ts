@@ -51,8 +51,8 @@ test('CRM repository changeMode calls versioned crm_cambiar_modo_atencion author
     return json([]);
   };
   const repo=new SupabaseCrmRepository({url:'https://example.supabase.co',serviceRoleKey:'service-secret',fetcher:fetcher as any});
-  await repo.changeMode({sessionId:'whatsapp:51911111111',mode:'HUMANO',version:7,actorId:'crm-user-1',reason:'Tomada desde CRM'});
-  assert.deepEqual(body,{p_session_id:'whatsapp:51911111111',p_nuevo_modo:'HUMANO',p_actor_id:'crm-user-1',p_motivo:'Tomada desde CRM',p_version_esperada:7});
+  await repo.changeMode({sessionId:'whatsapp:51911111111',mode:'HUMANO',version:7,actorId:'auth-user-1',reason:'Tomada desde CRM'});
+  assert.deepEqual(body,{p_session_id:'whatsapp:51911111111',p_nuevo_modo:'HUMANO',p_actor_id:'auth-user-1',p_motivo:'Tomada desde CRM',p_version_esperada:7});
 });
 
 test('CRM repository records inbound wamid idempotently and returns current attention mode',async()=>{
@@ -88,4 +88,26 @@ test('CRM repository links every physical wamid to its logical aggregation witho
     assert.equal(patch.metadata.aggregation_status,'REPROCESSED');
     assert.deepEqual(patch.metadata.physical_message_ids,['wamid.1','wamid.2']);
   }
+});
+
+test('CRM repository persists advisor auth.users id instead of crm_usuarios id',async()=>{
+  let advisorPayload:any=null;
+  const fetcher=async(url:any,init:any={})=>{
+    const value=String(url);
+    if(value.includes('/rest/v1/crm_mensajes')&&init.method==='POST'){
+      advisorPayload=JSON.parse(init.body);
+      return json([]);
+    }
+    if((value.includes('/rest/v1/ia_sesiones')&&init.method==='POST')||(value.includes('/rest/v1/ia_contexto')&&init.method==='PATCH'))return json([]);
+    return json([]);
+  };
+  const repo=new SupabaseCrmRepository({url:'https://example.supabase.co',serviceRoleKey:'service-secret',fetcher:fetcher as any});
+  await repo.recordAdvisorMessage({
+    sessionId:'whatsapp:51911111111',
+    messageId:'wamid.OUT1',
+    content:'Hola desde asesor',
+    actor:{id:'crm-user-1',userId:'auth-user-1',email:'admin@s-tech.com.pe',name:'Admin',role:'ADMIN'},
+  });
+  assert.equal(advisorPayload?.[0]?.asesor_id,'auth-user-1');
+  assert.notEqual(advisorPayload?.[0]?.asesor_id,'crm-user-1');
 });
