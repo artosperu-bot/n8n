@@ -139,3 +139,48 @@ test('duplicate acquire from engine is treated as ignored webhook duplicate, not
   assert.equal(result.duplicate,true);
   assert.equal(sends,0);
 });
+
+test('outbound CRM persistence is retried without sending a duplicate Meta reply',async()=>{
+  let persistAttempts=0;let sends=0;
+  const processor=new WhatsAppInboundProcessor({
+    crm:{
+      async recordInbound(){return{mode:'BOT',version:1};},async getAttentionState(){return{mode:'BOT',version:1};},
+      async recordBotMessage(){persistAttempts+=1;if(persistAttempts<3)throw new Error('temporary CRM write failure');},
+    } as any,
+    engine:{async processTurn(){return{answer:'Una sola respuesta',state:{blockAutomaticReply:false}};}} as any,
+    whatsapp:{async sendText(){sends+=1;return{messageId:'wamid.OUT.PERSIST'};}} as any,
+    burstWindowMs:0,persistenceRetryAttempts:3,retryBaseDelayMs:0,sleeper:async()=>{},
+  } as any);
+  const result=await processor.processMessage(message as any);
+  assert.equal(result.processed,true);
+  assert.equal(sends,1);
+  assert.equal(persistAttempts,3);
+});
+
+test('successful Graph response without an outbound wamid fails visibly instead of silently skipping audit',async()=>{
+  const processor=new WhatsAppInboundProcessor({
+    crm:{async recordInbound(){return{mode:'BOT',version:1};},async getAttentionState(){return{mode:'BOT',version:1};},async recordBotMessage(){throw new Error('must not run');}} as any,
+    engine:{async processTurn(){return{answer:'Respuesta',state:{blockAutomaticReply:false}};}} as any,
+    whatsapp:{async sendText(){return{messageId:null};}} as any,
+    burstWindowMs:0,
+  });
+  await assert.rejects(()=>processor.processMessage(message as any),/WHATSAPP_MESSAGE_ID_REQUIRED/);
+});
+
+test('aggregation audit failure is explicit but cannot abandon a persisted inbound before the engine',async()=>{
+  let engineCalls=0;let sends=0;
+  const processor=new WhatsAppInboundProcessor({
+    crm:{
+      async recordInbound(){return{mode:'BOT',version:1};},
+      async markInboundAggregation(){throw new Error('metadata unavailable');},
+      async getAttentionState(){return{mode:'BOT',version:1};},async recordBotMessage(){},
+    } as any,
+    engine:{async processTurn(){engineCalls+=1;return{answer:'Procesada',state:{blockAutomaticReply:false}};}} as any,
+    whatsapp:{async sendText(){sends+=1;return{messageId:'wamid.OUT.AUDIT'};}} as any,
+    burstWindowMs:0,persistenceRetryAttempts:1,
+  } as any);
+  const result=await processor.processMessage(message as any);
+  assert.equal(result.processed,true);
+  assert.equal(engineCalls,1);
+  assert.equal(sends,1);
+});
