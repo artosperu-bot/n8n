@@ -1,9 +1,11 @@
 import type { CrmActor, CrmAttentionMode, CrmListFilters, CrmRepository } from '../../ports/Crm.ts';
+import type { AutomationCrmPort } from '../../automation/types.ts';
 
 type Options={url:string;serviceRoleKey:string;fetcher?:typeof fetch};
 
 function digits(value:unknown):string|null{const clean=String(value??'').replace(/\D/g,'');return clean||null;}
 function row(value:any):any{return Array.isArray(value)?value[0]??null:value??null;}
+function sourceSentAt(metadata:any):string|null{const value=metadata&&typeof metadata==='object'?metadata.source_sent_at:null;return typeof value==='string'&&value.trim()?value.trim():null;}
 function enrichWhatsappSession(session:any):any{
   const sessionId=String(session?.session_id??'');
   const isWhatsapp=sessionId.startsWith('whatsapp:');
@@ -11,7 +13,7 @@ function enrichWhatsappSession(session:any):any{
   return{...session,...(isWhatsapp?{canal:'whatsapp'}:{}),cliente_telefono:digits(session?.cliente_telefono)??derived};
 }
 
-export class SupabaseCrmRepository implements CrmRepository{
+export class SupabaseCrmRepository implements CrmRepository,AutomationCrmPort{
   readonly #url:string;
   readonly #key:string;
   readonly #fetcher:typeof fetch;
@@ -73,15 +75,24 @@ export class SupabaseCrmRepository implements CrmRepository{
 
   async getAttentionState(sessionId:string){return this.#mode(sessionId);}
 
+  async getAutomationState(sessionId:string){
+    const [current,messages]=await Promise.all([
+      this.#mode(sessionId),
+      this.#get('crm_mensajes',{session_id:`eq.${sessionId}`,emisor:'eq.CLIENTE',select:'message_id,fecha,metadata',order:'fecha.desc,id.desc',limit:'1'},'CRM automation customer state'),
+    ]);
+    const latest=messages[0]??null;
+    return{mode:current.mode,latestCustomerAt:sourceSentAt(latest?.metadata),latestCustomerMessageId:typeof latest?.message_id==='string'?latest.message_id:null};
+  }
+
   async changeMode(input:{sessionId:string;mode:CrmAttentionMode;version:number;actorId:string;reason?:string|null}){
     const response=await this.#fetcher(`${this.#url}/rest/v1/rpc/crm_cambiar_modo_atencion`,{method:'POST',headers:this.#headers(),body:JSON.stringify({p_session_id:input.sessionId,p_nuevo_modo:input.mode,p_actor_id:input.actorId,p_motivo:input.reason??null,p_version_esperada:input.version})});
     return row(await this.#json(response,'CRM change mode'));
   }
 
-  async recordInbound(input:{sessionId:string;messageId:string;content:string;contactName?:string|null;waId:string}){
+  async recordInbound(input:{sessionId:string;messageId:string;content:string;contactName?:string|null;waId:string;sourceSentAt?:string|null}){
     await this.#ensureWhatsAppSession(input.sessionId);
     await this.#markWhatsAppContext(input.sessionId);
-    const inserted=await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'CLIENTE',contenido:input.content,canal:'whatsapp',metadata:{source:'whatsapp_cloud_api',wa_id:input.waId,contact_name:input.contactName??null}}],'CRM inbound message');
+    const inserted=await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'CLIENTE',contenido:input.content,canal:'whatsapp',metadata:{source:'whatsapp_cloud_api',wa_id:input.waId,contact_name:input.contactName??null,source_sent_at:input.sourceSentAt??null}}],'CRM inbound message');
     const current=await this.#mode(input.sessionId);
     return{...current,duplicate:Boolean(inserted?.duplicate)};
   }
@@ -102,6 +113,12 @@ export class SupabaseCrmRepository implements CrmRepository{
     await this.#ensureWhatsAppSession(input.sessionId);
     await this.#markWhatsAppContext(input.sessionId);
     await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'BOT',contenido:input.content,canal:'whatsapp',metadata:{source:'stech_backend',wa_id:input.waId}}],'CRM bot message');
+  }
+
+  async recordAutomationMessage(input:{sessionId:string;messageId:string;content:string;recipient:string;jobId:string}):Promise<void>{
+    await this.#ensureWhatsAppSession(input.sessionId);
+    await this.#markWhatsAppContext(input.sessionId);
+    await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'BOT',contenido:input.content,canal:'whatsapp',metadata:{source:'crm_automation',wa_id:input.recipient,automation_job_id:input.jobId}}],'CRM automation message');
   }
 
   async recordAdvisorMessage(input:{sessionId:string;messageId:string;content:string;actor:CrmActor}):Promise<void>{
