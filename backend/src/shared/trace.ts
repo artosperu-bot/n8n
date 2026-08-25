@@ -5,6 +5,7 @@ const TRACE_EVENTS=new Set([
   'STECH_REFERENCE_TRACE',
   'STECH_PRODUCT_FLOW',
   'STECH_TURN_ERROR',
+  'STECH_HTTP_ERROR',
   'WHATSAPP_VERIFY',
   'WHATSAPP_INBOUND',
   'WHATSAPP_STATUS',
@@ -60,15 +61,10 @@ function parseTraceArgument(value:unknown):Record<string,unknown>|null{
 }
 
 export function writeTrace(payload:Record<string,unknown>,level:'log'|'error'='log'):void{
-  if(sinkInstalled){
-    const line=JSON.stringify(payload);
-    if(level==='error')console.error(line);else console.log(line);
-    return;
-  }
   const safe=sanitize(payload) as Record<string,unknown>;
   const line=JSON.stringify(safe);
   if(level==='error')console.error(line);else console.log(line);
-  appendTrace(safe);
+  if(!sinkInstalled)appendTrace(safe);
 }
 
 export function installTraceConsoleSink():void{
