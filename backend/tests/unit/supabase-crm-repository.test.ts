@@ -63,3 +63,23 @@ test('CRM repository records inbound wamid idempotently and returns current atte
   assert.equal(result.mode,'BOT');
   assert.ok(calls.some(value=>value.includes('crm_mensajes')));
 });
+
+test('CRM repository links every physical wamid to its logical aggregation without erasing inbound metadata',async()=>{
+  const patches:any[]=[];
+  const fetcher=async(url:any,init:any={})=>{
+    const value=String(url);
+    if(value.includes('/rest/v1/crm_mensajes')&&!init.method)return json([{metadata:{source:'whatsapp_cloud_api',wa_id:'51911111111'}}]);
+    if(value.includes('/rest/v1/crm_mensajes')&&init.method==='PATCH'){patches.push(JSON.parse(init.body));return new Response(null,{status:204});}
+    return json([]);
+  };
+  const repo=new SupabaseCrmRepository({url:'https://example.supabase.co',serviceRoleKey:'service-secret',fetcher:fetcher as any});
+  await repo.markInboundAggregation({sessionId:'whatsapp:51911111111',messageIds:['wamid.1','wamid.2'],logicalMessageId:'wamid.2',status:'REPROCESSED'});
+  assert.equal(patches.length,2);
+  for(const patch of patches){
+    assert.equal(patch.metadata.source,'whatsapp_cloud_api');
+    assert.equal(patch.metadata.wa_id,'51911111111');
+    assert.equal(patch.metadata.logical_message_id,'wamid.2');
+    assert.equal(patch.metadata.aggregation_status,'REPROCESSED');
+    assert.deepEqual(patch.metadata.physical_message_ids,['wamid.1','wamid.2']);
+  }
+});

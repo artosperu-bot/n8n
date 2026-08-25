@@ -27,6 +27,7 @@ export interface CrmRepository{
   getAttentionState?(sessionId:string):Promise<{mode:CrmAttentionMode;version:number|null}>;
   changeMode(input:{sessionId:string;mode:CrmAttentionMode;version:number;actorId:string;reason?:string|null}):Promise<any>;
   recordInbound(input:{sessionId:string;messageId:string;content:string;contactName?:string|null;waId:string}):Promise<{mode:CrmAttentionMode;version:number|null;duplicate?:boolean}>;
+  markInboundAggregation?(input:{sessionId:string;messageIds:string[];logicalMessageId:string;status:'AGGREGATED'|'REPROCESSED'|'SUPERSEDED'}):Promise<void>;
   recordBotMessage(input:{sessionId:string;messageId:string;content:string;waId:string}):Promise<void>;
   recordAdvisorMessage(input:{sessionId:string;messageId:string;content:string;actor:CrmActor}):Promise<void>;
 }

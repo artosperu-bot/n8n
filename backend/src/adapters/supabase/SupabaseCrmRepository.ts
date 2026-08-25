@@ -85,6 +85,18 @@ export class SupabaseCrmRepository implements CrmRepository{
     return{...current,duplicate:Boolean(inserted?.duplicate)};
   }
 
+  async markInboundAggregation(input:{sessionId:string;messageIds:string[];logicalMessageId:string;status:'AGGREGATED'|'REPROCESSED'|'SUPERSEDED'}):Promise<void>{
+    const physicalMessageIds=[...new Set(input.messageIds.filter(Boolean))];
+    for(const messageId of physicalMessageIds){
+      const rows=await this.#get('crm_mensajes',{session_id:`eq.${input.sessionId}`,message_id:`eq.${messageId}`,select:'metadata',limit:'1'},'CRM inbound aggregation metadata');
+      const metadata=rows[0]?.metadata&&typeof rows[0].metadata==='object'?rows[0].metadata:{};
+      const url=new URL(`${this.#url}/rest/v1/crm_mensajes`);
+      url.searchParams.set('session_id',`eq.${input.sessionId}`);url.searchParams.set('message_id',`eq.${messageId}`);
+      const response=await this.#fetcher(url,{method:'PATCH',headers:this.#headers({Prefer:'return=minimal'}),body:JSON.stringify({metadata:{...metadata,logical_message_id:input.logicalMessageId,aggregation_status:input.status,physical_message_ids:physicalMessageIds,aggregation_updated_at:new Date().toISOString()}})});
+      if(!response.ok)throw new Error(`CRM inbound aggregation metadata HTTP ${response.status}`);
+    }
+  }
+
   async recordBotMessage(input:{sessionId:string;messageId:string;content:string;waId:string}):Promise<void>{
     await this.#markWhatsAppContext(input.sessionId);
     await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'BOT',contenido:input.content,canal:'whatsapp',metadata:{source:'stech_backend',wa_id:input.waId}}],'CRM bot message');

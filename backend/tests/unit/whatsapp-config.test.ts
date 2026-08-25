@@ -15,6 +15,12 @@ test('loadConfig exposes WhatsApp Cloud API settings with v25.0 default',()=>{
   assert.equal(config.whatsappPhoneNumberId,'1283086411554196');
   assert.equal(config.whatsappAppId,'2264991854297489');
   assert.equal(config.whatsappGraphApiVersion,'v25.0');
+  assert.equal(config.whatsappBurstWindowMs,2500);
+});
+
+test('loadConfig allows a bounded WhatsApp burst window override',()=>{
+  assert.equal(loadConfig({STECH_PROFILE:'test',WHATSAPP_BURST_WINDOW_MS:'2300'}).whatsappBurstWindowMs,2300);
+  assert.equal(loadConfig({STECH_PROFILE:'test',WHATSAPP_BURST_WINDOW_MS:'99999'}).whatsappBurstWindowMs,5000);
 });
 
 test('loadConfig allows overriding WhatsApp Graph API version',()=>{

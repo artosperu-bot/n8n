@@ -109,7 +109,7 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
     :null;
 
   const engine=new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation });
-  const whatsappInbound=crm?new WhatsAppInboundProcessor({crm,engine,whatsapp}):null;
+  const whatsappInbound=crm?new WhatsAppInboundProcessor({crm,engine,whatsapp,burstWindowMs:config.whatsappBurstWindowMs}):null;
 
   return {config,conversations,telemetry,erp,rag,llm,automation,whatsapp,crm,crmAuth,whatsappInbound,engine};
 }

@@ -37,6 +37,7 @@ export type AppConfig = {
   whatsappPhoneNumberId?: string;
   whatsappAppId?: string;
   whatsappGraphApiVersion: string;
+  whatsappBurstWindowMs:number;
   crmAllowedOrigins:string[];
 };
 
@@ -49,6 +50,9 @@ function bool(value: string | undefined, fallback = false): boolean {
 function csv(value:string|undefined,fallback:string[]):string[]{
   const items=String(value??'').split(',').map(item=>item.trim()).filter(Boolean);
   return items.length?[...new Set(items)]:fallback;
+}
+function boundedNumber(value:string|undefined,fallback:number,min:number,max:number):number{
+  const parsed=Number(value);return Number.isFinite(parsed)?Math.max(min,Math.min(max,Math.round(parsed))):fallback;
 }
 
 export function loadConfig(env: EnvLike = process.env): AppConfig {
@@ -93,6 +97,7 @@ export function loadConfig(env: EnvLike = process.env): AppConfig {
     whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
     whatsappAppId: env.WHATSAPP_APP_ID,
     whatsappGraphApiVersion: env.WHATSAPP_GRAPH_API_VERSION ?? 'v25.0',
+    whatsappBurstWindowMs:boundedNumber(env.WHATSAPP_BURST_WINDOW_MS,2500,0,5000),
     crmAllowedOrigins:csv(env.CRM_ALLOWED_ORIGINS,['http://localhost:5173','http://127.0.0.1:5173']),
   };
 }
