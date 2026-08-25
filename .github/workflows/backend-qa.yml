@@ -29,6 +29,7 @@ jobs:
           set -o pipefail
           npm test 2>&1 | tee qa-test.log
       - name: Build check
+        if: always()
         working-directory: backend
         run: |
           set -o pipefail
