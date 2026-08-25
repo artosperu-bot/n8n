@@ -64,11 +64,10 @@ export class SupabaseAutomationRepository implements AutomationRepository{
     const value=await this.json(response,'automation cancel pending');return Number(Array.isArray(value)?value[0]??0:value??0);
   }
   async scheduleJob(input:ScheduleAutomationJobInput):Promise<AutomationJob|null>{
-    const response=await this.fetcher(`${this.url}/rest/v1/crm_automation_jobs`,{method:'POST',headers:this.headers({Prefer:'return=representation'}),body:JSON.stringify({
-      rule_id:input.ruleId,session_id:input.sessionId,event_type:input.eventType,basis_message_id:input.basisMessageId,recipient:input.recipient,execute_at:input.executeAt,status:'PENDING',
+    const response=await this.fetcher(`${this.url}/rest/v1/rpc/crm_schedule_automation_job_once`,{method:'POST',headers:this.headers(),body:JSON.stringify({
+      p_rule_id:input.ruleId,p_session_id:input.sessionId,p_event_type:input.eventType,p_basis_message_id:input.basisMessageId,p_recipient:input.recipient,p_execute_at:input.executeAt,
     })});
-    if(response.status===409)return null;
-    const rows=await this.json(response,'automation schedule job') as any[];return rows[0]?mapJob(rows[0]):null;
+    const rows=await this.json(response,'automation schedule once') as any[];return rows[0]?mapJob(rows[0]):null;
   }
   async claimDue(workerId:string,batchSize:number,leaseSeconds:number):Promise<AutomationClaimedJob[]>{
     const response=await this.fetcher(`${this.url}/rest/v1/rpc/crm_claim_due_automation_jobs`,{method:'POST',headers:this.headers(),body:JSON.stringify({p_worker_id:workerId,p_batch_size:batchSize,p_lease_seconds:leaseSeconds})});
