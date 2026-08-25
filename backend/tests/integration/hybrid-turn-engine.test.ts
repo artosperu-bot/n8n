@@ -234,6 +234,15 @@ test('explicit budget with known use cannot be degraded to OTHER by semantic pla
   assert.ok(r.state.recommendedProduct);
 });
 
+test('asking whether product photos exist returns assets instead of camera megapixels',async()=>{
+  const engine=new HybridConversationEngine(deps(new FakeLlmProvider()));
+  const result=await engine.processTurn({sessionId:'s-image-availability',message:'¿Tienes fotos del Armor 22?'});
+  assert.equal(result.debug.intent,'IMAGE');
+  assert.equal(result.debug.route,'SQL_IMAGES');
+  assert.match(result.answer,/^https:\/\//);
+  assert.doesNotMatch(result.answer,/megapixel|\bMP\b|c[aá]mara principal/i);
+});
+
 test('explicit budget authority cannot be degraded to CAPABILITY by semantic planner',async()=>{
   const conversations=new MemoryConversationRepository();
   await conversations.saveState('s-budget-capability',{

@@ -46,6 +46,11 @@ test('camera-use wording is not confused with a request to show product images',
   assert.ok(result.attributes.includes('CAMARA'));
 });
 
+test('product photo availability wording is an image asset request, not camera capability',()=>{
+  const result=resolveIntentPlan('¿Tienes fotos del Armor 22?');
+  assert.equal(result.primary,'IMAGES');
+});
+
 test('explicit short model purchase wording is recognized as purchase', () => {
   assert.equal(resolveIntentPlan('ya el 22 quiero').primary, 'PURCHASE');
 });
