@@ -6,8 +6,9 @@ function digits(value:unknown):string|null{const clean=String(value??'').replace
 function row(value:any):any{return Array.isArray(value)?value[0]??null:value??null;}
 function enrichWhatsappSession(session:any):any{
   const sessionId=String(session?.session_id??'');
-  const derived=sessionId.startsWith('whatsapp:')?digits(sessionId.slice('whatsapp:'.length)):null;
-  return{...session,cliente_telefono:digits(session?.cliente_telefono)??derived};
+  const isWhatsapp=sessionId.startsWith('whatsapp:');
+  const derived=isWhatsapp?digits(sessionId.slice('whatsapp:'.length)):null;
+  return{...session,...(isWhatsapp?{canal:'whatsapp'}:{}),cliente_telefono:digits(session?.cliente_telefono)??derived};
 }
 
 export class SupabaseCrmRepository implements CrmRepository{
@@ -44,14 +45,14 @@ export class SupabaseCrmRepository implements CrmRepository{
 
   async listWhatsAppConversations(filters:CrmListFilters={}){
     const limit=Math.max(1,Math.min(Number(filters.limit??40)||40,100));
-    const params:Record<string,string>={canal:'eq.whatsapp',select:'*',order:'ultimo_mensaje_at.desc.nullslast',limit:String(limit)};
+    const params:Record<string,string>={session_id:'ilike.whatsapp:*',select:'*',order:'ultimo_mensaje_at.desc.nullslast',limit:String(limit)};
     if(filters.mode)params.modo_atencion=`eq.${filters.mode}`;
     if(filters.search?.trim()){
       const term=filters.search.trim().replace(/[(),]/g,' ');
       params.or=`(session_id.ilike.*${term}*,cliente_nombre.ilike.*${term}*,cliente_telefono.ilike.*${term}*,ultimo_mensaje.ilike.*${term}*,producto_nombre.ilike.*${term}*)`;
     }
     const rows=await this.#get('crm_v_inbox',params,'CRM inbox');
-    const sessions=rows.filter(session=>String(session?.canal??'').toLowerCase()==='whatsapp'||String(session?.session_id??'').startsWith('whatsapp:')).map(enrichWhatsappSession);
+    const sessions=rows.filter(session=>String(session?.session_id??'').startsWith('whatsapp:')).map(enrichWhatsappSession);
     const stats={bot:0,human:0,waiting:0,closed:0};
     for(const session of sessions){const mode=String(session.modo_atencion??'').toUpperCase();if(mode==='BOT')stats.bot+=1;else if(mode==='HUMANO')stats.human+=1;else if(mode==='ESPERANDO_ASESOR')stats.waiting+=1;else if(mode==='CERRADO')stats.closed+=1;}
     return{sessions,stats};
@@ -98,11 +99,13 @@ export class SupabaseCrmRepository implements CrmRepository{
   }
 
   async recordBotMessage(input:{sessionId:string;messageId:string;content:string;waId:string}):Promise<void>{
+    await this.#ensureWhatsAppSession(input.sessionId);
     await this.#markWhatsAppContext(input.sessionId);
     await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'BOT',contenido:input.content,canal:'whatsapp',metadata:{source:'stech_backend',wa_id:input.waId}}],'CRM bot message');
   }
 
   async recordAdvisorMessage(input:{sessionId:string;messageId:string;content:string;actor:CrmActor}):Promise<void>{
+    await this.#ensureWhatsAppSession(input.sessionId);
     await this.#markWhatsAppContext(input.sessionId);
     await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'ASESOR',contenido:input.content,canal:'whatsapp',asesor_id:input.actor.id,metadata:{source:'stech_crm',actor_email:input.actor.email,actor_name:input.actor.name,actor_role:input.actor.role}}],'CRM advisor message');
   }
