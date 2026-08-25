@@ -22,7 +22,7 @@ export class WhatsAppInboundProcessor{
     if(message.type!=='text'||!message.text)return{processed:false};
     const sessionId=`whatsapp:${message.waId}`;
     const inbound=await this.#crm.recordInbound({sessionId,messageId:message.waMessageId,content:message.text,contactName:message.contactName,waId:message.waId});
-    if(inbound.duplicate){writeTrace({event:'WHATSAPP_DUPLICATE',stage:'CRM_INBOUND'});return{processed:false,duplicate:true};}
+    if(inbound.duplicate)writeTrace({event:'WHATSAPP_DUPLICATE',stage:'CRM_INBOUND_CONTINUE_TO_ENGINE'});
     if(inbound.mode!=='BOT'){
       writeTrace({event:'WHATSAPP_INBOUND',status:'STORED_NO_BOT',attentionMode:inbound.mode});
       return{processed:false,suppressed:true};
