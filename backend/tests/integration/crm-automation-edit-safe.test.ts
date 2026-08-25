@@ -1,3 +1,4 @@
+// TDD red gate: edit endpoint and BOT_MESSAGE_SENT creation must fail before implementation.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStechApp } from '../../src/app.ts';
