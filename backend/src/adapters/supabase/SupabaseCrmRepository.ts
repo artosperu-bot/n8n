@@ -64,6 +64,8 @@ export class SupabaseCrmRepository implements CrmRepository{
     return{session,messages,context:contexts[0]??{},insight:insights[0]??{},recipient};
   }
 
+  async getAttentionState(sessionId:string){return this.#mode(sessionId);}
+
   async changeMode(input:{sessionId:string;mode:CrmAttentionMode;version:number;actorId:string;reason?:string|null}){
     const response=await this.#fetcher(`${this.#url}/rest/v1/rpc/crm_cambiar_modo_atencion`,{method:'POST',headers:this.#headers(),body:JSON.stringify({p_session_id:input.sessionId,p_nuevo_modo:input.mode,p_actor_id:input.actorId,p_motivo:input.reason??null,p_version_esperada:input.version})});
     return row(await this.#json(response,'CRM change mode'));
