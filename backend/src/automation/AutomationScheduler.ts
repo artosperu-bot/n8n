@@ -9,6 +9,14 @@ type CustomerMessageEvent = {
   attentionMode?: AutomationAttentionMode;
 };
 
+type BotMessageEvent = {
+  sessionId: string;
+  customerMessageId: string;
+  recipient: string;
+  botSentAt: string;
+  attentionMode: AutomationAttentionMode;
+};
+
 export class AutomationScheduler {
   readonly #repository: AutomationRepository;
   readonly #now: () => Date;
@@ -24,14 +32,17 @@ export class AutomationScheduler {
 
   async onCustomerMessage(input: CustomerMessageEvent): Promise<{cancelled: number; scheduled: number}> {
     if (input.duplicate) return {cancelled: 0, scheduled: 0};
-
     const cancelled = await this.#repository.cancelPending(input.sessionId, 'CUSTOMER_REPLIED');
-    if (input.attentionMode && input.attentionMode !== 'BOT') return {cancelled, scheduled: 0};
+    return {cancelled, scheduled: 0};
+  }
 
-    const eventType: AutomationEventType = 'CUSTOMER_MESSAGE_RECEIVED';
+  async onBotMessage(input: BotMessageEvent): Promise<{scheduled: number}> {
+    if (input.attentionMode !== 'BOT') return {scheduled: 0};
+
+    const eventType: AutomationEventType = 'BOT_MESSAGE_SENT';
     const rules = await this.#repository.listActiveRules(eventType);
-    const source = input.sourceSentAt ? new Date(input.sourceSentAt) : null;
-    const basis = source && !Number.isNaN(source.getTime()) ? source : this.#now();
+    const sentAt = new Date(input.botSentAt);
+    const basis = Number.isNaN(sentAt.getTime()) ? this.#now() : sentAt;
     let scheduled = 0;
 
     for (const rule of rules) {
@@ -40,13 +51,13 @@ export class AutomationScheduler {
         ruleId: rule.id,
         sessionId: input.sessionId,
         eventType,
-        basisMessageId: input.messageId || null,
+        basisMessageId: input.customerMessageId || null,
         recipient: input.recipient,
         executeAt: new Date(basis.getTime() + Math.max(0, rule.delaySeconds) * 1000).toISOString(),
       });
       if (job) scheduled += 1;
     }
 
-    return {cancelled, scheduled};
+    return {scheduled};
   }
 }
