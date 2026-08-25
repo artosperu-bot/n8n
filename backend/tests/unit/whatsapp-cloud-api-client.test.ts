@@ -51,3 +51,37 @@ test('WhatsAppCloudApiClient errors are bounded and never leak access token',asy
     return true;
   });
 });
+
+test('WhatsAppCloudApiClient retries transient Graph failures and returns the successful wamid once',async()=>{
+  let attempts=0;const delays:number[]=[];
+  const client=new WhatsAppCloudApiClient({
+    accessToken:'secret-token',phoneNumberId:'1283086411554196',version:'v25.0',retryMaxAttempts:3,retryBaseDelayMs:10,
+    sleeper:async(ms:number)=>{delays.push(ms);},
+    fetcher:async()=>{attempts+=1;if(attempts<3)return new Response('temporary',{status:503});return Response.json({messages:[{id:'wamid.OUT.RETRIED'}]});},
+  } as any);
+  const result=await client.sendText('51911111111','Hola');
+  assert.equal(result.messageId,'wamid.OUT.RETRIED');
+  assert.equal(attempts,3);
+  assert.deepEqual(delays,[10,20]);
+});
+
+test('WhatsAppCloudApiClient does not retry a permanent Graph 400',async()=>{
+  let attempts=0;
+  const client=new WhatsAppCloudApiClient({
+    accessToken:'secret-token',phoneNumberId:'1283086411554196',retryMaxAttempts:3,sleeper:async()=>{},
+    fetcher:async()=>{attempts+=1;return new Response('bad request',{status:400});},
+  } as any);
+  await assert.rejects(()=>client.sendText('51911111111','Hola'),/HTTP 400/);
+  assert.equal(attempts,1);
+});
+
+test('WhatsAppCloudApiClient retries a transient network disconnect without leaking its details',async()=>{
+  let attempts=0;
+  const client=new WhatsAppCloudApiClient({
+    accessToken:'secret-token',phoneNumberId:'1283086411554196',retryMaxAttempts:2,retryBaseDelayMs:0,sleeper:async()=>{},
+    fetcher:async()=>{attempts+=1;if(attempts===1)throw new Error('socket reset for 51911111111');return Response.json({messages:[{id:'wamid.OUT.NETWORK'}]});},
+  } as any);
+  const result=await client.sendText('51911111111','Hola');
+  assert.equal(result.messageId,'wamid.OUT.NETWORK');
+  assert.equal(attempts,2);
+});
