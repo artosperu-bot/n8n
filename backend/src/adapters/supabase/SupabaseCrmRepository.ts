@@ -45,7 +45,8 @@ export class SupabaseCrmRepository implements CrmRepository{
       const term=filters.search.trim().replace(/[(),]/g,' ');
       params.or=`(session_id.ilike.*${term}*,cliente_nombre.ilike.*${term}*,cliente_telefono.ilike.*${term}*,ultimo_mensaje.ilike.*${term}*,producto_nombre.ilike.*${term}*)`;
     }
-    const sessions=await this.#get('crm_v_inbox',params,'CRM inbox');
+    const rows=await this.#get('crm_v_inbox',params,'CRM inbox');
+    const sessions=rows.filter(session=>String(session?.canal??'').toLowerCase()==='whatsapp'||String(session?.session_id??'').startsWith('whatsapp:'));
     const stats={bot:0,human:0,waiting:0,closed:0};
     for(const session of sessions){const mode=String(session.modo_atencion??'').toUpperCase();if(mode==='BOT')stats.bot+=1;else if(mode==='HUMANO')stats.human+=1;else if(mode==='ESPERANDO_ASESOR')stats.waiting+=1;else if(mode==='CERRADO')stats.closed+=1;}
     return{sessions,stats};
