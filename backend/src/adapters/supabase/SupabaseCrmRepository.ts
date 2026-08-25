@@ -26,6 +26,11 @@ export class SupabaseCrmRepository implements CrmRepository{
     const response=await this.#fetcher(url,{method:'POST',headers:this.#headers({Prefer:'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify([{session_id:sessionId,canal:'whatsapp'}])});
     if(!response.ok)throw new Error(`CRM ensure WhatsApp session HTTP ${response.status}`);
   }
+  async #markWhatsAppContext(sessionId:string):Promise<void>{
+    const url=`${this.#url}/rest/v1/ia_contexto?session_id=eq.${encodeURIComponent(sessionId)}`;
+    const response=await this.#fetcher(url,{method:'PATCH',headers:this.#headers({Prefer:'return=minimal'}),body:JSON.stringify({canal:'whatsapp'})});
+    if(!response.ok)throw new Error(`CRM WhatsApp context channel HTTP ${response.status}`);
+  }
   async #mode(sessionId:string):Promise<{mode:CrmAttentionMode;version:number|null}>{
     const rows=await this.#get('ia_sesiones',{session_id:`eq.${sessionId}`,select:'modo_atencion,version',limit:'1'},'CRM session mode');
     const current=rows[0];
@@ -65,16 +70,19 @@ export class SupabaseCrmRepository implements CrmRepository{
 
   async recordInbound(input:{sessionId:string;messageId:string;content:string;contactName?:string|null;waId:string}){
     await this.#ensureWhatsAppSession(input.sessionId);
+    await this.#markWhatsAppContext(input.sessionId);
     const inserted=await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'CLIENTE',contenido:input.content,canal:'whatsapp',metadata:{source:'whatsapp_cloud_api',wa_id:input.waId,contact_name:input.contactName??null}}],'CRM inbound message');
     const current=await this.#mode(input.sessionId);
     return{...current,duplicate:Boolean(inserted?.duplicate)};
   }
 
   async recordBotMessage(input:{sessionId:string;messageId:string;content:string;waId:string}):Promise<void>{
+    await this.#markWhatsAppContext(input.sessionId);
     await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'BOT',contenido:input.content,canal:'whatsapp',metadata:{source:'stech_backend',wa_id:input.waId}}],'CRM bot message');
   }
 
   async recordAdvisorMessage(input:{sessionId:string;messageId:string;content:string;actor:CrmActor}):Promise<void>{
+    await this.#markWhatsAppContext(input.sessionId);
     await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'ASESOR',contenido:input.content,canal:'whatsapp',asesor_id:input.actor.id,metadata:{source:'stech_crm',actor_email:input.actor.email,actor_name:input.actor.name,actor_role:input.actor.role}}],'CRM advisor message');
   }
 }
