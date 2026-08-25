@@ -14,7 +14,10 @@ import { OpenAIEmbeddingProvider } from './adapters/openai/OpenAIEmbeddingProvid
 import { SupabaseConversationRepository } from './adapters/supabase/SupabaseConversationRepository.ts';
 import { SupabaseRagRepository } from './adapters/supabase/SupabaseRagRepository.ts';
 import { SupabaseTelemetryRepository } from './adapters/supabase/SupabaseTelemetryRepository.ts';
+import { SupabaseCrmAuth } from './adapters/supabase/SupabaseCrmAuth.ts';
+import { SupabaseCrmRepository } from './adapters/supabase/SupabaseCrmRepository.ts';
 import { WhatsAppCloudApiClient } from './adapters/whatsapp/WhatsAppCloudApiClient.ts';
+import { WhatsAppInboundProcessor } from './adapters/whatsapp/WhatsAppInboundProcessor.ts';
 import { HybridConversationEngine } from './conversation/HybridConversationEngine.ts';
 import { RecentHistoryLlmProvider } from './conversation/history/RecentHistoryLlmProvider.ts';
 import { FullRagLlmProvider } from './conversation/commercial/FullRagLlmProvider.ts';
@@ -98,5 +101,15 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
       })
     : null;
 
-  return {config,conversations,telemetry,erp,rag,llm,automation,whatsapp,engine: new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation })};
+  const crm = config.persistenceMode==='supabase'
+    ?new SupabaseCrmRepository({url:need(config.supabaseUrl,'SUPABASE_URL'),serviceRoleKey:need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY')})
+    :null;
+  const crmAuth = config.persistenceMode==='supabase'
+    ?new SupabaseCrmAuth({url:need(config.supabaseUrl,'SUPABASE_URL'),serviceRoleKey:need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY')})
+    :null;
+
+  const engine=new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation });
+  const whatsappInbound=crm?new WhatsAppInboundProcessor({crm,engine,whatsapp}):null;
+
+  return {config,conversations,telemetry,erp,rag,llm,automation,whatsapp,crm,crmAuth,whatsappInbound,engine};
 }
