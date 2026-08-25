@@ -23,6 +23,7 @@ function publicError(error:unknown):{status:number;code:string}{
   if(/CRM_AUTH_REQUIRED|CRM_AUTH_INVALID/.test(raw))return{status:401,code:'CRM_UNAUTHORIZED'};
   if(/CRM_ACCESS_DENIED/.test(raw))return{status:403,code:'CRM_FORBIDDEN'};
   if(/CRM_SESSION_NOT_FOUND|SESSION_NOT_FOUND/.test(raw))return{status:404,code:'SESSION_NOT_FOUND'};
+  if(/SESSION_CLOSED/.test(raw))return{status:409,code:'SESSION_CLOSED'};
   if(/40001|modificada por otro proceso|version/i.test(raw))return{status:409,code:'VERSION_CONFLICT'};
   if(/CRM_NOT_CONFIGURED|WHATSAPP_NOT_CONFIGURED/.test(raw))return{status:503,code:raw.includes('WHATSAPP')?'WHATSAPP_NOT_CONFIGURED':'CRM_NOT_CONFIGURED'};
   if(/required|obligatorio|INVALID_|is required/i.test(raw))return{status:400,code:'INVALID_REQUEST'};
@@ -70,11 +71,9 @@ export function createStechApp(options:AppOptions = {}) {
         const parsed=parseWhatsAppWebhook(body);
         send(res,200,{received:true});
         queueMicrotask(()=>{
-          try{
-            if(parsed.messages.length)writeTrace({event:'WHATSAPP_INBOUND',count:parsed.messages.length,types:[...new Set(parsed.messages.map(message=>message.type))]});
-            if(parsed.statuses.length)writeTrace({event:'WHATSAPP_STATUS',count:parsed.statuses.length,statuses:[...new Set(parsed.statuses.map(status=>status.status))]});
-            if(whatsappInbound)void whatsappInbound.process(parsed);
-          }catch(error){writeTrace({event:'WHATSAPP_ERROR',stage:'POST_ACK_DISPATCH',error:error instanceof Error?error.message:String(error)},'error');}
+          if(parsed.messages.length)writeTrace({event:'WHATSAPP_INBOUND',count:parsed.messages.length,types:[...new Set(parsed.messages.map(message=>message.type))]});
+          if(parsed.statuses.length)writeTrace({event:'WHATSAPP_STATUS',count:parsed.statuses.length,statuses:[...new Set(parsed.statuses.map(status=>status.status))]});
+          if(whatsappInbound)void whatsappInbound.process(parsed).catch(error=>writeTrace({event:'WHATSAPP_ERROR',stage:'POST_ACK_DISPATCH',error:error instanceof Error?error.message:String(error)},'error'));
         });
         return;
       }
@@ -118,6 +117,7 @@ export function createStechApp(options:AppOptions = {}) {
         const who=await actor(req);const repository=requireCrm();const body=await readJson(req);const version=number(body.version);const content=String(body.content??'').trim();
         if(version===null||!content)throw new Error('MESSAGE_AND_VERSION_REQUIRED');if(!whatsapp)throw new Error('WHATSAPP_NOT_CONFIGURED');
         const id=decodeURIComponent(crmMessagesMatch[1]);const detail=await repository.getConversation(id);if(!detail.recipient)throw new Error('WHATSAPP_RECIPIENT_REQUIRED');
+        if(String(detail.session?.modo_atencion??'').toUpperCase()==='CERRADO')throw new Error('SESSION_CLOSED');
         const mode=await repository.changeMode({sessionId:id,mode:'HUMANO',version,actorId:who.id,reason:'Mensaje enviado por asesor desde CRM'});
         const sent=await whatsapp.sendText(detail.recipient,content);if(!sent.messageId)throw new Error('WHATSAPP_MESSAGE_ID_REQUIRED');
         await repository.recordAdvisorMessage({sessionId:id,messageId:sent.messageId,content,actor:who});
