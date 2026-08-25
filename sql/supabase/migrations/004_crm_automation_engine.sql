@@ -65,6 +65,10 @@ alter table public.crm_automation_rules enable row level security;
 alter table public.crm_automation_jobs enable row level security;
 alter table public.crm_automation_executions enable row level security;
 
+grant select,insert,update,delete on public.crm_automation_rules to service_role;
+grant select,insert,update,delete on public.crm_automation_jobs to service_role;
+grant select,insert,update,delete on public.crm_automation_executions to service_role;
+
 create or replace function public.crm_cancel_pending_automation_jobs(
   p_session_id text,
   p_reason text
@@ -77,14 +81,14 @@ as $$
 declare
   v_count integer;
 begin
-  update public.crm_automation_jobs
+  update public.crm_automation_jobs as j
      set status = 'CANCELLED',
          cancel_reason = coalesce(nullif(btrim(p_reason), ''), 'CANCELLED'),
          lease_owner = null,
          lease_until = null,
          updated_at = now()
-   where session_id = p_session_id
-     and status = 'PENDING';
+   where j.session_id = p_session_id
+     and j.status = 'PENDING';
 
   get diagnostics v_count = row_count;
   return v_count;
@@ -121,16 +125,16 @@ begin
 
   -- Conservative at-most-once policy: an expired PROCESSING lease is not
   -- automatically retried because the provider may already have accepted it.
-  update public.crm_automation_jobs
+  update public.crm_automation_jobs as j
      set status = 'AMBIGUOUS',
          last_error = 'WORKER_LEASE_EXPIRED_AFTER_CLAIM',
          cancel_reason = 'WORKER_LEASE_EXPIRED_AFTER_CLAIM',
          lease_owner = null,
          lease_until = null,
          updated_at = now()
-   where status = 'PROCESSING'
-     and lease_until is not null
-     and lease_until < now();
+   where j.status = 'PROCESSING'
+     and j.lease_until is not null
+     and j.lease_until < now();
 
   return query
   with due as (
@@ -144,7 +148,7 @@ begin
      for update of j skip locked
      limit greatest(1, least(coalesce(p_batch_size, 20), 200))
   ), claimed as (
-    update public.crm_automation_jobs j
+    update public.crm_automation_jobs as j
        set status = 'PROCESSING',
            attempt_count = j.attempt_count + 1,
            lease_owner = p_worker_id,
