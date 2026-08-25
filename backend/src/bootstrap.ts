@@ -105,7 +105,11 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
     ?new SupabaseCrmRepository({url:need(config.supabaseUrl,'SUPABASE_URL'),serviceRoleKey:need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY')})
     :null;
   const crmAuth = config.persistenceMode==='supabase'
-    ?new SupabaseCrmAuth({url:need(config.supabaseUrl,'SUPABASE_URL'),serviceRoleKey:need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY')})
+    ?new SupabaseCrmAuth({
+        url:need(config.supabaseUrl,'SUPABASE_URL'),
+        serviceRoleKey:need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY'),
+        authApiKey:config.supabaseAuthApiKey,
+      })
     :null;
 
   const engine=new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation });
