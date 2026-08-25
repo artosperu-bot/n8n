@@ -43,21 +43,27 @@ test('WhatsApp CRM lists conversations and returns detail behind auth',async()=>
   assert.equal(detail.status,200);assert.equal(((await detail.json()) as any).session.modo_atencion,'BOT');
 }));
 
-test('take and return-bot endpoints require optimistic version and call mode authority',async()=>withApp(async(base,calls)=>{
+test('take and return-bot endpoints use auth.users id with optimistic version',async()=>withApp(async(base,calls)=>{
   const headers={authorization:'Bearer user-jwt','content-type':'application/json'};
   const take=await fetch(`${base}/api/whatsapp/conversations/${encodeURIComponent('whatsapp:51911111111')}/take`,{method:'POST',headers,body:JSON.stringify({version:4,reason:'Atención manual'})});
   assert.equal(take.status,200);
   const back=await fetch(`${base}/api/whatsapp/conversations/${encodeURIComponent('whatsapp:51911111111')}/return-bot`,{method:'POST',headers,body:JSON.stringify({version:5})});
   assert.equal(back.status,200);
-  assert.ok(calls.some(x=>x[0]==='changeMode'&&x[1].mode==='HUMANO'&&x[1].version===4));
-  assert.ok(calls.some(x=>x[0]==='changeMode'&&x[1].mode==='BOT'&&x[1].version===5));
+  const humanCall=calls.find(x=>x[0]==='changeMode'&&x[1].mode==='HUMANO'&&x[1].version===4);
+  const botCall=calls.find(x=>x[0]==='changeMode'&&x[1].mode==='BOT'&&x[1].version===5);
+  assert.equal(humanCall?.[1]?.actorId,'auth-user-1');
+  assert.equal(botCall?.[1]?.actorId,'auth-user-1');
 }));
 
-test('advisor message is sent to Meta by backend and persisted with Meta message id',async()=>withApp(async(base,calls)=>{
+test('advisor message uses auth.users id, is sent to Meta and persisted with Meta message id',async()=>withApp(async(base,calls)=>{
   const response=await fetch(`${base}/api/whatsapp/conversations/${encodeURIComponent('whatsapp:51911111111')}/messages`,{method:'POST',headers:{authorization:'Bearer user-jwt','content-type':'application/json'},body:JSON.stringify({version:4,content:'Hola desde asesor'})});
   assert.equal(response.status,200);
+  const humanCall=calls.find(x=>x[0]==='changeMode'&&x[1].mode==='HUMANO');
+  const advisorCall=calls.find(x=>x[0]==='advisor'&&x[1].messageId==='wamid.OUT1');
+  assert.equal(humanCall?.[1]?.actorId,'auth-user-1');
+  assert.equal(advisorCall?.[1]?.actor?.userId,'auth-user-1');
+  assert.equal(advisorCall?.[1]?.actor?.id,'crm-user-1');
   assert.ok(calls.some(x=>x[0]==='sendText'&&x[1]==='51911111111'));
-  assert.ok(calls.some(x=>x[0]==='advisor'&&x[1].messageId==='wamid.OUT1'));
 }));
 
 test('separate WhatsApp status endpoint reports backend-to-Meta connectivity',async()=>withApp(async base=>{
