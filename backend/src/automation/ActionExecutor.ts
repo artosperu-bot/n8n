@@ -10,11 +10,15 @@ function compactReason(error: unknown): string {
 }
 
 export class ActionExecutor {
-  constructor(private readonly sender: AutomationSender) {}
+  readonly #sender: AutomationSender;
+
+  constructor(sender: AutomationSender) {
+    this.#sender = sender;
+  }
 
   async sendText(recipient: string, content: string): Promise<AutomationActionResult> {
     try {
-      const sent = await this.sender.sendTextOnce(recipient, content);
+      const sent = await this.#sender.sendTextOnce(recipient, content);
       if (!sent.messageId) return {outcome: 'FAILED', providerMessageId: null, reason: 'WHATSAPP_MESSAGE_ID_REQUIRED'};
       return {outcome: 'SENT', providerMessageId: sent.messageId, reason: null};
     } catch (error) {
