@@ -31,6 +31,13 @@ export class WhatsAppInboundProcessor{
     try{result=await this.#engine.processTurn({sessionId,message:message.text,messageId:message.waMessageId});}
     catch(error){if(duplicateError(error)){writeTrace({event:'WHATSAPP_DUPLICATE',stage:'ENGINE'});return{processed:false,duplicate:true};}throw error;}
     if(result?.state?.blockAutomaticReply||result?.state?.handoffActive)return{processed:true,suppressed:true};
+    if(this.#crm.getAttentionState){
+      const latest=await this.#crm.getAttentionState(sessionId);
+      if(latest.mode!=='BOT'){
+        writeTrace({event:'WHATSAPP_INBOUND',status:'BOT_REPLY_CANCELLED_AFTER_TAKEOVER',attentionMode:latest.mode});
+        return{processed:true,suppressed:true};
+      }
+    }
     const answer=String(result?.answer??'').trim();
     if(!answer||!this.#whatsapp){writeTrace({event:'WHATSAPP_ERROR',stage:'OUTBOUND_NOT_CONFIGURED'});return{processed:true,suppressed:true};}
     const sent=await this.#whatsapp.sendText(message.waId,answer);
