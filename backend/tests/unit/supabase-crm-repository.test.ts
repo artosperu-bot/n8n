@@ -4,19 +4,25 @@ import { SupabaseCrmRepository } from '../../src/adapters/supabase/SupabaseCrmRe
 
 function json(body:any,status=200){return new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json'}});}
 
-test('CRM repository lists only WhatsApp inbox rows and exposes stats by attention mode',async()=>{
+test('CRM repository lists WhatsApp by canonical session prefix even if generic engine overwrote canal',async()=>{
+  let inboxUrl='';
   const fetcher=async(url:any)=>{
     const value=String(url);
-    if(value.includes('/rest/v1/crm_v_inbox'))return json([
-      {session_id:'whatsapp:51911111111',canal:'whatsapp',modo_atencion:'BOT',version:3,ultimo_mensaje:'Hola'},
-      {session_id:'api-1',canal:'backend',modo_atencion:'BOT',version:2,ultimo_mensaje:'Test'},
-    ]);
+    if(value.includes('/rest/v1/crm_v_inbox')){
+      inboxUrl=value;
+      return json([
+        {session_id:'whatsapp:51911111111',canal:'backend',modo_atencion:'BOT',version:3,ultimo_mensaje:'Hola'},
+      ]);
+    }
     return json([]);
   };
   const repo=new SupabaseCrmRepository({url:'https://example.supabase.co',serviceRoleKey:'service-secret',fetcher:fetcher as any});
   const result=await repo.listWhatsAppConversations({limit:40});
+  assert.match(inboxUrl,/session_id=ilike\.whatsapp/);
+  assert.ok(!inboxUrl.includes('canal=eq.whatsapp'));
   assert.equal(result.sessions.length,1);
   assert.equal(result.sessions[0].session_id,'whatsapp:51911111111');
+  assert.equal(result.sessions[0].canal,'whatsapp');
   assert.equal(result.stats.bot,1);
 });
 
@@ -46,7 +52,7 @@ test('CRM repository changeMode calls versioned crm_cambiar_modo_atencion author
   };
   const repo=new SupabaseCrmRepository({url:'https://example.supabase.co',serviceRoleKey:'service-secret',fetcher:fetcher as any});
   await repo.changeMode({sessionId:'whatsapp:51911111111',mode:'HUMANO',version:7,actorId:'crm-user-1',reason:'Tomada desde CRM'});
-  assert.deepEqual(body,{p_session_id:'whatsapp:51911111111',p_nuevo_modo:'HUMANO',p_actor_id:'crm-user-1',p_motivo:'Tomada desde CRM',p_version_esperada:7});
+  assert.deepEqual(body,{p_session_id:'whatsapp:51911111111',p_nuevo_modo_atencion:'HUMANO',p_actor_id:'crm-user-1',p_motivo:'Tomada desde CRM',p_version_esperada:7});
 });
 
 test('CRM repository records inbound wamid idempotently and returns current attention mode',async()=>{
