@@ -42,3 +42,32 @@ test('QA messages persist trace ids and use qa_live channel', async () => {
   const patch = calls.find(c => c.url.includes('/ia_conversaciones?id=eq.turn-1') && c.method === 'PATCH');
   assert.equal(patch.body.modelo, 'gpt-live');
 });
+
+test('WhatsApp atomic turn preserves whatsapp channel in session and context persistence', async () => {
+  const calls: any[] = [];
+  const fetcher: typeof fetch = async (url, init: any = {}) => {
+    const target=String(url);
+    const body=init.body?JSON.parse(String(init.body)):null;
+    calls.push({url:target,method:init.method??'GET',body});
+    if(target.includes('/rpc/ia_adquirir_turno'))return Response.json({ok:true,acquired:true,reason:'ACQUIRED'});
+    if(target.includes('/rpc/ia_persistir_turno_atomico'))return Response.json({ok:true,status:'SAVED'});
+    if(target.includes('/rpc/ia_liberar_turno'))return Response.json({ok:true,released:true});
+    return new Response(null,{status:204});
+  };
+  const repo=new SupabaseConversationRepository({url:'https://example.supabase.co',key:'service',fetcher});
+  const sessionId='whatsapp:51922920517';
+  await repo.beginTurn(sessionId,'wamid.real-1','wamid.real-1');
+  await repo.completeTurn(sessionId,'Hola','Hola, ¿en qué te ayudo?',{
+    sessionId,
+    turnCount:1,
+    comparisonProducts:[],
+    spinFacts:[],
+    priorities:[],
+  });
+
+  const sessionEnsure=calls.find(c=>c.url.includes('/ia_sesiones'));
+  assert.equal(sessionEnsure.body[0].canal,'whatsapp');
+  const persist=calls.find(c=>c.url.includes('/rpc/ia_persistir_turno_atomico'));
+  assert.ok(persist);
+  assert.equal(persist.body.p_contexto.canal,'whatsapp');
+});
