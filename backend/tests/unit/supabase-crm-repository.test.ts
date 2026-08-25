@@ -52,7 +52,7 @@ test('CRM repository changeMode calls versioned crm_cambiar_modo_atencion author
   };
   const repo=new SupabaseCrmRepository({url:'https://example.supabase.co',serviceRoleKey:'service-secret',fetcher:fetcher as any});
   await repo.changeMode({sessionId:'whatsapp:51911111111',mode:'HUMANO',version:7,actorId:'crm-user-1',reason:'Tomada desde CRM'});
-  assert.deepEqual(body,{p_session_id:'whatsapp:51911111111',p_nuevo_modo_atencion:'HUMANO',p_actor_id:'crm-user-1',p_motivo:'Tomada desde CRM',p_version_esperada:7});
+  assert.deepEqual(body,{p_session_id:'whatsapp:51911111111',p_nuevo_modo:'HUMANO',p_actor_id:'crm-user-1',p_motivo:'Tomada desde CRM',p_version_esperada:7});
 });
 
 test('CRM repository records inbound wamid idempotently and returns current attention mode',async()=>{
