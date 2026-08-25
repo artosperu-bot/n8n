@@ -12,6 +12,7 @@ export type AppConfig = {
   openAiEmbeddingModel: string;
   supabaseUrl?: string;
   supabaseServiceRoleKey?: string;
+  supabaseAuthApiKey?: string;
   supabaseSessionTable: string;
   supabaseContextTable: string;
   supabaseConversationTable: string;
@@ -72,6 +73,7 @@ export function loadConfig(env: EnvLike = process.env): AppConfig {
     openAiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small',
     supabaseUrl: env.SUPABASE_URL,
     supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
+    supabaseAuthApiKey: env.SUPABASE_PUBLISHABLE_KEY ?? env.SUPABASE_ANON_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY,
     supabaseSessionTable: env.SUPABASE_SESSION_TABLE ?? 'ia_sesiones',
     supabaseContextTable: env.SUPABASE_CONTEXT_TABLE ?? 'ia_contexto',
     supabaseConversationTable: env.SUPABASE_CONVERSATION_TABLE ?? 'ia_conversaciones',
