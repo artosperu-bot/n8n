@@ -40,6 +40,11 @@ export type AppConfig = {
   whatsappGraphApiVersion: string;
   whatsappBurstWindowMs:number;
   crmAllowedOrigins:string[];
+  crmAutomationEnabled:boolean;
+  crmAutomationPollIntervalMs:number;
+  crmAutomationBatchSize:number;
+  crmAutomationLeaseSeconds:number;
+  crmAutomationWindowHours:number;
 };
 
 type EnvLike = Record<string, string | undefined>;
@@ -101,5 +106,10 @@ export function loadConfig(env: EnvLike = process.env): AppConfig {
     whatsappGraphApiVersion: env.WHATSAPP_GRAPH_API_VERSION ?? 'v25.0',
     whatsappBurstWindowMs:boundedNumber(env.WHATSAPP_BURST_WINDOW_MS,2500,0,5000),
     crmAllowedOrigins:csv(env.CRM_ALLOWED_ORIGINS,['http://localhost:5173','http://127.0.0.1:5173']),
+    crmAutomationEnabled:bool(env.CRM_AUTOMATION_ENABLED,!test),
+    crmAutomationPollIntervalMs:boundedNumber(env.CRM_AUTOMATION_POLL_MS,5000,1000,60000),
+    crmAutomationBatchSize:boundedNumber(env.CRM_AUTOMATION_BATCH_SIZE,20,1,200),
+    crmAutomationLeaseSeconds:boundedNumber(env.CRM_AUTOMATION_LEASE_SECONDS,60,10,3600),
+    crmAutomationWindowHours:boundedNumber(env.CRM_AUTOMATION_WINDOW_HOURS,24,1,24),
   };
 }
