@@ -8,6 +8,7 @@ import type {
   AutomationRule,
   CreateAutomationRuleInput,
   ScheduleAutomationJobInput,
+  UpdateAutomationRuleInput,
 } from '../../automation/types.ts';
 
 type Options={url:string;serviceRoleKey:string;fetcher?:typeof fetch};
@@ -53,6 +54,13 @@ export class SupabaseAutomationRepository implements AutomationRepository{
       name:input.name,event_type:'BOT_MESSAGE_SENT',delay_seconds:input.delaySeconds,action_type:input.actionType,message_template:input.messageTemplate,active:input.active,priority:input.priority,
     })});
     const rows=await this.json(response,'automation create rule') as any[];if(!rows[0])throw new Error('AUTOMATION_RULE_CREATE_EMPTY');return mapRule(rows[0]);
+  }
+  async updateRule(id:string,input:UpdateAutomationRuleInput):Promise<AutomationRule>{
+    const url=new URL(`${this.url}/rest/v1/crm_automation_rules`);url.searchParams.set('id',`eq.${id}`);
+    const response=await this.fetcher(url,{method:'PATCH',headers:this.headers({Prefer:'return=representation'}),body:JSON.stringify({
+      name:input.name,delay_seconds:input.delaySeconds,message_template:input.messageTemplate,priority:input.priority,updated_at:new Date().toISOString(),
+    })});
+    const rows=await this.json(response,'automation update rule') as any[];if(!rows[0])throw new Error('AUTOMATION_RULE_NOT_FOUND');return mapRule(rows[0]);
   }
   async setRuleActive(id:string,active:boolean):Promise<AutomationRule>{
     const url=new URL(`${this.url}/rest/v1/crm_automation_rules`);url.searchParams.set('id',`eq.${id}`);
