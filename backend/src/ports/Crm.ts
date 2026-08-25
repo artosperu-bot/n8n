@@ -24,6 +24,7 @@ export type CrmConversationDetail={
 export interface CrmRepository{
   listWhatsAppConversations(filters:CrmListFilters):Promise<{sessions:any[];stats:{bot:number;human:number;waiting:number;closed:number}}>;
   getConversation(sessionId:string):Promise<CrmConversationDetail>;
+  getAttentionState?(sessionId:string):Promise<{mode:CrmAttentionMode;version:number|null}>;
   changeMode(input:{sessionId:string;mode:CrmAttentionMode;version:number;actorId:string;reason?:string|null}):Promise<any>;
   recordInbound(input:{sessionId:string;messageId:string;content:string;contactName?:string|null;waId:string}):Promise<{mode:CrmAttentionMode;version:number|null;duplicate?:boolean}>;
   recordBotMessage(input:{sessionId:string;messageId:string;content:string;waId:string}):Promise<void>;
