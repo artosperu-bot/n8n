@@ -50,7 +50,7 @@ export class SupabaseAutomationRepository implements AutomationRepository{
   }
   async createRule(input:CreateAutomationRuleInput):Promise<AutomationRule>{
     const response=await this.fetcher(`${this.url}/rest/v1/crm_automation_rules`,{method:'POST',headers:this.headers({Prefer:'return=representation'}),body:JSON.stringify({
-      name:input.name,event_type:input.eventType,delay_seconds:input.delaySeconds,action_type:input.actionType,message_template:input.messageTemplate,active:input.active,priority:input.priority,
+      name:input.name,event_type:'BOT_MESSAGE_SENT',delay_seconds:input.delaySeconds,action_type:input.actionType,message_template:input.messageTemplate,active:input.active,priority:input.priority,
     })});
     const rows=await this.json(response,'automation create rule') as any[];if(!rows[0])throw new Error('AUTOMATION_RULE_CREATE_EMPTY');return mapRule(rows[0]);
   }
