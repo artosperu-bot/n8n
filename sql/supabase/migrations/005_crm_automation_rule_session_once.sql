@@ -80,7 +80,7 @@ begin
   with acquired as (
     insert into public.crm_automation_rule_session_guard(rule_id, session_id)
     values (p_rule_id, p_session_id)
-    on conflict (rule_id, session_id) do nothing
+    on conflict on constraint crm_automation_rule_session_guard_pkey do nothing
     returning 1
   ), inserted as (
     insert into public.crm_automation_jobs(
