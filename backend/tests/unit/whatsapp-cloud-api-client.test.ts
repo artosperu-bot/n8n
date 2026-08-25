@@ -17,7 +17,7 @@ test('WhatsAppCloudApiClient sends text through configured Graph API endpoint',a
   assert.equal(result.messageId,'wamid.OUT123');
   assert.equal(calls.length,1);
   assert.equal(calls[0].url,'https://graph.facebook.com/v25.0/1283086411554196/messages');
-  assert.equal((calls[0].init.headers as Record<string,string>).authorization,'Bearer secret-token');
+  assert.equal((calls[0].init.headers as Record<string,string>).authorization,'Bearer secret-token'); // EXAMPLE_ONLY: test fixture
   assert.deepEqual(JSON.parse(String(calls[0].init.body)),{
     messaging_product:'whatsapp',recipient_type:'individual',to:'51911111111',type:'text',text:{preview_url:false,body:'Hola'},
   });
@@ -35,7 +35,7 @@ test('WhatsAppCloudApiClient checks configured phone number against Graph API wi
   assert.equal(status.phoneNumberId,'1283086411554196');
   assert.equal(status.verifiedName,'STECH');
   assert.match(calls[0].url,/fields=id%2Cdisplay_phone_number%2Cverified_name%2Cquality_rating/);
-  assert.equal((calls[0].init.headers as Record<string,string>).authorization,'Bearer secret-token');
+  assert.equal((calls[0].init.headers as Record<string,string>).authorization,'Bearer secret-token'); // EXAMPLE_ONLY: test fixture
 });
 
 test('WhatsAppCloudApiClient errors are bounded and never leak access token',async()=>{
