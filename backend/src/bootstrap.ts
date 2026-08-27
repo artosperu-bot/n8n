@@ -17,9 +17,11 @@ import { SupabaseTelemetryRepository } from './adapters/supabase/SupabaseTelemet
 import { SupabaseCrmAuth } from './adapters/supabase/SupabaseCrmAuth.ts';
 import { SupabaseCrmRepository } from './adapters/supabase/SupabaseCrmRepository.ts';
 import { SupabaseAutomationRepository } from './adapters/supabase/SupabaseAutomationRepository.ts';
+import { SupabaseAutomationMediaContext } from './adapters/supabase/SupabaseAutomationMediaContext.ts';
 import { WhatsAppCloudApiClient } from './adapters/whatsapp/WhatsAppCloudApiClient.ts';
 import { WhatsAppInboundProcessor } from './adapters/whatsapp/WhatsAppInboundProcessor.ts';
 import { AutomationScheduler } from './automation/AutomationScheduler.ts';
+import { AutomationMediaResolver } from './automation/AutomationMediaResolver.ts';
 import { AutomationWorker } from './automation/AutomationWorker.ts';
 import { HybridConversationEngine } from './conversation/HybridConversationEngine.ts';
 import { RecentHistoryLlmProvider } from './conversation/history/RecentHistoryLlmProvider.ts';
@@ -119,7 +121,11 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
   const crmAutomationRepository=crm&&whatsapp&&config.crmAutomationEnabled
     ?new SupabaseAutomationRepository({url:need(config.supabaseUrl,'SUPABASE_URL'),serviceRoleKey:need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY')})
     :null;
-  const crmAutomationScheduler=crmAutomationRepository?new AutomationScheduler(crmAutomationRepository):null;
+  const crmAutomationMediaContext=crmAutomationRepository
+    ?new SupabaseAutomationMediaContext({url:need(config.supabaseUrl,'SUPABASE_URL'),serviceRoleKey:need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY')})
+    :null;
+  const crmAutomationMediaResolver=crmAutomationMediaContext?new AutomationMediaResolver(crmAutomationMediaContext,erp):null;
+  const crmAutomationScheduler=crmAutomationRepository?new AutomationScheduler(crmAutomationRepository,()=>new Date(),crmAutomationMediaResolver):null;
   const crmAutomationWorker=crmAutomationRepository&&crm&&whatsapp
     ?new AutomationWorker({
         repository:crmAutomationRepository,
