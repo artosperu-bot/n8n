@@ -1,4 +1,4 @@
-import type { AutomationAttentionMode, AutomationEventType, AutomationRepository } from './types.ts';
+import type { AutomationAttentionMode, AutomationEventType, AutomationMediaSnapshot, AutomationRepository } from './types.ts';
 
 type CustomerMessageEvent = {
   sessionId: string;
@@ -17,13 +17,18 @@ type BotMessageEvent = {
   attentionMode: AutomationAttentionMode;
 };
 
+type MediaResolver={resolveForSession(sessionId:string):Promise<AutomationMediaSnapshot>};
+const EMPTY_MEDIA:AutomationMediaSnapshot={mediaUrl:null,mediaType:null,mediaProductId:null,mediaSource:null};
+
 export class AutomationScheduler {
   readonly #repository: AutomationRepository;
   readonly #now: () => Date;
+  readonly #mediaResolver:MediaResolver|null;
 
-  constructor(repository: AutomationRepository, now: () => Date = () => new Date()) {
+  constructor(repository: AutomationRepository, now: () => Date = () => new Date(), mediaResolver:MediaResolver|null=null) {
     this.#repository = repository;
     this.#now = now;
+    this.#mediaResolver=mediaResolver;
   }
 
   cancelSession(sessionId: string, reason: string): Promise<number> {
@@ -47,6 +52,12 @@ export class AutomationScheduler {
 
     for (const rule of rules) {
       if (!rule.active || rule.eventType !== eventType) continue;
+      let media:AutomationMediaSnapshot=EMPTY_MEDIA;
+      if(rule.actionType==='SEND_IMAGE_CUSTOM_URL'){
+        media={mediaUrl:rule.mediaUrl,mediaType:null,mediaProductId:null,mediaSource:'CUSTOM_URL'};
+      }else if(rule.actionType==='SEND_IMAGE_PRODUCT_AUTO'&&this.#mediaResolver){
+        media=await this.#mediaResolver.resolveForSession(input.sessionId).catch(()=>EMPTY_MEDIA);
+      }
       const job = await this.#repository.scheduleJob({
         ruleId: rule.id,
         sessionId: input.sessionId,
@@ -54,6 +65,8 @@ export class AutomationScheduler {
         basisMessageId: input.customerMessageId || null,
         recipient: input.recipient,
         executeAt: new Date(basis.getTime() + Math.max(0, rule.delaySeconds) * 1000).toISOString(),
+        actionType:rule.actionType,
+        ...media,
       });
       if (job) scheduled += 1;
     }
