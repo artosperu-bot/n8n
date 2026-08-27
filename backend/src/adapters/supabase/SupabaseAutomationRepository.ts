@@ -1,4 +1,5 @@
 import type {
+  AutomationActionType,
   AutomationClaimedJob,
   AutomationEventType,
   AutomationExecutionOutcome,
@@ -13,15 +14,20 @@ import type {
 
 type Options={url:string;serviceRoleKey:string;fetcher?:typeof fetch};
 
+function nullable(value:any):string|null{return value==null||String(value).trim()===''?null:String(value);}
 function mapRule(row:any):AutomationRule{return{
   id:String(row.id),name:String(row.name),eventType:String(row.event_type) as AutomationEventType,
-  delaySeconds:Number(row.delay_seconds??0),actionType:String(row.action_type??'SEND_TEXT') as 'SEND_TEXT',
-  messageTemplate:String(row.message_template??''),active:row.active===true,priority:Number(row.priority??100),
+  delaySeconds:Number(row.delay_seconds??0),actionType:String(row.action_type??'SEND_TEXT') as AutomationActionType,
+  messageTemplate:String(row.message_template??''),mediaUrl:nullable(row.media_url),active:row.active===true,priority:Number(row.priority??100),
 };}
 function mapJob(row:any):AutomationJob{return{
   id:String(row.id),ruleId:String(row.rule_id),sessionId:String(row.session_id),eventType:String(row.event_type) as AutomationEventType,
   basisMessageId:row.basis_message_id==null?null:String(row.basis_message_id),recipient:String(row.recipient),executeAt:String(row.execute_at),
-  status:String(row.status) as AutomationJobStatus,attemptCount:Number(row.attempt_count??0),leaseOwner:row.lease_owner??null,leaseUntil:row.lease_until??null,
+  status:String(row.status) as AutomationJobStatus,attemptCount:Number(row.attempt_count??0),
+  actionType:String(row.action_type_snapshot??row.action_type??'SEND_TEXT') as AutomationActionType,
+  mediaUrl:nullable(row.media_url_snapshot??row.media_url),mediaType:nullable(row.media_type_snapshot??row.media_type),
+  mediaProductId:nullable(row.media_product_id_snapshot??row.media_product_id),mediaSource:nullable(row.media_source_snapshot??row.media_source),
+  leaseOwner:row.lease_owner??null,leaseUntil:row.lease_until??null,
 };}
 
 export class SupabaseAutomationRepository implements AutomationRepository{
@@ -51,14 +57,14 @@ export class SupabaseAutomationRepository implements AutomationRepository{
   }
   async createRule(input:CreateAutomationRuleInput):Promise<AutomationRule>{
     const response=await this.fetcher(`${this.url}/rest/v1/crm_automation_rules`,{method:'POST',headers:this.headers({Prefer:'return=representation'}),body:JSON.stringify({
-      name:input.name,event_type:'BOT_MESSAGE_SENT',delay_seconds:input.delaySeconds,action_type:input.actionType,message_template:input.messageTemplate,active:input.active,priority:input.priority,
+      name:input.name,event_type:'BOT_MESSAGE_SENT',delay_seconds:input.delaySeconds,action_type:input.actionType,message_template:input.messageTemplate,media_url:input.mediaUrl,active:input.active,priority:input.priority,
     })});
     const rows=await this.json(response,'automation create rule') as any[];if(!rows[0])throw new Error('AUTOMATION_RULE_CREATE_EMPTY');return mapRule(rows[0]);
   }
   async updateRule(id:string,input:UpdateAutomationRuleInput):Promise<AutomationRule>{
     const url=new URL(`${this.url}/rest/v1/crm_automation_rules`);url.searchParams.set('id',`eq.${id}`);
     const response=await this.fetcher(url,{method:'PATCH',headers:this.headers({Prefer:'return=representation'}),body:JSON.stringify({
-      name:input.name,delay_seconds:input.delaySeconds,message_template:input.messageTemplate,priority:input.priority,updated_at:new Date().toISOString(),
+      name:input.name,delay_seconds:input.delaySeconds,action_type:input.actionType,message_template:input.messageTemplate,media_url:input.mediaUrl,priority:input.priority,updated_at:new Date().toISOString(),
     })});
     const rows=await this.json(response,'automation update rule') as any[];if(!rows[0])throw new Error('AUTOMATION_RULE_NOT_FOUND');return mapRule(rows[0]);
   }
@@ -74,6 +80,7 @@ export class SupabaseAutomationRepository implements AutomationRepository{
   async scheduleJob(input:ScheduleAutomationJobInput):Promise<AutomationJob|null>{
     const response=await this.fetcher(`${this.url}/rest/v1/rpc/crm_schedule_automation_job_once`,{method:'POST',headers:this.headers(),body:JSON.stringify({
       p_rule_id:input.ruleId,p_session_id:input.sessionId,p_event_type:input.eventType,p_basis_message_id:input.basisMessageId,p_recipient:input.recipient,p_execute_at:input.executeAt,
+      p_action_type:input.actionType,p_media_url:input.mediaUrl,p_media_type:input.mediaType,p_media_product_id:input.mediaProductId,p_media_source:input.mediaSource,
     })});
     const rows=await this.json(response,'automation schedule once') as any[];return rows[0]?mapJob(rows[0]):null;
   }
