@@ -1,6 +1,13 @@
 export type AutomationEventType='CUSTOMER_MESSAGE_RECEIVED'|'BOT_MESSAGE_SENT';
-export type AutomationActionType='SEND_TEXT';
+export type AutomationActionType='SEND_TEXT'|'SEND_IMAGE_PRODUCT_AUTO'|'SEND_IMAGE_CUSTOM_URL';
 export type AutomationJobStatus='PENDING'|'PROCESSING'|'SENT'|'CANCELLED'|'SKIPPED'|'FAILED'|'AMBIGUOUS';
+
+export type AutomationMediaSnapshot={
+  mediaUrl:string|null;
+  mediaType:string|null;
+  mediaProductId:string|null;
+  mediaSource:string|null;
+};
 
 export type AutomationRule={
   id:string;
@@ -9,6 +16,7 @@ export type AutomationRule={
   delaySeconds:number;
   actionType:AutomationActionType;
   messageTemplate:string;
+  mediaUrl:string|null;
   active:boolean;
   priority:number;
 };
@@ -23,6 +31,11 @@ export type AutomationJob={
   executeAt:string;
   status:AutomationJobStatus;
   attemptCount:number;
+  actionType:AutomationActionType;
+  mediaUrl:string|null;
+  mediaType:string|null;
+  mediaProductId:string|null;
+  mediaSource:string|null;
   leaseOwner?:string|null;
   leaseUntil?:string|null;
 };
@@ -38,6 +51,11 @@ export type ScheduleAutomationJobInput={
   basisMessageId:string|null;
   recipient:string;
   executeAt:string;
+  actionType:AutomationActionType;
+  mediaUrl:string|null;
+  mediaType:string|null;
+  mediaProductId:string|null;
+  mediaSource:string|null;
 };
 
 export type AutomationExecutionOutcome={
@@ -54,6 +72,7 @@ export type CreateAutomationRuleInput={
   delaySeconds:number;
   actionType:AutomationActionType;
   messageTemplate:string;
+  mediaUrl:string|null;
   active:boolean;
   priority:number;
 };
@@ -61,7 +80,9 @@ export type CreateAutomationRuleInput={
 export type UpdateAutomationRuleInput={
   name:string;
   delaySeconds:number;
+  actionType:AutomationActionType;
   messageTemplate:string;
+  mediaUrl:string|null;
   priority:number;
 };
 
@@ -94,9 +115,15 @@ export interface AutomationCrmPort{
     content:string;
     recipient:string;
     jobId:string;
+    actionType?:AutomationActionType;
+    mediaUrl?:string|null;
+    mediaProductId?:string|null;
+    mediaSource?:string|null;
+    fallbackToText?:boolean;
   }):Promise<void>;
 }
 
 export interface AutomationSender{
   sendTextOnce(to:string,text:string):Promise<{messageId:string|null}>;
+  sendImageWithCaptionOnce?(to:string,imageUrl:string,caption:string):Promise<{messageId:string|null}>;
 }
