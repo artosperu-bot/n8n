@@ -1,5 +1,5 @@
 import type { CrmActor, CrmAttentionMode, CrmListFilters, CrmRepository } from '../../ports/Crm.ts';
-import type { AutomationCrmPort } from '../../automation/types.ts';
+import type { AutomationActionType, AutomationCrmPort } from '../../automation/types.ts';
 
 type Options={url:string;serviceRoleKey:string;fetcher?:typeof fetch};
 
@@ -115,10 +115,18 @@ export class SupabaseCrmRepository implements CrmRepository,AutomationCrmPort{
     await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'BOT',contenido:input.content,canal:'whatsapp',metadata:{source:'stech_backend',wa_id:input.waId}}],'CRM bot message');
   }
 
-  async recordAutomationMessage(input:{sessionId:string;messageId:string;content:string;recipient:string;jobId:string}):Promise<void>{
+  async recordAutomationMessage(input:{sessionId:string;messageId:string;content:string;recipient:string;jobId:string;actionType?:AutomationActionType;mediaUrl?:string|null;mediaProductId?:string|null;mediaSource?:string|null;fallbackToText?:boolean}):Promise<void>{
     await this.#ensureWhatsAppSession(input.sessionId);
     await this.#markWhatsAppContext(input.sessionId);
-    await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'BOT',contenido:input.content,canal:'whatsapp',metadata:{source:'crm_automation',wa_id:input.recipient,automation_job_id:input.jobId}}],'CRM automation message');
+    await this.#insert('crm_mensajes',[{
+      session_id:input.sessionId,message_id:input.messageId,emisor:'BOT',contenido:input.content,canal:'whatsapp',
+      metadata:{
+        source:'crm_automation',wa_id:input.recipient,automation_job_id:input.jobId,
+        automation_action_type:input.actionType??'SEND_TEXT',automation_media_url:input.mediaUrl??null,
+        automation_media_product_id:input.mediaProductId??null,automation_media_source:input.mediaSource??null,
+        automation_fallback_to_text:Boolean(input.fallbackToText),
+      },
+    }],'CRM automation message');
   }
 
   async recordAdvisorMessage(input:{sessionId:string;messageId:string;content:string;actor:CrmActor}):Promise<void>{
