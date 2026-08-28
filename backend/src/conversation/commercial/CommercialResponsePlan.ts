@@ -45,6 +45,7 @@ function responseMode(input: LlmWriteInput, nba: string): CommercialResponseMode
   if (nba === 'ASK_MISSING_FACT') return 'DISCOVERY_SPIN';
   if (nba === 'SOFT_CLOSE') return 'SOFT_CLOSE';
   if (hasContextualMove || (strategy === 'FAB_SPIN' && hasVerifiedFeatures && hasGenuineContext)) return 'CONTEXTUAL_FAB';
+  if (intent === 'PRODUCT_INFO') return 'PRODUCT_OVERVIEW';
   return 'FACTUAL_DIRECT';
 }
 
@@ -66,7 +67,6 @@ function closePurpose(input:LlmWriteInput,nba:string):CommercialResponsePlan['cl
 export function buildCommercialResponsePlan(input: LlmWriteInput, factualCore: string): CommercialResponsePlan {
   const nba = exactNba(input);
   const mode = responseMode(input, nba);
-  const intent = String(input.resolvedCurrentIntent ?? input.intent ?? '').toUpperCase();
   const contextFocus = unique([
     input.useCase,
     input.problem,
@@ -76,14 +76,12 @@ export function buildCommercialResponsePlan(input: LlmWriteInput, factualCore: s
   ]).slice(0, 6);
   const maxQuestions: 0 | 1 = ['ASK_MISSING_FACT', 'SOFT_CLOSE', 'COLLECT_RESERVATION_DATA'].includes(nba) ? 1 : 0;
   const allowedActions = nba === 'ANSWER_ONLY' ? [] : [nba];
-  const shouldUseLlm = mode !== 'HANDOFF'
-    && (mode !== 'FACTUAL_DIRECT' || intent === 'PRODUCT_INFO');
 
   return {
     mode,
     strategy: String(input.state?.commercialStrategy ?? '').trim() || null,
-    shouldUseLlm,
-    acknowledgeContext: contextFocus.length > 0 && mode !== 'FACTUAL_DIRECT',
+    shouldUseLlm: !['FACTUAL_DIRECT', 'HANDOFF'].includes(mode),
+    acknowledgeContext: contextFocus.length > 0 && mode !== 'FACTUAL_DIRECT' && mode !== 'PRODUCT_OVERVIEW',
     contextFocus,
     factualCore: String(factualCore ?? '').trim(),
     exactNba: nba,
@@ -117,6 +115,9 @@ export function buildCommercialResponseInstruction(plan: CommercialResponsePlan)
   const action = authorizedActionInstruction(plan);
   const safety = 'No inventes escasez, urgencia, popularidad, prueba social, rendimiento, precio, stock ni capacidades.';
 
+  if (plan.mode === 'PRODUCT_OVERVIEW') {
+    return `RESPUESTA_DIRECTA es únicamente la fuente de hechos verificados: no la copies, no la recites literalmente y no mantengas su estructura de ficha técnica. Presenta el producto como lo haría un asesor comercial humano en 2 a 4 frases naturales. Selecciona solo 3 o 4 datos realmente representativos y agrúpalos por valor práctico; traduce memoria/almacenamiento, batería/carga, resistencia u otros hechos disponibles a lo que significan en el uso diario, sin asumir un uso que el cliente no haya dicho. Evita expresiones mecánicas como “en memoria viene con”, “en autonomía equipa” o “en resistencia destaca por certificaciones”. No hagas una lista de especificaciones salvo que el cliente la pida. No inventes beneficios técnicos que no puedan sostenerse con los hechos. Si exactNba es ANSWER_ONLY, termina sin pregunta, sin CTA y sin volver a discovery. ${SIMPLE_HUMAN_LANGUAGE} ${action}. ${safety}`;
+  }
   if (plan.mode === 'DISCOVERY_SPIN') {
     return `Conserva los hechos de RESPUESTA_DIRECTA, pero no la conviertas en una ficha técnica. Responde primero lo actual y luego formula solo la pregunta faltante autorizada, como máximo una. No preguntes presupuesto salvo que ese sea exactamente el dato faltante; no repitas situación, problema, consecuencia o prioridad ya conocidos. Si ya existe una consecuencia en el contexto (${context}), no vuelvas a preguntarla. ${SIMPLE_HUMAN_LANGUAGE} ${GROUNDED_PAIN_EMPATHY} No completes por tu cuenta el dato que realmente falte. ${action}. ${safety}`;
   }
