@@ -14,6 +14,7 @@ test('generic objection never turns into a synthetic budget objection',()=>{
     allowedProducts:['Armor 22'],
   });
   assert.notEqual(prepared.missingFact,'presupuesto máximo');
+  assert.equal(prepared.finalExecutableNba,'ANSWER_ONLY');
 });
 
 test('generic LAER objection instruction does not pretend the objection is price',()=>{
