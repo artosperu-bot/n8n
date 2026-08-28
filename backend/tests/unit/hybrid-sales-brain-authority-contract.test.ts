@@ -17,6 +17,19 @@ test('generic objection never turns into a synthetic budget objection',()=>{
   assert.equal(prepared.finalExecutableNba,'ANSWER_ONLY');
 });
 
+test('price objection never invents a budget-discovery question',()=>{
+  const prepared=prepareCommercialWriteInput({
+    message:'El Armor 22 me parece muy caro. ¿Por qué debería elegirlo?',
+    intent:'HANDLE_PRICE_OBJECTION',
+    state:{activeProduct:'Armor 22',objection:'precio alto'},
+    decision:{nextBestAction:'ASK_MISSING_FACT',objection:'precio alto'} as any,
+    resolvedProduct:'Armor 22',
+    allowedProducts:['Armor 22'],
+  });
+  assert.equal(prepared.missingFact,null);
+  assert.equal(prepared.finalExecutableNba,'ANSWER_ONLY');
+});
+
 test('generic LAER objection instruction does not pretend the objection is price',()=>{
   const plan=buildCommercialResponsePlan({
     message:'No confío mucho en ese equipo Armor 22.',
