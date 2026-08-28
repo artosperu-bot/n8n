@@ -28,18 +28,18 @@ jobs:
           print('PERSISTENCE_MODE=' + str(body.get('modes',{}).get('persistence')))
           PY
 
-      - name: Execute generic objection turn in deployed backend
+      - name: Execute exact worker fit turn in deployed backend
         shell: bash
         run: |
           set -euo pipefail
-          SESSION_ID="qa-prod-generic-objection-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          MESSAGE_ID="qa-prod-generic-objection-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-01"
+          SESSION_ID="qa-prod-worker-fit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          MESSAGE_ID="qa-prod-worker-fit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-01"
           BODY="$(python - "$SESSION_ID" "$MESSAGE_ID" <<'PY'
           import json, sys
           print(json.dumps({
             'sessionId': sys.argv[1],
             'messageId': sys.argv[2],
-            'message': 'No confío mucho en ese equipo Armor 22.'
+            'message': 'Soy obrero, ¿me sirve el Armor 22?'
           }, ensure_ascii=False))
           PY
           )"
@@ -54,12 +54,13 @@ jobs:
           body=json.loads(sys.argv[1])
           print('ANSWER=' + str(body.get('answer')))
           debug=body.get('debug') or {}
+          state=body.get('state') or {}
+          pending=state.get('pendingQuestion') or {}
           print('INTENT=' + str(debug.get('intent')))
           print('ROUTE=' + str(debug.get('route')))
           print('NEXT_BEST_ACTION=' + str(debug.get('nextBestAction')))
-          state=body.get('state') or {}
-          print('OBJECTION=' + str(state.get('objection')))
           print('COMMERCIAL_STAGE=' + str(state.get('commercialStage')))
-          print('COMMERCIAL_STRATEGY=' + str(state.get('commercialStrategy')))
+          print('USE_CASE=' + str(state.get('useCase')))
+          print('PENDING_MISSING_FACT=' + str(pending.get('missingFact')))
           assert body.get('answer'), body
           PY
