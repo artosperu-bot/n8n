@@ -94,6 +94,6 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
       return 'OFFER_ALTERNATIVE';
 
     default:
-      return 'ASK_MISSING_FACT';
+      return 'ANSWER_ONLY';
   }
 }
