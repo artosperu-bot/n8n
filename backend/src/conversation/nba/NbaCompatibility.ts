@@ -42,8 +42,16 @@ export function compatibleNba(
   fallback:string|null,
 ):string|null {
   const i=String(intent).toUpperCase();
+  const deterministic=String(fallback??'').toUpperCase();
   if (state.purchaseSignal===true || i==='PURCHASE') return purchaseAction(state);
   if (['HUMAN','QUOTE'].includes(i)) return 'ASSISTED_HANDOFF';
+
+  // A broad PRODUCT_INFO turn must progress with exactly one useful discovery
+  // question when the deterministic authority says context is still missing.
+  // The planner may choose the wording, but it cannot suppress that +1 by
+  // downgrading the turn to ANSWER_ONLY. Once use/criteria exist, the fallback
+  // becomes ANSWER_ONLY and the normal semantic-planner authority resumes.
+  if(i==='PRODUCT_INFO'&&deterministic==='ASK_MISSING_FACT')return'ASK_MISSING_FACT';
 
   // The semantic planner is the conversational authority. Deterministic code
   // validates that its proposal is safe/compatible and only then falls back to
