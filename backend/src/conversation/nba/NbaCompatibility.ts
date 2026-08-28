@@ -14,8 +14,8 @@ const ALLOWED: Record<string, Set<string>> = {
   RECOMMEND:new Set(['ASK_MISSING_FACT','RECOMMEND','SOFT_CLOSE','ANSWER_ONLY']),
   RECOMMEND_WITHIN_BUDGET:new Set(['ASK_MISSING_FACT','RECOMMEND','SOFT_CLOSE','ANSWER_ONLY']),
   COMPARE:new Set(['COMPARE','RECOMMEND','SOFT_CLOSE','ANSWER_ONLY']),
-  OBJECTION:new Set(['ASK_MISSING_FACT','OFFER_ALTERNATIVE','RECOMMEND','SOFT_CLOSE']),
-  HANDLE_PRICE_OBJECTION:new Set(['ASK_MISSING_FACT','OFFER_ALTERNATIVE','RECOMMEND','SOFT_CLOSE']),
+  OBJECTION:new Set(['ANSWER_ONLY','ASK_MISSING_FACT','OFFER_ALTERNATIVE','RECOMMEND','SOFT_CLOSE']),
+  HANDLE_PRICE_OBJECTION:new Set(['ANSWER_ONLY','ASK_MISSING_FACT','OFFER_ALTERNATIVE','RECOMMEND','SOFT_CLOSE']),
   FULFILLMENT_SELECTION:new Set(['SOFT_CLOSE','ANSWER_ONLY']),
   CATALOG:new Set(['OFFER_ALTERNATIVE','ANSWER_ONLY','ASK_MISSING_FACT']),
   CATEGORIES:new Set(['OFFER_ALTERNATIVE','ANSWER_ONLY','ASK_MISSING_FACT']),
@@ -44,8 +44,13 @@ export function compatibleNba(
   const i=String(intent).toUpperCase();
   if (state.purchaseSignal===true || i==='PURCHASE') return purchaseAction(state);
   if (['HUMAN','QUOTE'].includes(i)) return 'ASSISTED_HANDOFF';
-  if (isNbaCompatible(intent,fallback,state)) return fallback;
-  if (isNbaCompatible(intent,proposed,state)) return proposed;
+
+  // The semantic planner is the conversational authority. Deterministic code
+  // validates that its proposal is safe/compatible and only then falls back to
+  // the bounded heuristic catalog. This prevents SPIN/NBA heuristics from
+  // replacing an already-correct answer with a synthetic discovery step.
+  if (isNbaCompatible(intent,proposed,state)) return String(proposed).toUpperCase();
+  if (isNbaCompatible(intent,fallback,state)) return String(fallback).toUpperCase();
   if (FACTUAL.has(i)) return 'ANSWER_ONLY';
   return null;
 }
