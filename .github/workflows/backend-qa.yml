@@ -42,5 +42,6 @@ jobs:
           path: |
             backend/qa-test.log
             backend/qa-build.log
+            backend/package-lock.json
           if-no-files-found: ignore
           retention-days: 3
