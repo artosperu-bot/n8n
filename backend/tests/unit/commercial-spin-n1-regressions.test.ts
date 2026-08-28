@@ -40,13 +40,20 @@ test('SPIN exposes the next missing conversational fact in order without making 
   assert.equal(implication.stage,'NEED_PAYOFF');
 });
 
-test('an explicitly stated need can skip redundant SPIN questions',()=>{
-  const spin=evaluateSpinReadiness({useCase:'trabajo_en_campo',priorities:['resistencia']});
-  assert.equal(spin.hasSituation,true);
+test('an explicitly stated decision criterion skips redundant SPIN even without a situation label',()=>{
+  const spin=evaluateSpinReadiness({explicitPriorities:['resistencia','bateria']});
+  assert.equal(spin.hasSituation,false);
   assert.equal(spin.hasNeed,true);
   assert.equal(spin.nextMissingFact,null);
   assert.equal(spin.stage,'READY');
   assert.equal(spin.readyForRecommendation,true);
+});
+
+test('budget alone is not enough to skip useful discovery',()=>{
+  const spin=evaluateSpinReadiness({budget:1500});
+  assert.equal(spin.readyForRecommendation,false);
+  assert.equal(spin.stage,'SITUATION');
+  assert.equal(spin.nextMissingFact,'uso principal');
 });
 
 test('broad PRODUCT_INFO opens one useful SPIN question while a focused capability stays factual',()=>{
@@ -67,16 +74,28 @@ test('deterministic N+1 outranks a conflicting compatible planner proposal',()=>
   assert.equal(capability.nextBestAction,'ANSWER_ONLY');
 });
 
-test('recommendation can use one SPIN discovery N+1 before enough context exists',()=>{
-  assert.equal(nextBestAction('RECOMMEND',{priorities:['resistencia','bateria']}),'ASK_MISSING_FACT');
-  assert.equal(isNbaCompatible('RECOMMEND','ASK_MISSING_FACT',{}),true);
+test('recommendation with explicit criteria answers instead of forcing another SPIN question',()=>{
+  const state={priorities:['resistencia','bateria'],explicitPriorities:['resistencia','bateria']};
+  assert.equal(nextBestAction('RECOMMEND',state),'ANSWER_ONLY');
   const prepared=prepareCommercialWriteInput({
     message:'Busco uno resistente y con buena batería, ¿qué me recomiendas?',intent:'RECOMMEND',
-    state:{priorities:['resistencia','bateria']},decision:{nextBestAction:'ASK_MISSING_FACT'} as any,
+    state,decision:{nextBestAction:'ANSWER_ONLY'} as any,
     allowedProducts:[],
   });
-  assert.equal(prepared.nextBestAction,'ASK_MISSING_FACT');
+  assert.equal(prepared.nextBestAction,'ANSWER_ONLY');
+  assert.equal(prepared.missingFact,null);
+});
+
+test('recommendation without useful context still asks one missing fact',()=>{
+  assert.equal(nextBestAction('RECOMMEND',{}),'ASK_MISSING_FACT');
+  const prepared=prepareCommercialWriteInput({
+    message:'¿Cuál me recomiendas?',intent:'RECOMMEND',state:{},decision:{nextBestAction:'ASK_MISSING_FACT'} as any,allowedProducts:[],
+  });
   assert.equal(prepared.missingFact,'uso principal');
+});
+
+test('neutral OTHER defaults to answer-only instead of fabricating generic discovery',()=>{
+  assert.equal(nextBestAction('OTHER',{}),'ANSWER_ONLY');
 });
 
 test('construction problem does not jump to budget as the next SPIN question',()=>{
