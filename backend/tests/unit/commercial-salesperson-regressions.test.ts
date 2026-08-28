@@ -168,7 +168,7 @@ test('broad product info uses commercial composer instead of full-rag kernel fal
     commercialContractPrepared:true,
   } as any,'Armor 22 tiene información verificada.');
 
-  assert.equal(plan.mode,'FACTUAL_DIRECT');
+  assert.equal(plan.mode,'PRODUCT_OVERVIEW');
   assert.equal(plan.shouldUseLlm,true);
   assert.equal(plan.maxQuestions,0);
 });
