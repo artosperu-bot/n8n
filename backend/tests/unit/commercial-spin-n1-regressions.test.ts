@@ -98,16 +98,16 @@ test('deterministic N+1 outranks a conflicting compatible planner proposal',()=>
   assert.equal(capability.nextBestAction,'ANSWER_ONLY');
 });
 
-test('recommendation can use one SPIN discovery N+1 before enough context exists',()=>{
-  assert.equal(nextBestAction('RECOMMEND',{priorities:['resistencia','bateria']}),'ASK_MISSING_FACT');
-  assert.equal(isNbaCompatible('RECOMMEND','ASK_MISSING_FACT',{}),true);
+test('recommendation skips redundant SPIN when substantive criteria are already explicit',()=>{
+  assert.equal(nextBestAction('RECOMMEND',{priorities:['resistencia','bateria']}),'ANSWER_ONLY');
+  assert.equal(isNbaCompatible('RECOMMEND','ANSWER_ONLY',{}),true);
   const prepared=prepareCommercialWriteInput({
     message:'Busco uno resistente y con buena batería, ¿qué me recomiendas?',intent:'RECOMMEND',
-    state:{priorities:['resistencia','bateria']},decision:{nextBestAction:'ASK_MISSING_FACT'} as any,
+    state:{priorities:['resistencia','bateria']},decision:{nextBestAction:'ANSWER_ONLY'} as any,
     allowedProducts:[],
   });
-  assert.equal(prepared.nextBestAction,'ASK_MISSING_FACT');
-  assert.equal(prepared.missingFact,'uso principal');
+  assert.equal(prepared.nextBestAction,'ANSWER_ONLY');
+  assert.equal(prepared.missingFact,null);
 });
 
 test('construction problem does not jump to budget as the next SPIN question',()=>{
