@@ -85,7 +85,7 @@ test('generic objection without a verified alternative answers without inventing
   assert.equal(prepared.missingFact,null);
 });
 
-test('price objection without verified alternative asks budget only when budget is unknown',()=>{
+test('price objection without verified alternative answers first and never invents a budget question',()=>{
   const unknown=prepareCommercialWriteInput({
     message:'Está caro.',
     intent:'HANDLE_PRICE_OBJECTION',
@@ -94,8 +94,8 @@ test('price objection without verified alternative asks budget only when budget 
     allowedProducts:['Armor 22'],
     alternatives:[],
   });
-  assert.equal(unknown.nextBestAction,'ASK_MISSING_FACT');
-  assert.equal(unknown.missingFact,'presupuesto máximo');
+  assert.equal(unknown.nextBestAction,'ANSWER_ONLY');
+  assert.equal(unknown.missingFact,null);
 
   const known=prepareCommercialWriteInput({
     message:'Está caro, mi tope es 900.',
