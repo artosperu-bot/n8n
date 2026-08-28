@@ -19,6 +19,10 @@ function hasSpinFact(state:ConversationState,pattern:RegExp):boolean{
   return (state.spinFacts??[]).some(value=>pattern.test(String(value)));
 }
 
+function substantivePriority(value:string):boolean{
+  return !/^(?:precio|presupuesto|tope|economico|barato|caro)$/.test(value);
+}
+
 /**
  * SPIN authority is intentionally separate from N+1.
  *
@@ -27,13 +31,15 @@ function hasSpinFact(state:ConversationState,pattern:RegExp):boolean{
  * reservation or another commercial action.
  *
  * The sequence is flexible rather than rigid: when the customer already states
- * a concrete need/priority, we skip redundant P/I questions and mark discovery
- * ready. Otherwise we progress one useful question at a time S -> P -> I -> N.
+ * concrete non-price criteria, we skip redundant S/P/I questions and mark
+ * discovery ready. Budget/price alone is not enough product-fit context.
  */
 export function evaluateSpinReadiness(state:ConversationState={}):SpinReadiness{
   const contribution=String(state.lastSpinContribution??'').toUpperCase();
   const priorities=unique(state.priorities??[]);
   const explicit=unique(((state as any).explicitPriorities??[]) as string[]);
+  const statedPriorities=unique([...priorities,...explicit]);
+  const hasSubstantiveNeed=statedPriorities.some(substantivePriority);
 
   const hasSituation=Boolean(
     state.useCase
@@ -51,21 +57,19 @@ export function evaluateSpinReadiness(state:ConversationState={}):SpinReadiness{
     || hasSpinFact(state,/\b(?:implicacion|impacto|consecuencia)\b/i)
   );
   const hasNeed=Boolean(
-    explicit.length>0
-    || priorities.length>0
+    hasSubstantiveNeed
     || contribution==='NECESIDAD_SOLUCION'
-    || hasSpinFact(state,/^prioridad:/i)
+    || (hasSpinFact(state,/^prioridad:/i)&&!hasSpinFact(state,/^prioridad:(?:precio|presupuesto|tope)$/i))
   );
 
-  if(!hasSituation){
-    return{hasSituation:false,hasProblem,hasImplication,hasNeed,stage:'SITUATION',nextMissingFact:'uso principal',readyForRecommendation:false,readyForStock:false,reason:'NO_SITUATION'};
+  // Explicit substantive purchase criteria already tell us what must drive the
+  // recommendation. Do not interrogate the customer for a synthetic use case.
+  if(hasNeed){
+    return{hasSituation,hasProblem,hasImplication,hasNeed:true,stage:'READY',nextMissingFact:null,readyForRecommendation:true,readyForStock:true,reason:'NEED_CONFIRMED'};
   }
 
-  // A need explicitly supplied by the customer is enough to avoid making SPIN
-  // feel like an interview. We retain S/P/I facts if they exist, but do not ask
-  // questions merely to fill boxes.
-  if(hasNeed){
-    return{hasSituation:true,hasProblem,hasImplication,hasNeed:true,stage:'READY',nextMissingFact:null,readyForRecommendation:true,readyForStock:true,reason:'NEED_CONFIRMED'};
+  if(!hasSituation){
+    return{hasSituation:false,hasProblem,hasImplication,hasNeed:false,stage:'SITUATION',nextMissingFact:'uso principal',readyForRecommendation:false,readyForStock:false,reason:'NO_SITUATION'};
   }
 
   if(!hasProblem){
