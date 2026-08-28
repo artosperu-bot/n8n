@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AutomationScheduler } from '../../src/automation/AutomationScheduler.ts';
 import { AutomationWorker } from '../../src/automation/AutomationWorker.ts';
+import { AutomationMediaResolver } from '../../src/automation/AutomationMediaResolver.ts';
 import { WhatsAppCloudApiClient } from '../../src/adapters/whatsapp/WhatsAppCloudApiClient.ts';
 
 function baseRule(overrides:Record<string,unknown>={}){
@@ -20,22 +21,39 @@ class SchedulerRepo {
   async scheduleJob(input:any){this.scheduled.push(input);return {...input,id:'j-media',status:'PENDING',attemptCount:0};}
   async claimDue(){return[];} async getRule(){return null;} async markTerminal(){} async recordExecution(){}
   async listRules(){return this.rules;} async createRule(){throw new Error('not used');} async updateRule(){throw new Error('not used');}
-  async setRuleActive(){throw new Error('not used');} async listJobs(){return[];}
+  async setRuleActive(){throw new Error('not used');} async listJobs(){return[];} async deleteRule(){throw new Error('not used');}
 }
 
 test('automatic product image is resolved and frozen when BOT follow-up job is scheduled',async()=>{
   const repo=new SchedulerRepo();
   const mediaResolver={
-    async resolveForSession(){return{mediaUrl:'https://cdn.stech.test/armor-x13.webp',mediaType:'caracteristicas_generales',mediaProductId:'P-ARMOR-X13',mediaSource:'SQL_BRIDGE'};},
+    async resolveForSession(){return{mediaUrl:'https://cdn.stech.test/armor-x13.webp',mediaUrls:['https://cdn.stech.test/armor-x13.webp'],mediaType:'caracteristicas_generales',mediaProductId:'P-ARMOR-X13',mediaSource:'SQL_BRIDGE'};},
   };
   const scheduler=new (AutomationScheduler as any)(repo,()=>new Date('2026-08-27T15:00:00.000Z'),mediaResolver);
   await scheduler.onBotMessage({sessionId:'whatsapp:51999',customerMessageId:'wamid.customer',recipient:'51999',botSentAt:'2026-08-27T15:00:00.000Z',attentionMode:'BOT'});
   assert.equal(repo.scheduled.length,1);
   assert.equal(repo.scheduled[0].actionType,'SEND_IMAGE_PRODUCT_AUTO');
   assert.equal(repo.scheduled[0].mediaUrl,'https://cdn.stech.test/armor-x13.webp');
+  assert.deepEqual(repo.scheduled[0].mediaUrls,['https://cdn.stech.test/armor-x13.webp']);
   assert.equal(repo.scheduled[0].mediaType,'caracteristicas_generales');
   assert.equal(repo.scheduled[0].mediaProductId,'P-ARMOR-X13');
   assert.equal(repo.scheduled[0].mediaSource,'SQL_BRIDGE');
+});
+
+test('resolver preserves all unique product images in ERP order and caps snapshot at 20',async()=>{
+  const urls=Array.from({length:22},(_,index)=>`https://cdn.stech.test/${index+1}.webp`);
+  const resolver=new AutomationMediaResolver(
+    {async getAutomationProductReference(){return{productId:'P-ARMOR-22',productQuery:'Armor 22'};}},
+    {async getProductImages(){return [
+      {url:urls[0],type:'caracteristicas_generales',source:'SQL_BRIDGE'},
+      {url:urls[1],type:'resistencia_certificaciones',source:'SQL_BRIDGE'},
+      {url:urls[1],type:'duplicada',source:'SQL_BRIDGE'},
+      ...urls.slice(2).map((url,index)=>({url,type:`tipo_${index}`,source:'SQL_BRIDGE'})),
+    ];}},
+  );
+  const snapshot=await resolver.resolveForSession('whatsapp:51999');
+  assert.equal(snapshot.mediaUrl,urls[0]);
+  assert.deepEqual((snapshot as any).mediaUrls,urls.slice(0,20));
 });
 
 test('custom image URL is frozen directly from the rule when the job is scheduled',async()=>{
@@ -45,6 +63,7 @@ test('custom image URL is frozen directly from the rule when the job is schedule
   await scheduler.onBotMessage({sessionId:'whatsapp:51999',customerMessageId:'wamid.customer',recipient:'51999',botSentAt:'2026-08-27T15:00:00.000Z',attentionMode:'BOT'});
   assert.equal(repo.scheduled[0].actionType,'SEND_IMAGE_CUSTOM_URL');
   assert.equal(repo.scheduled[0].mediaUrl,'https://assets.stech.test/promo.jpg');
+  assert.deepEqual(repo.scheduled[0].mediaUrls,['https://assets.stech.test/promo.jpg']);
   assert.equal(repo.scheduled[0].mediaSource,'CUSTOM_URL');
 });
 
@@ -54,7 +73,7 @@ function workerRepo(job:any,rule:any){
     terminals,executions,
     async claimDue(){return[job];},async getRule(){return rule;},async markTerminal(id:string,status:string,reason:string|null=null){terminals.push({id,status,reason});},
     async recordExecution(input:any){executions.push(input);},async listActiveRules(){return[];},async cancelPending(){return 0;},async scheduleJob(){return null;},
-    async listRules(){return[];},async createRule(){throw new Error('not used');},async updateRule(){throw new Error('not used');},async setRuleActive(){throw new Error('not used');},async listJobs(){return[];},
+    async listRules(){return[];},async createRule(){throw new Error('not used');},async updateRule(){throw new Error('not used');},async setRuleActive(){throw new Error('not used');},async listJobs(){return[];},async deleteRule(){throw new Error('not used');},
   } as any;
 }
 
@@ -66,7 +85,7 @@ function crm(){return{
 function imageJob(){return{
   id:'j-media',ruleId:'r-media',sessionId:'whatsapp:51999',eventType:'BOT_MESSAGE_SENT',basisMessageId:'wamid.customer',recipient:'51999',
   executeAt:'2026-08-27T15:00:00.000Z',status:'PROCESSING',attemptCount:1,messageTemplate:'🔥 Sigue disponible',
-  actionType:'SEND_IMAGE_PRODUCT_AUTO',mediaUrl:'https://cdn.stech.test/armor.webp',mediaType:'caracteristicas_generales',mediaProductId:'P-ARMOR-X13',mediaSource:'SQL_BRIDGE',
+  actionType:'SEND_IMAGE_PRODUCT_AUTO',mediaUrl:'https://cdn.stech.test/armor.webp',mediaUrls:['https://cdn.stech.test/armor.webp'],mediaType:'caracteristicas_generales',mediaProductId:'P-ARMOR-X13',mediaSource:'SQL_BRIDGE',
 };}
 
 test('worker sends image with caption for a media job instead of text-only',async()=>{
@@ -81,6 +100,41 @@ test('worker sends image with caption for a media job instead of text-only',asyn
   assert.equal(textSends,0);
   assert.equal(repo.terminals[0]?.status,'SENT');
   assert.equal(repo.executions[0]?.providerMessageId,'wamid.image');
+});
+
+test('automatic media job sends all frozen product images in order and caption only on first',async()=>{
+  const job={...imageJob(),mediaUrls:['https://cdn.stech.test/1.webp','https://cdn.stech.test/2.webp','https://cdn.stech.test/3.webp'],mediaUrl:'https://cdn.stech.test/1.webp'};
+  const repo=workerRepo(job,baseRule());const calls:Array<[string,string,string]>=[];
+  const sender={
+    async sendTextOnce(){throw new Error('text fallback must not run');},
+    async sendImageWithCaptionOnce(to:string,url:string,caption:string){calls.push([to,url,caption]);return{messageId:`wamid.${calls.length}`};},
+  } as any;
+  const worker=new AutomationWorker({repository:repo,crm:crm(),sender,workerId:'w-media',now:()=>new Date('2026-08-27T15:30:00.000Z')});
+  await worker.runOnce();
+  assert.deepEqual(calls,[
+    ['51999','https://cdn.stech.test/1.webp','🔥 Sigue disponible'],
+    ['51999','https://cdn.stech.test/2.webp',''],
+    ['51999','https://cdn.stech.test/3.webp',''],
+  ]);
+  assert.equal(repo.terminals[0]?.status,'SENT');
+  assert.deepEqual(repo.executions[0]?.detail?.providerMessageIds,['wamid.1','wamid.2','wamid.3']);
+  assert.equal(repo.executions[0]?.detail?.mediaSentCount,3);
+});
+
+test('later image failure after one accepted image remains SENT with partial-media warning',async()=>{
+  const job={...imageJob(),mediaUrls:['https://cdn.stech.test/1.webp','https://cdn.stech.test/2.webp'],mediaUrl:'https://cdn.stech.test/1.webp'};
+  const repo=workerRepo(job,baseRule());let calls=0;let textSends=0;
+  const sender={
+    async sendTextOnce(){textSends+=1;return{messageId:'must-not-fallback'};},
+    async sendImageWithCaptionOnce(){calls+=1;if(calls===1)return{messageId:'wamid.1'};throw new Error('WhatsApp Graph API HTTP 400: second image rejected');},
+  } as any;
+  const worker=new AutomationWorker({repository:repo,crm:crm(),sender,workerId:'w-media',now:()=>new Date('2026-08-27T15:30:00.000Z')});
+  await worker.runOnce();
+  assert.equal(calls,2);
+  assert.equal(textSends,0);
+  assert.equal(repo.terminals[0]?.status,'SENT');
+  assert.equal(repo.executions[0]?.detail?.warning,'PARTIAL_MEDIA_SEND');
+  assert.equal(repo.executions[0]?.detail?.mediaSentCount,1);
 });
 
 test('explicit image rejection falls back once to the caption text',async()=>{
@@ -107,6 +161,20 @@ test('ambiguous image transport failure does not send a second text message',asy
   await worker.runOnce();
   assert.equal(textSends,0);
   assert.equal(repo.terminals[0]?.status,'AMBIGUOUS');
+});
+
+test('provider acceptance remains SENT even if CRM audit persistence fails',async()=>{
+  const job=imageJob();const repo=workerRepo(job,baseRule());
+  const brokenCrm={
+    async getAutomationState(){return{mode:'BOT',latestCustomerAt:'2026-08-27T14:00:00.000Z',latestCustomerMessageId:'wamid.customer'};},
+    async recordAutomationMessage(){throw new Error('audit unavailable');},
+  } as any;
+  const sender={async sendImageWithCaptionOnce(){return{messageId:'wamid.accepted'};},async sendTextOnce(){throw new Error('not used');}} as any;
+  const worker=new AutomationWorker({repository:repo,crm:brokenCrm,sender,workerId:'w-media',now:()=>new Date('2026-08-27T15:30:00.000Z')});
+  await worker.runOnce();
+  assert.equal(repo.terminals[0]?.status,'SENT');
+  assert.equal(repo.terminals.some((entry:any)=>entry.status==='FAILED'),false);
+  assert.equal(repo.executions.some((entry:any)=>entry.outcome==='FAILED'),false);
 });
 
 test('WhatsApp client sends a public image link with caption through Graph messages endpoint',async()=>{
