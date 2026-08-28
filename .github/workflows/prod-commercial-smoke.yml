@@ -28,18 +28,18 @@ jobs:
           print('PERSISTENCE_MODE=' + str(body.get('modes',{}).get('persistence')))
           PY
 
-      - name: Execute safe commercial turn in deployed backend
+      - name: Execute generic objection turn in deployed backend
         shell: bash
         run: |
           set -euo pipefail
-          SESSION_ID="qa-prod-objection-${GITHUB_RUN_ID}"
-          MESSAGE_ID="qa-prod-objection-${GITHUB_RUN_ID}-01"
+          SESSION_ID="qa-prod-generic-objection-${GITHUB_RUN_ID}"
+          MESSAGE_ID="qa-prod-generic-objection-${GITHUB_RUN_ID}-01"
           BODY="$(python - "$SESSION_ID" "$MESSAGE_ID" <<'PY'
           import json, sys
           print(json.dumps({
             'sessionId': sys.argv[1],
             'messageId': sys.argv[2],
-            'message': 'El Armor 22 me parece muy caro. ¿Por qué debería elegirlo?'
+            'message': 'No confío mucho en ese equipo Armor 22.'
           }, ensure_ascii=False))
           PY
           )"
