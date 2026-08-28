@@ -1,0 +1,85 @@
+name: Apply hybrid sales authority remediation
+
+on:
+  push:
+    branches:
+      - fix/hybrid-sales-brain-authority
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/hybrid-sales-brain-authority
+          fetch-depth: 0
+
+      - name: Apply structural remediation
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'Expected block not found in {path}: {old[:120]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # 1) Generic objection is not a synthetic price/budget objection.
+          replace(
+              'backend/src/conversation/commercial/CommercialWriteContract.ts',
+              "function nextMissingFact(facts:{useCase:string|null;problem:string|null;priorities:string[];budget:number|null},intent:string,state:any):string|null{\n  if(['HANDLE_PRICE_OBJECTION','OBJECTION','BUDGET_CONSTRAINT'].includes(intent)&&facts.budget==null)return 'presupuesto máximo';\n  return evaluateSpinReadiness(spinState(state,facts)).nextMissingFact;\n}",
+              "function nextMissingFact(facts:{useCase:string|null;problem:string|null;priorities:string[];budget:number|null},intent:string,state:any):string|null{\n  // A generic objection must be answered on its own terms. It is not a hidden\n  // request for budget discovery and SPIN must not manufacture a new question.\n  if(intent==='OBJECTION')return null;\n  if(['HANDLE_PRICE_OBJECTION','BUDGET_CONSTRAINT'].includes(intent)&&facts.budget==null)return 'presupuesto máximo';\n  return evaluateSpinReadiness(spinState(state,facts)).nextMissingFact;\n}"
+          )
+
+          # 2) LAER handles the actual objection instead of pretending every objection is price.
+          replace(
+              'backend/src/conversation/commercial/CommercialResponsePlan.ts',
+              "  if (plan.mode === 'OBJECTION_LAER') {\n    return `Conserva RESPUESTA_DIRECTA. ${SIMPLE_HUMAN_LANGUAGE} Reconoce primero que el precio le parece alto sin decir “te entiendo”, “lo siento” ni repetirlo como etiqueta. Si ayuda, usa una sola escena cotidiana basada en el contexto (${context}) para mostrar qué gasto o molestia puede evitar una característica relevante, sin inventar experiencias personales. Responde con hechos verificados y luego ${action}. No mezcles alternativa y cierre en el mismo turno salvo que la acción lo autorice. No seas defensivo ni presiones. ${safety}`;\n  }",
+              "  if (plan.mode === 'OBJECTION_LAER') {\n    return `Conserva RESPUESTA_DIRECTA. ${SIMPLE_HUMAN_LANGUAGE} Atiende exactamente la objeción, duda o preocupación que expresó el cliente; no la conviertas en objeción de precio si no habló de precio. Reconócela brevemente sin decir “te entiendo” ni “lo siento”, y responde primero con evidencia verificada relevante para esa preocupación. Si ayuda, usa una sola escena cotidiana basada en el contexto (${context}), sin inventar experiencias personales. Después ${action}. Si la acción es ANSWER_ONLY, termina ahí sin otra pregunta. No mezcles alternativa y cierre salvo autorización explícita, no seas defensivo ni presiones. ${safety}`;\n  }"
+          )
+
+          # 3) Central hybrid authority is wired into the conversation engine.
+          replace(
+              'backend/src/conversation/HybridConversationEngine.ts',
+              "import { prepareCommercialWriteInput } from './commercial/CommercialWriteContract.ts';\n",
+              "import { prepareCommercialWriteInput } from './commercial/CommercialWriteContract.ts';\nimport { mergeSemanticUseCase, shouldUseRecommendationCandidates } from './commercial/HybridSalesAuthority.ts';\n"
+          )
+          replace(
+              'backend/src/conversation/HybridConversationEngine.ts',
+              "      const commercialState:ConversationState={...baseState,recommendedProduct:supersedesRecommendation?null:baseState.recommendedProduct,useCase:normalizeGenuineUseCase(baseState.useCase)??decisionUseCase,problem:baseState.problem??decision.customerProblem??null,priorities:unique([...(baseState.priorities??[]),...(decision.priorities??[])]),objection:baseState.objection??decision.objection??null,spinFacts:unique([...(baseState.spinFacts??[]),decisionSpin])};",
+              "      const commercialState:ConversationState={...baseState,recommendedProduct:supersedesRecommendation?null:baseState.recommendedProduct,useCase:mergeSemanticUseCase({previousUseCase:normalizeGenuineUseCase(previous.useCase),fallbackUseCase:normalizeGenuineUseCase(baseState.useCase),semanticUseCase:decisionUseCase}),problem:baseState.problem??decision.customerProblem??null,priorities:unique([...(baseState.priorities??[]),...(decision.priorities??[])]),objection:baseState.objection??decision.objection??null,spinFacts:unique([...(baseState.spinFacts??[]),decisionSpin])};"
+          )
+          replace(
+              'backend/src/conversation/HybridConversationEngine.ts',
+              "        const recommendationTurn=['RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent)||(intent==='EVALUATE_USE'&&!target&&hasDecisionContext);",
+              "        const recommendationTurn=shouldUseRecommendationCandidates({intent,nba,hasTarget:Boolean(target),hasDecisionContext});"
+          )
+
+          # 4) Semantic planner: answer current concern first; occupations are valid use context.
+          replace(
+              'backend/src/adapters/openai/OpenAIProvider.ts',
+              "      'No vuelvas a preguntar datos ya conocidos.',\n      'customerNeed solo puede describir cómo o dónde se usará realmente el producto; precio, stock, comparar, buscar una alternativa o agendar una prueba son intenciones, no casos de uso.',",
+              "      'No vuelvas a preguntar datos ya conocidos.',\n      'Una ocupación o contexto laboral explícito del cliente —por ejemplo obrero, operario, construcción, delivery, técnico o trabajo de campo— ES contexto de uso válido. Si ya lo dijo, no vuelvas a preguntar para qué lo usará.',\n      'Si el cliente pregunta si un producto concreto le sirve y ya dio contexto de uso, clasifica EVALUATE_USE y normalmente responde primero con ANSWER_ONLY; no lo rebajes a PRODUCT_INFO ni fabriques discovery.',\n      'OBJECTION no equivale a objeción de precio. Desconfianza, tamaño, cámara, marca, durabilidad u otra duda deben conservar su significado exacto.',\n      'Si el cliente dice que un producto está caro y pregunta por qué debería elegirlo, primero defiende o limita el valor de ESE producto con evidencia; normalmente usa ANSWER_ONLY. Usa OFFER_ALTERNATIVE solo cuando el cliente pide otra opción o cuando el producto realmente no encaja y existe una alternativa verificada.',\n      'customerNeed solo puede describir cómo o dónde se usará realmente el producto; precio, stock, comparar, buscar una alternativa o agendar una prueba son intenciones, no casos de uso.',"
+          )
+          replace(
+              'backend/src/adapters/openai/OpenAIProvider.ts',
+              "      'Si la intención es HANDLE_PRICE_OBJECTION, reconoce brevemente la objeción antes de ejecutar EXECUTABLE_NBA.',",
+              "      'Si la intención es HANDLE_PRICE_OBJECTION, responde primero por qué el producto sí o no justifica su valor usando únicamente hechos verificados; no saltes a otra opción salvo que EXECUTABLE_NBA autorice OFFER_ALTERNATIVE.',\n      'Si la intención es OBJECTION, atiende la preocupación exacta del cliente. No la reformules como precio, presupuesto o falta de uso salvo que el cliente realmente haya dicho eso.',"
+          )
+
+          # Remove this temporary workflow in the resulting remediation commit.
+          Path('.github/workflows/apply-hybrid-sales-authority.yml').unlink()
+
+      - name: Commit remediation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: restore answer-first hybrid sales authority [bot-fix]"
+          git push origin HEAD:fix/hybrid-sales-brain-authority
