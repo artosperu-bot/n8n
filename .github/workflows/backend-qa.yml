@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/stech-backend
+      - feat/crm-automation-engine
     paths:
       - 'backend/**'
       - '.github/workflows/backend-qa.yml'
