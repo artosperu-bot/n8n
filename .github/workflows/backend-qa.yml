@@ -24,6 +24,11 @@ jobs:
       - name: Install
         working-directory: backend
         run: npm ci --no-audit --no-fund
+      - name: Focused salesperson regressions
+        working-directory: backend
+        run: |
+          set -o pipefail
+          node --experimental-strip-types --test tests/unit/commercial-salesperson-regressions.test.ts 2>&1 | tee qa-commercial-salesperson.log
       - name: Test
         working-directory: backend
         run: |
@@ -41,6 +46,7 @@ jobs:
         with:
           name: backend-qa-diagnostics
           path: |
+            backend/qa-commercial-salesperson.log
             backend/qa-test.log
             backend/qa-build.log
           if-no-files-found: ignore
