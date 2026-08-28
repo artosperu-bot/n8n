@@ -1,0 +1,6 @@
+.env
+node_modules/
+qa-results/
+*.log
+*.zip
+.DS_Store

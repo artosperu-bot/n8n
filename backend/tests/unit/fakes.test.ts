@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import { MemoryConversationRepository } from '../../src/adapters/fake/MemoryConversationRepository.ts';import { FakeErpRepository } from '../../src/adapters/fake/FakeErpRepository.ts';
+test('memory repository preserves state between turns',async()=>{const repo=new MemoryConversationRepository();await repo.saveState('s1',{activeProduct:'Armor 22',budget:1500});const state=await repo.getState('s1');assert.equal(state.activeProduct,'Armor 22');assert.equal(state.budget,1500);});
+test('fake ERP quote is explicitly test-only',async()=>{const erp=new FakeErpRepository();const q=await erp.getProductQuote('Armor 22');assert.equal(q?.source,'FAKE_TEST_DATA');assert.equal(typeof q?.price,'number');});

@@ -1,0 +1,27 @@
+{
+  "name": "stech-backend",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "description": "STECH modular conversational backend",
+  "engines": { "node": ">=22.16" },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --experimental-strip-types --watch src/server.ts",
+    "start": "node --env-file-if-exists=.env --experimental-strip-types src/server.ts",
+    "build": "node --experimental-strip-types scripts/build-check.ts",
+    "test": "node --experimental-strip-types scripts/run-tests.ts",
+    "chat": "node --env-file-if-exists=.env --experimental-strip-types scripts/chat-cli.ts",
+    "smoke": "node --experimental-strip-types scripts/smoke-test.ts",
+    "test:n8n": "node --env-file-if-exists=.env --experimental-strip-types scripts/test-n8n-gateway.ts",
+    "qa:live": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=journeys",
+    "qa:live:core": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=core",
+    "qa:live:all": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=all",
+    "qa:golden100": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-live.ts --suite=golden100",
+    "qa:acceptance20": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-acceptance20.ts",
+    "qa:full-rag20": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-full-rag20.ts",
+    "qa:full-rag50": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-full-rag50.ts",
+    "qa:commercial-smoke": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-commercial-smoke.ts",
+    "qa:commercial50": "node --env-file-if-exists=.env --experimental-strip-types scripts/qa-commercial50.ts"
+  },
+  "dependencies": { "mssql": "^12.7.0" }
+}
