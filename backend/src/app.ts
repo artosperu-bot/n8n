@@ -92,6 +92,10 @@ export function createStechApp(options:AppOptions = {}) {
         if(!name||!messageTemplate||delaySeconds===null||priority===null||!actionType||(actionType==='SEND_IMAGE_CUSTOM_URL'&&!mediaUrl))throw new Error('INVALID_AUTOMATION_RULE');
         return send(res,200,{rule:await requireAutomation().updateRule(id,{name,delaySeconds,actionType,messageTemplate,mediaUrl,priority})});
       }
+      if(automationRuleEdit&&req.method==='DELETE'){
+        const who=await actor(req);requireAdmin(who);const id=decodeURIComponent(automationRuleEdit[1]);
+        return send(res,200,{rule:await requireAutomation().deleteRule(id,'DELETED_FROM_CRM')});
+      }
       const automationRuleToggle=url.pathname.match(/^\/api\/automations\/rules\/([^/]+)\/(enable|disable)$/);
       if(automationRuleToggle&&req.method==='POST'){const who=await actor(req);requireAdmin(who);const id=decodeURIComponent(automationRuleToggle[1]);const active=automationRuleToggle[2]==='enable';return send(res,200,{rule:await requireAutomation().setRuleActive(id,active)});}
       if(req.method==='GET'&&url.pathname==='/api/automations/jobs'){const who=await actor(req);const sessionId=url.searchParams.get('sessionId');if(sessionId)await requireAutomationSessionAccess(who,sessionId);else requireAdmin(who);return send(res,200,{jobs:await requireAutomation().listJobs({sessionId,limit:number(url.searchParams.get('limit'))})});}
