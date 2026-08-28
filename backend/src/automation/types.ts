@@ -4,6 +4,7 @@ export type AutomationJobStatus='PENDING'|'PROCESSING'|'SENT'|'CANCELLED'|'SKIPP
 
 export type AutomationMediaSnapshot={
   mediaUrl:string|null;
+  mediaUrls:string[];
   mediaType:string|null;
   mediaProductId:string|null;
   mediaSource:string|null;
@@ -33,6 +34,7 @@ export type AutomationJob={
   attemptCount:number;
   actionType:AutomationActionType;
   mediaUrl:string|null;
+  mediaUrls:string[];
   mediaType:string|null;
   mediaProductId:string|null;
   mediaSource:string|null;
@@ -53,6 +55,7 @@ export type ScheduleAutomationJobInput={
   executeAt:string;
   actionType:AutomationActionType;
   mediaUrl:string|null;
+  mediaUrls:string[];
   mediaType:string|null;
   mediaProductId:string|null;
   mediaSource:string|null;
@@ -98,6 +101,7 @@ export interface AutomationRepository{
   createRule(input:CreateAutomationRuleInput):Promise<AutomationRule>;
   updateRule(id:string,input:UpdateAutomationRuleInput):Promise<AutomationRule>;
   setRuleActive(id:string,active:boolean):Promise<AutomationRule>;
+  deleteRule(id:string,reason:string):Promise<AutomationRule>;
   listJobs(filters?:{sessionId?:string|null;limit?:number|null}):Promise<AutomationJob[]>;
 }
 
@@ -117,6 +121,7 @@ export interface AutomationCrmPort{
     jobId:string;
     actionType?:AutomationActionType;
     mediaUrl?:string|null;
+    mediaUrls?:string[];
     mediaProductId?:string|null;
     mediaSource?:string|null;
     fallbackToText?:boolean;
