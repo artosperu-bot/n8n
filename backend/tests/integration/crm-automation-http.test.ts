@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStechApp } from '../../src/app.ts';
 
-function rule(id='r1'){return{id,name:'Seguimiento 1h',eventType:'BOT_MESSAGE_SENT',delaySeconds:3600,actionType:'SEND_TEXT',messageTemplate:'¿Sigues interesado?',active:true,priority:100};}
-function job(sessionId='whatsapp:51911111111'){return{id:'j1',ruleId:'r1',sessionId,eventType:'BOT_MESSAGE_SENT',basisMessageId:'wamid.IN1',recipient:'51911111111',executeAt:'2026-08-25T21:00:00Z',status:'PENDING',attemptCount:0};}
+function rule(id='r1'){return{id,name:'Seguimiento 1h',eventType:'BOT_MESSAGE_SENT',delaySeconds:3600,actionType:'SEND_TEXT',messageTemplate:'¿Sigues interesado?',mediaUrl:null,active:true,priority:100};}
+function job(sessionId='whatsapp:51911111111'){return{id:'j1',ruleId:'r1',sessionId,eventType:'BOT_MESSAGE_SENT',basisMessageId:'wamid.IN1',recipient:'51911111111',executeAt:'2026-08-25T21:00:00Z',status:'PENDING',attemptCount:0,actionType:'SEND_TEXT',mediaUrl:null,mediaUrls:[],mediaType:null,mediaProductId:null,mediaSource:null};}
 function auth(role:'admin'|'advisor'){return{authorization:['Bearer',role].join(' ')}};
 function jsonAuth(role:'admin'|'advisor'){return{...auth(role),'content-type':'application/json'};}
 
@@ -25,6 +25,7 @@ async function withApp(run:(base:string,calls:any[],worker:any)=>Promise<void>){
     async createRule(input:any){calls.push(['createRule',input]);return{...rule('created'),...input};},
     async updateRule(id:string,input:any){calls.push(['updateRule',id,input]);return{...rule(id),...input};},
     async setRuleActive(id:string,active:boolean){calls.push(['setActive',id,active]);return{...rule(id),active};},
+    async deleteRule(id:string,reason:string){calls.push(['deleteRule',id,reason]);return{...rule(id),active:false};},
     async listJobs(filters:any){calls.push(['listJobs',filters]);return[job(filters?.sessionId??'whatsapp:any')];},
     async cancelPending(sessionId:string,reason:string){calls.push(['cancel',sessionId,reason]);return 2;},
     async listActiveRules(){return[];},async scheduleJob(){return null;},async claimDue(){return[];},async getRule(){return rule();},async markTerminal(){},async recordExecution(){},
@@ -38,7 +39,7 @@ async function withApp(run:(base:string,calls:any[],worker:any)=>Promise<void>){
   assert.equal(worker.stopCalls,1);
 }
 
-test('automation rule endpoints require auth and only ADMIN can create/toggle',async()=>withApp(async(base,calls)=>{
+test('automation rule endpoints require auth and only ADMIN can create/toggle/delete',async()=>withApp(async(base,calls)=>{
   const unauth=await fetch(`${base}/api/automations/rules`);assert.equal(unauth.status,401);
   const denied=await fetch(`${base}/api/automations/rules`,{method:'POST',headers:jsonAuth('advisor'),body:JSON.stringify({name:'x',delaySeconds:60,messageTemplate:'Hola'})});
   assert.equal(denied.status,403);
@@ -48,6 +49,9 @@ test('automation rule endpoints require auth and only ADMIN can create/toggle',a
   assert.deepEqual(createCall?.[1],{name:'Seguimiento 1h',eventType:'BOT_MESSAGE_SENT',delaySeconds:3600,actionType:'SEND_TEXT',messageTemplate:'¿Sigues interesado?',mediaUrl:null,active:true,priority:20});
   const toggle=await fetch(`${base}/api/automations/rules/r1/disable`,{method:'POST',headers:auth('admin')});assert.equal(toggle.status,200);
   assert.ok(calls.some(x=>x[0]==='setActive'&&x[1]==='r1'&&x[2]===false));
+  const advisorDelete=await fetch(`${base}/api/automations/rules/r1`,{method:'DELETE',headers:auth('advisor')});assert.equal(advisorDelete.status,403);
+  const adminDelete=await fetch(`${base}/api/automations/rules/r1`,{method:'DELETE',headers:auth('admin')});assert.equal(adminDelete.status,200);
+  assert.ok(calls.some(x=>x[0]==='deleteRule'&&x[1]==='r1'&&x[2]==='DELETED_FROM_CRM'));
 }));
 
 test('ADMIN can list all jobs while ASESOR is limited to assigned sessions',async()=>withApp(async(base,calls)=>{
