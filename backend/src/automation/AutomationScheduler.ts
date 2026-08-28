@@ -18,7 +18,7 @@ type BotMessageEvent = {
 };
 
 type MediaResolver={resolveForSession(sessionId:string):Promise<AutomationMediaSnapshot>};
-const EMPTY_MEDIA:AutomationMediaSnapshot={mediaUrl:null,mediaType:null,mediaProductId:null,mediaSource:null};
+const EMPTY_MEDIA:AutomationMediaSnapshot={mediaUrl:null,mediaUrls:[],mediaType:null,mediaProductId:null,mediaSource:null};
 
 export class AutomationScheduler {
   readonly #repository: AutomationRepository;
@@ -54,7 +54,7 @@ export class AutomationScheduler {
       if (!rule.active || rule.eventType !== eventType) continue;
       let media:AutomationMediaSnapshot=EMPTY_MEDIA;
       if(rule.actionType==='SEND_IMAGE_CUSTOM_URL'){
-        media={mediaUrl:rule.mediaUrl,mediaType:null,mediaProductId:null,mediaSource:'CUSTOM_URL'};
+        media={mediaUrl:rule.mediaUrl,mediaUrls:rule.mediaUrl?[rule.mediaUrl]:[],mediaType:null,mediaProductId:null,mediaSource:'CUSTOM_URL'};
       }else if(rule.actionType==='SEND_IMAGE_PRODUCT_AUTO'&&this.#mediaResolver){
         media=await this.#mediaResolver.resolveForSession(input.sessionId).catch(()=>EMPTY_MEDIA);
       }
