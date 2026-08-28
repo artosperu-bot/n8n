@@ -12,8 +12,18 @@ function validHttps(value:unknown):string|null{
   try{const url=new URL(raw);return url.protocol==='https:'?url.toString():null;}catch{return null;}
 }
 
+export function selectAutomationProductImages(images:Image[],limit=20):Array<Image&{url:string}>{
+  const seen=new Set<string>();const out:Array<Image&{url:string}>=[];
+  for(const image of images){
+    const url=validHttps(image.url);if(!url||seen.has(url))continue;
+    seen.add(url);out.push({...image,url});
+    if(out.length>=Math.max(1,Math.min(20,limit)))break;
+  }
+  return out;
+}
+
 export function selectAutomationProductImage(images:Image[]):Image|null{
-  const valid=images.map(image=>({...image,url:validHttps(image.url)})).filter((image):image is Image&{url:string}=>Boolean(image.url));
+  const valid=selectAutomationProductImages(images,20);
   return valid.find(image=>String(image.type??'').toLowerCase().includes('caracteristicas_generales'))??valid[0]??null;
 }
 
@@ -26,11 +36,12 @@ export class AutomationMediaResolver{
     const ref=await this.#crm.getAutomationProductReference(sessionId);
     const candidates=[ref.productId,ref.productQuery].map(value=>String(value??'').trim()).filter((value,index,all)=>value&&all.indexOf(value)===index);
     for(const candidate of candidates){
-      const selected=selectAutomationProductImage(await this.#erp.getProductImages(candidate,10));
-      if(selected){
-        return{mediaUrl:selected.url,mediaType:selected.type??null,mediaProductId:ref.productId??candidate,mediaSource:selected.source??'SQL_BRIDGE'};
+      const selected=selectAutomationProductImages(await this.#erp.getProductImages(candidate,20),20);
+      if(selected.length){
+        const first=selected[0];
+        return{mediaUrl:first.url,mediaUrls:selected.map(image=>image.url),mediaType:first.type??null,mediaProductId:ref.productId??candidate,mediaSource:first.source??'SQL_BRIDGE'};
       }
     }
-    return{mediaUrl:null,mediaType:null,mediaProductId:ref.productId,mediaSource:null};
+    return{mediaUrl:null,mediaUrls:[],mediaType:null,mediaProductId:ref.productId,mediaSource:null};
   }
 }
