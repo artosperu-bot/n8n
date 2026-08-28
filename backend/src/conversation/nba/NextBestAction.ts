@@ -76,7 +76,10 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'SUBCATEGORIES':
       return 'OFFER_ALTERNATIVE';
 
+    // Unknown/neutral turns must not manufacture a generic sales question. If a
+    // current message does not justify a commercial continuation, answer it and
+    // preserve context; explicit intents above remain responsible for discovery.
     default:
-      return 'ASK_MISSING_FACT';
+      return 'ANSWER_ONLY';
   }
 }
