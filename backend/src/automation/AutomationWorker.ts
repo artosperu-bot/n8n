@@ -92,6 +92,8 @@ export class AutomationWorker {
       return this.#options.repository.markTerminal(job.id,result.outcome,result.reason);
     }
 
+    const sentMediaUrls=result.sentMediaUrls??[];
+    const sentPrimaryMediaUrl=sentMediaUrls[0]??null;
     let auditWarning:string|null=result.warning??null;
     let auditError:string|null=null;
     try {
@@ -102,8 +104,8 @@ export class AutomationWorker {
         recipient: job.recipient,
         jobId: job.id,
         actionType:job.actionType,
-        mediaUrl:job.mediaUrl,
-        mediaUrls:job.mediaUrls,
+        mediaUrl:sentPrimaryMediaUrl,
+        mediaUrls:sentMediaUrls,
         mediaProductId:job.mediaProductId,
         mediaSource:job.mediaSource,
         fallbackToText:Boolean(result.fallbackToText),
@@ -119,7 +121,7 @@ export class AutomationWorker {
       outcome: 'SENT',
       providerMessageId: result.providerMessageId,
       detail: {
-        actionType:job.actionType,mediaUrl:job.mediaUrl,mediaUrls:job.mediaUrls,mediaProductId:job.mediaProductId,mediaSource:job.mediaSource,
+        actionType:job.actionType,mediaUrl:sentPrimaryMediaUrl,mediaUrls:sentMediaUrls,requestedMediaUrls:job.mediaUrls,sentMediaUrls,mediaProductId:job.mediaProductId,mediaSource:job.mediaSource,
         fallbackToText:Boolean(result.fallbackToText),imageError:result.imageError??null,providerMessageIds:result.providerMessageIds??[result.providerMessageId],
         mediaSentCount:result.mediaSentCount??(job.actionType==='SEND_TEXT'?0:1),warning:auditWarning,auditError,
       },
