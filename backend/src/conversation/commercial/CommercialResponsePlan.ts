@@ -66,6 +66,7 @@ function closePurpose(input:LlmWriteInput,nba:string):CommercialResponsePlan['cl
 export function buildCommercialResponsePlan(input: LlmWriteInput, factualCore: string): CommercialResponsePlan {
   const nba = exactNba(input);
   const mode = responseMode(input, nba);
+  const intent = String(input.resolvedCurrentIntent ?? input.intent ?? '').toUpperCase();
   const contextFocus = unique([
     input.useCase,
     input.problem,
@@ -75,11 +76,13 @@ export function buildCommercialResponsePlan(input: LlmWriteInput, factualCore: s
   ]).slice(0, 6);
   const maxQuestions: 0 | 1 = ['ASK_MISSING_FACT', 'SOFT_CLOSE', 'COLLECT_RESERVATION_DATA'].includes(nba) ? 1 : 0;
   const allowedActions = nba === 'ANSWER_ONLY' ? [] : [nba];
+  const shouldUseLlm = mode !== 'HANDOFF'
+    && (mode !== 'FACTUAL_DIRECT' || intent === 'PRODUCT_INFO');
 
   return {
     mode,
     strategy: String(input.state?.commercialStrategy ?? '').trim() || null,
-    shouldUseLlm: !['FACTUAL_DIRECT', 'HANDOFF'].includes(mode),
+    shouldUseLlm,
     acknowledgeContext: contextFocus.length > 0 && mode !== 'FACTUAL_DIRECT',
     contextFocus,
     factualCore: String(factualCore ?? '').trim(),
