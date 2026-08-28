@@ -3,12 +3,32 @@ import assert from 'node:assert/strict';
 import { evaluateSpinReadiness } from '../../src/conversation/nba/SpinProgression.ts';
 import { nextBestAction } from '../../src/conversation/nba/NextBestAction.ts';
 import { prepareCommercialWriteInput } from '../../src/conversation/commercial/CommercialWriteContract.ts';
+import { extractCommercialFacts } from '../../src/conversation/commercial/CommercialFacts.ts';
+import { resolveIntentPlan } from '../../src/conversation/intent/IntentPlan.ts';
+import { validateTurnDecision } from '../../src/conversation/decision/DecisionValidator.ts';
+
+function turnDecision(primaryIntent:string):any{
+  return {
+    primaryIntent,secondaryIntents:[],targetProduct:'Armor 22',mentionedProducts:[],referenceType:null,
+    explicitSwitch:false,selectedProduct:null,comparisonProducts:[],attributes:[],customerNeed:null,
+    customerProblem:null,priorities:[],objection:null,commercialStage:null,spinContribution:null,
+    nextBestAction:'ANSWER_ONLY',needsSql:false,needsProductRag:false,needsInstitutionalRag:false,confidence:0.9,
+  };
+}
 
 test('explicit substantive priorities skip redundant situation discovery',()=>{
   const spin=evaluateSpinReadiness({priorities:['resistencia','bateria']});
   assert.equal(spin.readyForRecommendation,true);
   assert.equal(spin.nextMissingFact,null);
   assert.equal(spin.stage,'READY');
+});
+
+test('real customer wording extracts substantive criteria without asking for a synthetic use case',()=>{
+  const facts=extractCommercialFacts('Quiero uno resistente y con buena batería',{});
+  assert.deepEqual(facts.priorities.sort(),['bateria','resistencia']);
+  const spin=evaluateSpinReadiness({priorities:facts.priorities});
+  assert.equal(spin.readyForRecommendation,true);
+  assert.equal(spin.nextMissingFact,null);
 });
 
 test('budget alone is not enough context for a recommendation',()=>{
@@ -25,6 +45,30 @@ test('price-only priority is not enough context for a recommendation',()=>{
 
 test('neutral OTHER does not invent commercial discovery',()=>{
   assert.equal(nextBestAction('OTHER',{}),'ANSWER_ONLY');
+});
+
+test('deterministic intent separates generic objection from price objection',()=>{
+  assert.equal(resolveIntentPlan('Está caro').primary,'HANDLE_PRICE_OBJECTION');
+  assert.equal(resolveIntentPlan('No confío mucho en ese equipo').primary,'OBJECTION');
+  assert.equal(resolveIntentPlan('Se me hace muy grande').primary,'OBJECTION');
+});
+
+test('current deterministic objection subtype outranks planner disagreement',()=>{
+  const generic=validateTurnDecision(
+    turnDecision('HANDLE_PRICE_OBJECTION'),
+    {activeProduct:'Armor 22',objection:null},
+    ['Armor 22'],
+    turnDecision('OBJECTION'),
+  );
+  assert.equal(generic.primaryIntent,'OBJECTION');
+
+  const price=validateTurnDecision(
+    turnDecision('OBJECTION'),
+    {activeProduct:'Armor 22',objection:'precio'},
+    ['Armor 22'],
+    turnDecision('HANDLE_PRICE_OBJECTION'),
+  );
+  assert.equal(price.primaryIntent,'HANDLE_PRICE_OBJECTION');
 });
 
 test('generic objection without a verified alternative answers without inventing a budget question',()=>{
