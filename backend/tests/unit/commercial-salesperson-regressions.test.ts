@@ -108,3 +108,21 @@ test('price objection without verified alternative asks budget only when budget 
   assert.equal(known.nextBestAction,'ANSWER_ONLY');
   assert.equal(known.missingFact,null);
 });
+
+test('worker self-description is a real work use case and does not ask for use again',()=>{
+  const facts=extractCommercialFacts('Soy obrero, ¿me sirve?',{activeProduct:'Armor 22'});
+  assert.equal(facts.useCase,'trabajo');
+  const spin=evaluateSpinReadiness({...facts,activeProduct:'Armor 22'});
+  assert.equal(spin.hasSituation,true);
+  assert.notEqual(spin.nextMissingFact,'uso principal');
+});
+
+test('deterministic evaluate-use intent outranks planner product-info downgrade',()=>{
+  const decision=validateTurnDecision(
+    turnDecision('PRODUCT_INFO'),
+    {activeProduct:'Armor 22',useCase:'trabajo'},
+    ['Armor 22'],
+    turnDecision('EVALUATE_USE'),
+  );
+  assert.equal(decision.primaryIntent,'EVALUATE_USE');
+});
