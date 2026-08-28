@@ -5,6 +5,7 @@ import { nextBestAction } from '../../src/conversation/nba/NextBestAction.ts';
 import { prepareCommercialWriteInput } from '../../src/conversation/commercial/CommercialWriteContract.ts';
 import { extractCommercialFacts } from '../../src/conversation/commercial/CommercialFacts.ts';
 import { buildGroundedDirectAnswer } from '../../src/conversation/commercial/GroundedDirectAnswer.ts';
+import { buildCommercialResponsePlan } from '../../src/conversation/commercial/CommercialResponsePlan.ts';
 import { resolveIntentPlan } from '../../src/conversation/intent/IntentPlan.ts';
 import { validateTurnDecision } from '../../src/conversation/decision/DecisionValidator.ts';
 
@@ -145,4 +146,29 @@ test('worker suitability produces a grounded answer before any discovery questio
   assert.match(answer,/Armor 22/i);
   assert.match(answer,/trabajo/i);
   assert.match(answer,/IP68|1\.5 m|6600 mAh/i);
+});
+
+test('broad product info uses commercial composer instead of full-rag kernel fallback',()=>{
+  const plan=buildCommercialResponsePlan({
+    message:'Info del Armor 22',
+    intent:'PRODUCT_INFO',
+    resolvedCurrentIntent:'PRODUCT_INFO',
+    state:{activeProduct:'Armor 22'},
+    resolvedProduct:'Armor 22',
+    directAnswer:'Armor 22 tiene información verificada.',
+    verifiedFacts:[
+      {domain:'PRODUCT_RAG',key:'BATERIA_MAH',value:'6600 mAh'},
+      {domain:'PRODUCT_RAG',key:'IP68',value:'Sí'},
+    ],
+    verifiedFeatures:[
+      {domain:'PRODUCT_RAG',key:'BATERIA_MAH',value:'6600 mAh'},
+      {domain:'PRODUCT_RAG',key:'IP68',value:'Sí'},
+    ],
+    finalExecutableNba:'ANSWER_ONLY',
+    commercialContractPrepared:true,
+  } as any,'Armor 22 tiene información verificada.');
+
+  assert.equal(plan.mode,'FACTUAL_DIRECT');
+  assert.equal(plan.shouldUseLlm,true);
+  assert.equal(plan.maxQuestions,0);
 });
