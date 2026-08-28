@@ -41,6 +41,7 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
   let primaryIntent=plannerIntent??fallbackIntent??'OTHER';
 
   if(fallbackIntent&&['OBJECTION','HANDLE_PRICE_OBJECTION'].includes(fallbackIntent)&&['OBJECTION','HANDLE_PRICE_OBJECTION'].includes(primaryIntent))primaryIntent=fallbackIntent;
+  if(fallbackIntent==='EVALUATE_USE'&&['PRODUCT_INFO','OTHER','EVALUATE_USE'].includes(primaryIntent))primaryIntent='EVALUATE_USE';
   if(fallbackIntent&&['PURCHASE','HUMAN','QUOTE'].includes(fallbackIntent))primaryIntent=fallbackIntent;
   const contextualPurchaseContinuation=state.purchaseSignal===true&&String(state.lastIntent??'').toUpperCase()==='STOCK'&&String(state.lastNba??state.pendingCommercialAction??'').toUpperCase()==='SOFT_CLOSE'&&['OTHER',null].includes(plannerIntent as any)&&fallbackIntent==='OTHER';
   if(contextualPurchaseContinuation)primaryIntent='PURCHASE';
