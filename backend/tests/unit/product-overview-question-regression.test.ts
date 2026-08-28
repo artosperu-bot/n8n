@@ -1,12 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { nextBestAction } from '../../src/conversation/nba/NextBestAction.ts';
+import { compatibleNba } from '../../src/conversation/nba/NbaCompatibility.ts';
 import { buildCommercialResponsePlan } from '../../src/conversation/commercial/CommercialResponsePlan.ts';
 
 test('broad product info asks one useful next question only while discovery context is missing',()=>{
   assert.equal(nextBestAction('PRODUCT_INFO',{activeProduct:'Armor 22'}),'ASK_MISSING_FACT');
   assert.equal(nextBestAction('PRODUCT_INFO',{activeProduct:'Armor 22',useCase:'trabajo'}),'ANSWER_ONLY');
   assert.equal(nextBestAction('PRODUCT_INFO',{activeProduct:'Armor 22',priorities:['resistencia']}),'ANSWER_ONLY');
+});
+
+test('broad product info question is not suppressed by planner ANSWER_ONLY',()=>{
+  assert.equal(
+    compatibleNba('PRODUCT_INFO',{activeProduct:'Armor 22'},'ANSWER_ONLY','ASK_MISSING_FACT'),
+    'ASK_MISSING_FACT',
+  );
+  assert.equal(
+    compatibleNba('PRODUCT_INFO',{activeProduct:'Armor 22',useCase:'trabajo'},'ANSWER_ONLY','ANSWER_ONLY'),
+    'ANSWER_ONLY',
+  );
 });
 
 test('broad product info keeps overview mode while allowing exactly one follow-up question',()=>{
