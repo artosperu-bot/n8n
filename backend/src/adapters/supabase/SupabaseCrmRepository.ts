@@ -6,6 +6,7 @@ type Options={url:string;serviceRoleKey:string;fetcher?:typeof fetch};
 function digits(value:unknown):string|null{const clean=String(value??'').replace(/\D/g,'');return clean||null;}
 function row(value:any):any{return Array.isArray(value)?value[0]??null:value??null;}
 function sourceSentAt(metadata:any):string|null{const value=metadata&&typeof metadata==='object'?metadata.source_sent_at:null;return typeof value==='string'&&value.trim()?value.trim():null;}
+function uniqueUrls(values:unknown):string[]{const seen=new Set<string>();const out:string[]=[];for(const value of Array.isArray(values)?values:[]){const url=String(value??'').trim();if(!url||seen.has(url))continue;seen.add(url);out.push(url);if(out.length>=20)break;}return out;}
 function enrichWhatsappSession(session:any):any{
   const sessionId=String(session?.session_id??'');
   const isWhatsapp=sessionId.startsWith('whatsapp:');
@@ -19,10 +20,15 @@ export class SupabaseCrmRepository implements CrmRepository,AutomationCrmPort{
   readonly #fetcher:typeof fetch;
   constructor(options:Options){this.#url=options.url.replace(/\/$/,'');this.#key=options.serviceRoleKey;this.#fetcher=options.fetcher??fetch;}
   #headers(extra:Record<string,string>={}){return{apikey:this.#key,authorization:`Bearer ${this.#key}`,'content-type':'application/json',...extra};}
-  async #json(response:Response,label:string):Promise<any>{if(!response.ok)throw new Error(`${label} HTTP ${response.status}: ${(await response.text()).slice(0,240)}`);return response.status===204?null:response.json();}
+  async #json(response:Response,label:string):Promise<any>{
+    const raw=await response.text().catch(()=>'' );
+    if(!response.ok)throw new Error(`${label} HTTP ${response.status}: ${raw.slice(0,240)}`);
+    if(!raw.trim())return null;
+    try{return JSON.parse(raw);}catch{throw new Error(`${label} INVALID_JSON_RESPONSE`);}
+  }
   async #get(table:string,params:Record<string,string>,label:string):Promise<any[]>{
     const url=new URL(`${this.#url}/rest/v1/${table}`);for(const[k,v]of Object.entries(params))url.searchParams.set(k,v);
-    const response=await this.#fetcher(url,{headers:this.#headers()});return await this.#json(response,label) as any[];
+    const response=await this.#fetcher(url,{headers:this.#headers()});return (await this.#json(response,label)??[]) as any[];
   }
   async #insert(table:string,payload:any,label:string):Promise<any>{
     const response=await this.#fetcher(`${this.#url}/rest/v1/${table}`,{method:'POST',headers:this.#headers({Prefer:'return=representation'}),body:JSON.stringify(payload)});
@@ -115,14 +121,17 @@ export class SupabaseCrmRepository implements CrmRepository,AutomationCrmPort{
     await this.#insert('crm_mensajes',[{session_id:input.sessionId,message_id:input.messageId,emisor:'BOT',contenido:input.content,canal:'whatsapp',metadata:{source:'stech_backend',wa_id:input.waId}}],'CRM bot message');
   }
 
-  async recordAutomationMessage(input:{sessionId:string;messageId:string;content:string;recipient:string;jobId:string;actionType?:AutomationActionType;mediaUrl?:string|null;mediaProductId?:string|null;mediaSource?:string|null;fallbackToText?:boolean}):Promise<void>{
+  async recordAutomationMessage(input:{sessionId:string;messageId:string;content:string;recipient:string;jobId:string;actionType?:AutomationActionType;mediaUrl?:string|null;mediaUrls?:string[];mediaProductId?:string|null;mediaSource?:string|null;fallbackToText?:boolean}):Promise<void>{
     await this.#ensureWhatsAppSession(input.sessionId);
     await this.#markWhatsAppContext(input.sessionId);
+    const urls=uniqueUrls(input.mediaUrls);
+    if(!urls.length&&input.mediaUrl)urls.push(input.mediaUrl);
     await this.#insert('crm_mensajes',[{
       session_id:input.sessionId,message_id:input.messageId,emisor:'BOT',contenido:input.content,canal:'whatsapp',
       metadata:{
         source:'crm_automation',wa_id:input.recipient,automation_job_id:input.jobId,
-        automation_action_type:input.actionType??'SEND_TEXT',automation_media_url:input.mediaUrl??null,
+        automation_action_type:input.actionType??'SEND_TEXT',automation_media_url:input.mediaUrl??urls[0]??null,
+        automation_media_urls:urls,
         automation_media_product_id:input.mediaProductId??null,automation_media_source:input.mediaSource??null,
         automation_fallback_to_text:Boolean(input.fallbackToText),
       },
