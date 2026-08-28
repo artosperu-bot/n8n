@@ -1,0 +1,65 @@
+name: Production commercial persistence smoke
+
+on:
+  push:
+    branches:
+      - feat/crm-automation-engine
+    paths:
+      - .github/workflows/prod-commercial-smoke.yml
+  workflow_dispatch:
+
+jobs:
+  prod-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check deployed backend build
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEALTH="$(curl --fail --silent --show-error --max-time 20 https://whatsapp.artos.pe/health)"
+          echo "health=$HEALTH"
+          python - "$HEALTH" <<'PY'
+          import json, sys
+          body=json.loads(sys.argv[1])
+          assert body.get('status') == 'ok', body
+          assert body.get('service') == 'stech-backend', body
+          print('DEPLOYED_BUILD_ID=' + str(body.get('buildId')))
+          print('PERSISTENCE_MODE=' + str(body.get('modes',{}).get('persistence')))
+          PY
+
+      - name: Execute safe commercial turn in deployed backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          SESSION_ID="qa-prod-objection-${GITHUB_RUN_ID}"
+          MESSAGE_ID="qa-prod-objection-${GITHUB_RUN_ID}-01"
+          BODY="$(python - "$SESSION_ID" "$MESSAGE_ID" <<'PY'
+          import json, sys
+          print(json.dumps({
+            'sessionId': sys.argv[1],
+            'messageId': sys.argv[2],
+            'message': 'El Armor 22 me parece muy caro. ¿Por qué debería elegirlo?'
+          }, ensure_ascii=False))
+          PY
+          )"
+          RESPONSE="$(curl --fail --silent --show-error --max-time 90 \
+            -X POST https://whatsapp.artos.pe/api/chat \
+            -H 'Content-Type: application/json' \
+            --data "$BODY")"
+          echo "QA_SESSION_ID=$SESSION_ID"
+          echo "QA_MESSAGE_ID=$MESSAGE_ID"
+          python - "$RESPONSE" <<'PY'
+          import json, sys
+          body=json.loads(sys.argv[1])
+          print('ANSWER=' + str(body.get('answer')))
+          debug=body.get('debug') or {}
+          print('INTENT=' + str(debug.get('intent')))
+          print('ROUTE=' + str(debug.get('route')))
+          print('NEXT_BEST_ACTION=' + str(debug.get('nextBestAction')))
+          state=body.get('state') or {}
+          print('OBJECTION=' + str(state.get('objection')))
+          print('COMMERCIAL_STAGE=' + str(state.get('commercialStage')))
+          print('COMMERCIAL_STRATEGY=' + str(state.get('commercialStrategy')))
+          assert body.get('answer'), body
+          PY
