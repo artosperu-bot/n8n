@@ -88,10 +88,11 @@ function spinState(state:any,facts:{useCase:string|null;problem:string|null;prio
 }
 
 function nextMissingFact(facts:{useCase:string|null;problem:string|null;priorities:string[];budget:number|null},intent:string,state:any):string|null{
-  // A generic objection must be answered on its own terms. It is not a hidden
-  // request for budget discovery and SPIN must not manufacture a new question.
-  if(intent==='OBJECTION')return null;
-  if(['HANDLE_PRICE_OBJECTION','BUDGET_CONSTRAINT'].includes(intent)&&facts.budget==null)return 'presupuesto máximo';
+  // Objections must be answered on their own terms. Detecting price friction is
+  // not authorization to invent budget discovery; only an explicit budget
+  // constraint may request a budget ceiling.
+  if(['OBJECTION','HANDLE_PRICE_OBJECTION'].includes(intent))return null;
+  if(intent==='BUDGET_CONSTRAINT'&&facts.budget==null)return 'presupuesto máximo';
   return evaluateSpinReadiness(spinState(state,facts)).nextMissingFact;
 }
 
