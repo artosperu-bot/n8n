@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/stech-backend
+      - feat/crm-automation-engine
     paths:
       - 'backend/**'
       - '.github/workflows/backend-qa.yml'
@@ -22,10 +23,31 @@ jobs:
           node-version: '22'
       - name: Install
         working-directory: backend
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+      - name: Focused salesperson regressions
+        working-directory: backend
+        run: |
+          set -o pipefail
+          node --experimental-strip-types --test tests/unit/commercial-salesperson-regressions.test.ts 2>&1 | tee qa-commercial-salesperson.log
       - name: Test
         working-directory: backend
-        run: npm test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee qa-test.log
       - name: Build check
+        if: always()
         working-directory: backend
-        run: npm run build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee qa-build.log
+      - name: Upload QA diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-qa-diagnostics
+          path: |
+            backend/qa-commercial-salesperson.log
+            backend/qa-test.log
+            backend/qa-build.log
+          if-no-files-found: ignore
+          retention-days: 3

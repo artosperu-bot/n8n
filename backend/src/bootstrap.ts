@@ -16,11 +16,17 @@ import { SupabaseRagRepository } from './adapters/supabase/SupabaseRagRepository
 import { SupabaseTelemetryRepository } from './adapters/supabase/SupabaseTelemetryRepository.ts';
 import { SupabaseCrmAuth } from './adapters/supabase/SupabaseCrmAuth.ts';
 import { SupabaseCrmRepository } from './adapters/supabase/SupabaseCrmRepository.ts';
+import { SupabaseAutomationRepository } from './adapters/supabase/SupabaseAutomationRepository.ts';
+import { SupabaseAutomationMediaContext } from './adapters/supabase/SupabaseAutomationMediaContext.ts';
 import { WhatsAppCloudApiClient } from './adapters/whatsapp/WhatsAppCloudApiClient.ts';
 import { WhatsAppInboundProcessor } from './adapters/whatsapp/WhatsAppInboundProcessor.ts';
+import { AutomationScheduler } from './automation/AutomationScheduler.ts';
+import { AutomationMediaResolver } from './automation/AutomationMediaResolver.ts';
+import { AutomationWorker } from './automation/AutomationWorker.ts';
 import { HybridConversationEngine } from './conversation/HybridConversationEngine.ts';
 import { RecentHistoryLlmProvider } from './conversation/history/RecentHistoryLlmProvider.ts';
 import { FullRagLlmProvider } from './conversation/commercial/FullRagLlmProvider.ts';
+import { writeTrace } from './shared/trace.ts';
 
 function need(value: string | undefined, name: string): string {
   if (!value || value.startsWith('REEMPLAZAR')) throw new Error(`${name} is required for selected adapter`);
@@ -112,8 +118,30 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
       })
     :null;
 
-  const engine=new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation });
-  const whatsappInbound=crm?new WhatsAppInboundProcessor({crm,engine,whatsapp,burstWindowMs:config.whatsappBurstWindowMs}):null;
+  const crmAutomationRepository=crm&&whatsapp&&config.crmAutomationEnabled
+    ?new SupabaseAutomationRepository({url:need(config.supabaseUrl,'SUPABASE_URL'),serviceRoleKey:need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY')})
+    :null;
+  const crmAutomationMediaContext=crmAutomationRepository
+    ?new SupabaseAutomationMediaContext({url:need(config.supabaseUrl,'SUPABASE_URL'),serviceRoleKey:need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY')})
+    :null;
+  const crmAutomationMediaResolver=crmAutomationMediaContext?new AutomationMediaResolver(crmAutomationMediaContext,erp):null;
+  const crmAutomationScheduler=crmAutomationRepository?new AutomationScheduler(crmAutomationRepository,()=>new Date(),crmAutomationMediaResolver):null;
+  const crmAutomationWorker=crmAutomationRepository&&crm&&whatsapp
+    ?new AutomationWorker({
+        repository:crmAutomationRepository,
+        crm,
+        sender:whatsapp,
+        workerId:`stech-${process.pid}`,
+        windowHours:config.crmAutomationWindowHours,
+        batchSize:config.crmAutomationBatchSize,
+        leaseSeconds:config.crmAutomationLeaseSeconds,
+        pollIntervalMs:config.crmAutomationPollIntervalMs,
+        onError:error=>writeTrace({event:'CRM_AUTOMATION_ERROR',stage:'WORKER',error:error instanceof Error?error.message:String(error)},'error'),
+      })
+    :null;
 
-  return {config,conversations,telemetry,erp,rag,llm,automation,whatsapp,crm,crmAuth,whatsappInbound,engine};
+  const engine=new HybridConversationEngine({ conversations, telemetry, erp, rag, llm, automation });
+  const whatsappInbound=crm?new WhatsAppInboundProcessor({crm,engine,whatsapp,automationScheduler:crmAutomationScheduler,burstWindowMs:config.whatsappBurstWindowMs}):null;
+
+  return {config,conversations,telemetry,erp,rag,llm,automation,whatsapp,crm,crmAuth,crmAutomationRepository,crmAutomationScheduler,crmAutomationWorker,whatsappInbound,engine};
 }

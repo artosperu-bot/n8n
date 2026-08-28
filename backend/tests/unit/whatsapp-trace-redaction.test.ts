@@ -10,7 +10,7 @@ test('WhatsApp trace redacts token, authorization, phone identifiers and message
     writeTrace({
       event:'WHATSAPP_INBOUND',
       accessToken:'EAAREALTOKEN123',
-      authorization:'Bearer EAAREALTOKEN123',
+      authorization:'Bearer EAAREALTOKEN123', // EXAMPLE_ONLY: deliberate redaction fixture
       waId:'51912345678',
       phoneNumberId:'1283086411554196',
       message:'Hola, mi DNI es 12345678',

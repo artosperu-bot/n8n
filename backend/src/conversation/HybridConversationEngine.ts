@@ -73,7 +73,6 @@ function normalizeIntent(intent: string, budget: number | null): string {
   if (intent === 'PRICE_AVAILABILITY') return 'PRICE';
   if (intent === 'IMAGES') return 'IMAGE';
   if (intent === 'ATTRIBUTE') return 'CAPABILITY';
-  if (intent === 'OBJECTION') return 'HANDLE_PRICE_OBJECTION';
   if (intent === 'RECOMMEND') return budget != null ? 'RECOMMEND_WITHIN_BUDGET' : 'RECOMMEND';
   return intent || 'OTHER';
 }
@@ -89,14 +88,14 @@ function stageFor(intent: string, proposed: string | null): string {
   if (proposed) return proposed;
   if (intent === 'PURCHASE') return 'CIERRE';
   if (['HUMAN','QUOTE'].includes(intent)) return 'CIERRE_ASISTIDO';
-  if (intent === 'HANDLE_PRICE_OBJECTION') return 'OBJECION';
+  if (['OBJECTION','HANDLE_PRICE_OBJECTION'].includes(intent)) return 'OBJECION';
   if (['RECOMMEND','RECOMMEND_WITHIN_BUDGET','COMPARE'].includes(intent)) return 'EVALUACION';
   if (['PRICE','STOCK'].includes(intent)) return 'CONSIDERACION';
   return 'DESCUBRIMIENTO';
 }
 function strategyFor(intent: string): string {
   if (['PURCHASE','HUMAN','QUOTE'].includes(intent)) return 'CIERRE_PROGRESIVO';
-  if (intent === 'HANDLE_PRICE_OBJECTION') return 'LAER';
+  if (['OBJECTION','HANDLE_PRICE_OBJECTION'].includes(intent)) return 'LAER';
   if (intent === 'COMPARE') return 'ELECCION_GUIADA';
   if (['PRODUCT_INFO','CAPABILITY','RECOMMEND','RECOMMEND_WITHIN_BUDGET','EVALUATE_USE'].includes(intent)) return 'FAB_SPIN';
   return 'RESPUESTA_DIRECTA';
@@ -134,7 +133,7 @@ function fallbackDecision(message: string, state: ConversationState): TurnDecisi
     spinContribution:null,
     nextBestAction:nextBestAction(intent, state),
     needsSql:['PRICE','STOCK','IMAGE','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','ORDER_STATUS'].includes(intent),
-    needsProductRag:['PRODUCT_INFO','CAPABILITY','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','EVALUATE_USE','HANDLE_PRICE_OBJECTION'].includes(intent),
+    needsProductRag:['PRODUCT_INFO','CAPABILITY','COMPARE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','EVALUATE_USE','OBJECTION','HANDLE_PRICE_OBJECTION'].includes(intent),
     needsInstitutionalRag:['POLICY','WARRANTY'].includes(intent),
     confidence:(institutionalIntent && primary === institutionalIntent) || inheritedIntent ? 0.99 : plan.confidence,
   };
@@ -512,7 +511,7 @@ export class HybridConversationEngine {
           const fallback=recommendedProduct?`Te recomiendo ${recommendedProduct} por la diferencia que muestra en el criterio consultado.`:rag.length?`Estas son las diferencias entre ${pair[0]} y ${pair[1]}.`:noEvidenceResponse();
           writerResult=await safeWrite(this.#deps.llm,prepareCommercialWriteInput({message:input.message,intent,state:{...commercialState,comparisonProducts:pair,recommendedProduct},rag,deterministicAnswer:plan,decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts(pair),alternatives:pair}),fallback);answer=writerResult.answer;nba=writerResult.nextBestAction??nba;
         }
-      }else if(['PRODUCT_INFO','CAPABILITY','EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent)){
+      }else if(['PRODUCT_INFO','CAPABILITY','EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','OBJECTION','HANDLE_PRICE_OBJECTION'].includes(intent)){
         const hasDecisionContext=Boolean(commercialState.useCase||commercialState.problem||(commercialState.priorities?.length??0)>0);
         const recommendationTurn=['RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent)||(intent==='EVALUATE_USE'&&!target&&hasDecisionContext);
         if(recommendationTurn){

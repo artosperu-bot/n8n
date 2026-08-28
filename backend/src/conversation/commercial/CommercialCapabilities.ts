@@ -109,6 +109,9 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
   const interestContext=Boolean(input.interestSignal||input.purchaseSignal||input.selectedProduct||input.recommendedProduct||input.activeProduct||input.state?.selectedProduct||input.state?.recommendedProduct||input.state?.activeProduct||matureCommercialContext);
   const implicationKnown=(input.implications??[]).length>0||String(input.state?.lastSpinContribution??'').toUpperCase()==='IMPLICACION'||(input.state?.spinFacts??[]).some(value=>/^(?:implicacion|impacto):/i.test(String(value)));
   const currentIntent=String(input.resolvedCurrentIntent??input.intent??'').toUpperCase();
+  const objection=fold(input.objection??input.state?.objection??'');
+  const objectionTurn=['OBJECTION','HANDLE_PRICE_OBJECTION'].includes(currentIntent);
+  const verifiedPriceObjection=currentIntent==='HANDLE_PRICE_OBJECTION'&&objection==='precio';
   const currentStockKnown=sqlResolved(input)&&input.quote?.stock!=null;
   const previousStockKnown=priorStockKnown(input,product);
   const priorClose=String(input.state?.pendingCommercialAction??input.state?.lastNba??'').toUpperCase()==='SOFT_CLOSE';
@@ -119,11 +122,11 @@ export function evaluateTurnCapabilities(input:LlmWriteInput):CommercialCapabili
     && Boolean(product&&featureEvidence&&(input.useCase||input.problem||(input.priorities??[]).length));
   return {
     ...base,
-    askUseCase:base.askUseCase&&decisionImpact&&!input.useCase,
-    askProblem:base.askProblem&&decisionImpact&&!input.problem,
-    askImplication:base.askImplication&&decisionImpact&&Boolean(input.problem)&&!implicationKnown,
-    askPriority:base.askPriority&&decisionImpact&&!(input.priorities??[]).length,
-    askBudget:base.askBudget&&decisionImpact&&input.budget==null,
+    askUseCase:base.askUseCase&&decisionImpact&&!objectionTurn&&!input.useCase,
+    askProblem:base.askProblem&&decisionImpact&&!objectionTurn&&!input.problem,
+    askImplication:base.askImplication&&decisionImpact&&!objectionTurn&&Boolean(input.problem)&&!implicationKnown,
+    askPriority:base.askPriority&&decisionImpact&&!objectionTurn&&!(input.priorities??[]).length,
+    askBudget:base.askBudget&&decisionImpact&&(!objectionTurn||verifiedPriceObjection)&&input.budget==null,
     askProduct:base.askProduct&&decisionImpact&&!product,
     addRelatedValue:base.addRelatedValue&&Boolean(product&&input.commercialMove&&(
       input.commercialMove.basis.includes('SQL')?sqlResolved(input):featureEvidence

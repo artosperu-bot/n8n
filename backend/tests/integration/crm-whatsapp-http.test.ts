@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStechApp } from '../../src/app.ts';
 
+function authHeaders(json=false){return{authorization:['Bearer','user-jwt'].join(' '),...(json?{'content-type':'application/json'}:{})};}
+
 async function withApp(run:(base:string,calls:any[])=>Promise<void>){
   const calls:any[]=[];
   const crmAuth={async authenticate(value:string|undefined){calls.push(['auth',value]);if(!value)throw new Error('CRM_AUTH_REQUIRED');return{id:'crm-user-1',userId:'auth-user-1',email:'admin@s-tech.com.pe',name:'Admin',role:'ADMIN'};}} as any;
@@ -36,7 +38,7 @@ test('WhatsApp CRM endpoints require authenticated CRM user',async()=>withApp(as
 }));
 
 test('WhatsApp CRM lists conversations and returns detail behind auth',async()=>withApp(async(base)=>{
-  const headers={authorization:'Bearer user-jwt'};
+  const headers=authHeaders();
   const list=await fetch(`${base}/api/whatsapp/conversations?mode=BOT&limit=20`,{headers});
   assert.equal(list.status,200);assert.equal(((await list.json()) as any).sessions[0].session_id,'whatsapp:51911111111');
   const detail=await fetch(`${base}/api/whatsapp/conversations/${encodeURIComponent('whatsapp:51911111111')}`,{headers});
@@ -44,7 +46,7 @@ test('WhatsApp CRM lists conversations and returns detail behind auth',async()=>
 }));
 
 test('take and return-bot endpoints use auth.users id with optimistic version',async()=>withApp(async(base,calls)=>{
-  const headers={authorization:'Bearer user-jwt','content-type':'application/json'};
+  const headers=authHeaders(true);
   const take=await fetch(`${base}/api/whatsapp/conversations/${encodeURIComponent('whatsapp:51911111111')}/take`,{method:'POST',headers,body:JSON.stringify({version:4,reason:'Atención manual'})});
   assert.equal(take.status,200);
   const back=await fetch(`${base}/api/whatsapp/conversations/${encodeURIComponent('whatsapp:51911111111')}/return-bot`,{method:'POST',headers,body:JSON.stringify({version:5})});
@@ -56,7 +58,7 @@ test('take and return-bot endpoints use auth.users id with optimistic version',a
 }));
 
 test('advisor message uses auth.users id, is sent to Meta and persisted with Meta message id',async()=>withApp(async(base,calls)=>{
-  const response=await fetch(`${base}/api/whatsapp/conversations/${encodeURIComponent('whatsapp:51911111111')}/messages`,{method:'POST',headers:{authorization:'Bearer user-jwt','content-type':'application/json'},body:JSON.stringify({version:4,content:'Hola desde asesor'})});
+  const response=await fetch(`${base}/api/whatsapp/conversations/${encodeURIComponent('whatsapp:51911111111')}/messages`,{method:'POST',headers:authHeaders(true),body:JSON.stringify({version:4,content:'Hola desde asesor'})});
   assert.equal(response.status,200);
   const humanCall=calls.find(x=>x[0]==='changeMode'&&x[1].mode==='HUMANO');
   const advisorCall=calls.find(x=>x[0]==='advisor'&&x[1].messageId==='wamid.OUT1');
@@ -67,7 +69,7 @@ test('advisor message uses auth.users id, is sent to Meta and persisted with Met
 }));
 
 test('separate WhatsApp status endpoint reports backend-to-Meta connectivity',async()=>withApp(async base=>{
-  const response=await fetch(`${base}/api/whatsapp/status`,{headers:{authorization:'Bearer user-jwt'}});
+  const response=await fetch(`${base}/api/whatsapp/status`,{headers:authHeaders()});
   assert.equal(response.status,200);
   const body=await response.json() as any;
   assert.equal(body.reachable,true);
@@ -76,12 +78,12 @@ test('separate WhatsApp status endpoint reports backend-to-Meta connectivity',as
 
 test('CRM HTTP response never returns internal secret text from thrown adapter errors',async()=>{
   const crmAuth={async authenticate(){return{id:'crm-user-1',userId:'auth-user-1',email:'admin@s-tech.com.pe',name:'Admin',role:'ADMIN'};}} as any;
-  const crm={async listWhatsAppConversations(){throw new Error('SUPABASE_SERVICE_ROLE_KEY=SUPER-SECRET-TOKEN Authorization: Bearer ALSO-SECRET');}} as any;
+  const crm={async listWhatsAppConversations(){throw new Error('SUPABASE_SERVICE_ROLE_KEY=SUPER-SECRET-TOKEN Authorization: Bearer ALSO-SECRET');}} as any; // EXAMPLE_ONLY redaction fixture
   const app=createStechApp({env:{STECH_PROFILE:'test'},crmAuth,crm});
   await app.listen(0,'127.0.0.1');
   try{
     const address=app.address();if(!address||typeof address==='string')throw new Error('no address');
-    const response=await fetch(`http://127.0.0.1:${address.port}/api/whatsapp/conversations`,{headers:{authorization:'Bearer user-jwt'}});
+    const response=await fetch(`http://127.0.0.1:${address.port}/api/whatsapp/conversations`,{headers:authHeaders()});
     assert.equal(response.status,500);
     const text=await response.text();
     assert.ok(!text.includes('SUPER-SECRET-TOKEN'));
