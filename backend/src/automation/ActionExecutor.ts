@@ -1,8 +1,8 @@
 import type { AutomationActionType, AutomationSender } from './types.ts';
 
 export type AutomationActionResult =
-  | {outcome: 'SENT'; providerMessageId: string; reason: null; fallbackToText?:boolean; imageError?:string|null;providerMessageIds?:string[];mediaSentCount?:number;warning?:string|null}
-  | {outcome: 'FAILED' | 'AMBIGUOUS'; providerMessageId: null; reason: string; fallbackToText?:boolean; imageError?:string|null;providerMessageIds?:string[];mediaSentCount?:number;warning?:string|null};
+  | {outcome: 'SENT'; providerMessageId: string; reason: null; fallbackToText?:boolean; imageError?:string|null;providerMessageIds?:string[];mediaSentCount?:number;sentMediaUrls?:string[];warning?:string|null}
+  | {outcome: 'FAILED' | 'AMBIGUOUS'; providerMessageId: null; reason: string; fallbackToText?:boolean; imageError?:string|null;providerMessageIds?:string[];mediaSentCount?:number;sentMediaUrls?:string[];warning?:string|null};
 
 function compactReason(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
@@ -26,12 +26,12 @@ export class ActionExecutor {
   async sendText(recipient: string, content: string): Promise<AutomationActionResult> {
     try {
       const sent = await this.#sender.sendTextOnce(recipient, content);
-      if (!sent.messageId) return {outcome: 'FAILED', providerMessageId: null, reason: 'WHATSAPP_MESSAGE_ID_REQUIRED'};
-      return {outcome: 'SENT', providerMessageId: sent.messageId, providerMessageIds:[sent.messageId], mediaSentCount:0, reason: null};
+      if (!sent.messageId) return {outcome: 'FAILED', providerMessageId: null, reason: 'WHATSAPP_MESSAGE_ID_REQUIRED',sentMediaUrls:[]};
+      return {outcome: 'SENT', providerMessageId: sent.messageId, providerMessageIds:[sent.messageId], mediaSentCount:0,sentMediaUrls:[], reason: null};
     } catch (error) {
       const reason = compactReason(error);
-      if (ambiguous(reason)) return {outcome: 'AMBIGUOUS', providerMessageId: null, reason: 'WHATSAPP_AMBIGUOUS_SEND'};
-      return {outcome: 'FAILED', providerMessageId: null, reason};
+      if (ambiguous(reason)) return {outcome: 'AMBIGUOUS', providerMessageId: null, reason: 'WHATSAPP_AMBIGUOUS_SEND',sentMediaUrls:[]};
+      return {outcome: 'FAILED', providerMessageId: null, reason,sentMediaUrls:[]};
     }
   }
 
@@ -43,23 +43,23 @@ export class ActionExecutor {
       return wantsImage&&text.outcome==='SENT'?{...text,fallbackToText:true,imageError:images.length?'IMAGE_SENDER_UNAVAILABLE':'IMAGE_NOT_RESOLVED'}:text;
     }
 
-    const providerMessageIds:string[]=[];
+    const providerMessageIds:string[]=[];const sentMediaUrls:string[]=[];
     for(let index=0;index<images.length;index+=1){
       try{
         const sent=await this.#sender.sendImageWithCaptionOnce(input.recipient,images[index],index===0?input.content:'');
         if(!sent.messageId)throw new Error('WHATSAPP_MESSAGE_ID_REQUIRED');
-        providerMessageIds.push(sent.messageId);
+        providerMessageIds.push(sent.messageId);sentMediaUrls.push(images[index]);
       }catch(error){
         const imageError=compactReason(error);
         if(providerMessageIds.length>0){
-          return{outcome:'SENT',providerMessageId:providerMessageIds[0],providerMessageIds,mediaSentCount:providerMessageIds.length,reason:null,fallbackToText:false,imageError,warning:'PARTIAL_MEDIA_SEND'};
+          return{outcome:'SENT',providerMessageId:providerMessageIds[0],providerMessageIds,mediaSentCount:providerMessageIds.length,sentMediaUrls,reason:null,fallbackToText:false,imageError,warning:'PARTIAL_MEDIA_SEND'};
         }
-        if(ambiguous(imageError))return{outcome:'AMBIGUOUS',providerMessageId:null,reason:'WHATSAPP_AMBIGUOUS_SEND',providerMessageIds:[],mediaSentCount:0,fallbackToText:false,imageError};
+        if(ambiguous(imageError))return{outcome:'AMBIGUOUS',providerMessageId:null,reason:'WHATSAPP_AMBIGUOUS_SEND',providerMessageIds:[],mediaSentCount:0,sentMediaUrls:[],fallbackToText:false,imageError};
         const fallback=await this.sendText(input.recipient,input.content);
-        return{...fallback,fallbackToText:true,imageError};
+        return{...fallback,fallbackToText:true,imageError,sentMediaUrls:[]};
       }
     }
 
-    return{outcome:'SENT',providerMessageId:providerMessageIds[0],providerMessageIds,mediaSentCount:providerMessageIds.length,reason:null,fallbackToText:false,imageError:null,warning:null};
+    return{outcome:'SENT',providerMessageId:providerMessageIds[0],providerMessageIds,mediaSentCount:providerMessageIds.length,sentMediaUrls,reason:null,fallbackToText:false,imageError:null,warning:null};
   }
 }
