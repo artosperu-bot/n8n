@@ -4,6 +4,7 @@ import { evaluateSpinReadiness } from '../../src/conversation/nba/SpinProgressio
 import { nextBestAction } from '../../src/conversation/nba/NextBestAction.ts';
 import { prepareCommercialWriteInput } from '../../src/conversation/commercial/CommercialWriteContract.ts';
 import { extractCommercialFacts } from '../../src/conversation/commercial/CommercialFacts.ts';
+import { buildGroundedDirectAnswer } from '../../src/conversation/commercial/GroundedDirectAnswer.ts';
 import { resolveIntentPlan } from '../../src/conversation/intent/IntentPlan.ts';
 import { validateTurnDecision } from '../../src/conversation/decision/DecisionValidator.ts';
 
@@ -125,4 +126,23 @@ test('deterministic evaluate-use intent outranks planner product-info downgrade'
     turnDecision('EVALUATE_USE'),
   );
   assert.equal(decision.primaryIntent,'EVALUATE_USE');
+});
+
+test('worker suitability produces a grounded answer before any discovery question',()=>{
+  const answer=buildGroundedDirectAnswer({
+    message:'Soy obrero, ¿me sirve el Armor 22?',
+    intent:'EVALUATE_USE',
+    attribute:null,
+    resolvedProduct:'Armor 22',
+    verifiedFacts:[
+      {domain:'PRODUCT_RAG',key:'IP68',value:'Sí'},
+      {domain:'PRODUCT_RAG',key:'MIL_STD_810H',value:'Sí'},
+      {domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m'},
+      {domain:'PRODUCT_RAG',key:'BATERIA_MAH',value:'6600 mAh'},
+    ] as any,
+  });
+  assert.ok(answer);
+  assert.match(answer,/Armor 22/i);
+  assert.match(answer,/trabajo/i);
+  assert.match(answer,/IP68|1\.5 m|6600 mAh/i);
 });
