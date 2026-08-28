@@ -9,6 +9,7 @@ import { classifyBudgetTurn } from './budget/BudgetResolver.ts';
 import { extractCommercialFacts } from './commercial/CommercialFacts.ts';
 import { updateInterestLevel } from './commercial/InterestLevel.ts';
 import { prepareCommercialWriteInput } from './commercial/CommercialWriteContract.ts';
+import { mergeSemanticUseCase, shouldUseRecommendationCandidates } from './commercial/HybridSalesAuthority.ts';
 import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from './commercial/UseCaseNormalizer.ts';
 import { productEvidenceSections } from './commercial/ProductEvidencePolicy.ts';
 import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, stockResponse } from './commercial/ResponsePolicy.ts';
@@ -442,7 +443,7 @@ export class HybridConversationEngine {
       const supersedesRecommendation=currentNamedProduct&&Boolean(baseState.recommendedProduct)&&!same(baseState.recommendedProduct,decision.targetProduct)&&!['RECOMMEND','RECOMMEND_WITHIN_BUDGET','COMPARE'].includes(intent);
       const decisionUseCase=normalizeGenuineUseCase(decision.customerNeed);
       const decisionSpin=normalizeUseCaseSpinFact(decision.spinContribution);
-      const commercialState:ConversationState={...baseState,recommendedProduct:supersedesRecommendation?null:baseState.recommendedProduct,useCase:normalizeGenuineUseCase(baseState.useCase)??decisionUseCase,problem:baseState.problem??decision.customerProblem??null,priorities:unique([...(baseState.priorities??[]),...(decision.priorities??[])]),objection:baseState.objection??decision.objection??null,spinFacts:unique([...(baseState.spinFacts??[]),decisionSpin])};
+      const commercialState:ConversationState={...baseState,recommendedProduct:supersedesRecommendation?null:baseState.recommendedProduct,useCase:mergeSemanticUseCase({previousUseCase:normalizeGenuineUseCase(previous.useCase),fallbackUseCase:normalizeGenuineUseCase(baseState.useCase),semanticUseCase:decisionUseCase}),problem:baseState.problem??decision.customerProblem??null,priorities:unique([...(baseState.priorities??[]),...(decision.priorities??[])]),objection:baseState.objection??decision.objection??null,spinFacts:unique([...(baseState.spinFacts??[]),decisionSpin])};
       const hasKnownProduct=Boolean(decision.targetProduct||commercialState.selectedProduct||commercialState.recommendedProduct||commercialState.activeProduct);
       const hasSolutionContext=Boolean(commercialState.useCase||commercialState.problem||(commercialState.priorities?.length??0)>=2);
       const recommendationCue=/\b(cual|que)\b[^?.!]{0,60}\b(conviene|recomiend|mejor)\b|\bpara\s+(?:mi|este|ese)\s+uso\b/.test(fold(input.message));
@@ -513,7 +514,7 @@ export class HybridConversationEngine {
         }
       }else if(['PRODUCT_INFO','CAPABILITY','EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','OBJECTION','HANDLE_PRICE_OBJECTION'].includes(intent)){
         const hasDecisionContext=Boolean(commercialState.useCase||commercialState.problem||(commercialState.priorities?.length??0)>0);
-        const recommendationTurn=['RECOMMEND','RECOMMEND_WITHIN_BUDGET','HANDLE_PRICE_OBJECTION'].includes(intent)||(intent==='EVALUATE_USE'&&!target&&hasDecisionContext);
+        const recommendationTurn=shouldUseRecommendationCandidates({intent,nba,hasTarget:Boolean(target),hasDecisionContext});
         if(recommendationTurn){
           const maxBudget=commercialState.budget??(intent==='HANDLE_PRICE_OBJECTION'&&quote?.price!=null?Math.max(0,quote.price-0.01):99999999);const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
           const ranked=await this.#rankCandidates(commercialState,query,maxBudget,intent==='HANDLE_PRICE_OBJECTION'?target:null,3);const ranks=ranked.ranks;recommendationTrace=ranked.trace;

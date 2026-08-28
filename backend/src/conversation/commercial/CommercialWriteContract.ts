@@ -88,7 +88,10 @@ function spinState(state:any,facts:{useCase:string|null;problem:string|null;prio
 }
 
 function nextMissingFact(facts:{useCase:string|null;problem:string|null;priorities:string[];budget:number|null},intent:string,state:any):string|null{
-  if(['HANDLE_PRICE_OBJECTION','OBJECTION','BUDGET_CONSTRAINT'].includes(intent)&&facts.budget==null)return 'presupuesto máximo';
+  // A generic objection must be answered on its own terms. It is not a hidden
+  // request for budget discovery and SPIN must not manufacture a new question.
+  if(intent==='OBJECTION')return null;
+  if(['HANDLE_PRICE_OBJECTION','BUDGET_CONSTRAINT'].includes(intent)&&facts.budget==null)return 'presupuesto máximo';
   return evaluateSpinReadiness(spinState(state,facts)).nextMissingFact;
 }
 
