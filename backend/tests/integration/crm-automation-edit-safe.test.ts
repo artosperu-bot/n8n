@@ -29,7 +29,7 @@ test('new rules are created with BOT_MESSAGE_SENT semantics',async()=>withApp(as
 test('ADMIN can edit rule content without changing identity or active state',async()=>withApp(async(base,calls)=>{
   const response=await fetch(`${base}/api/automations/rules/r1`,{method:'PATCH',headers:jsonAuth('admin'),body:JSON.stringify({name:'Seguimiento editado',delaySeconds:7200,messageTemplate:'Nuevo mensaje',priority:50})});
   assert.equal(response.status,200);
-  assert.deepEqual(calls.find(x=>x[0]==='updateRule'),['updateRule','r1',{name:'Seguimiento editado',delaySeconds:7200,messageTemplate:'Nuevo mensaje',priority:50}]);
+  assert.deepEqual(calls.find(x=>x[0]==='updateRule'),['updateRule','r1',{name:'Seguimiento editado',delaySeconds:7200,actionType:'SEND_TEXT',messageTemplate:'Nuevo mensaje',mediaUrl:null,priority:50}]);
 }));
 
 test('ASESOR cannot edit global automation rules',async()=>withApp(async(base)=>{

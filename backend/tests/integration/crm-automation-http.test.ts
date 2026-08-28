@@ -45,7 +45,7 @@ test('automation rule endpoints require auth and only ADMIN can create/toggle',a
   const created=await fetch(`${base}/api/automations/rules`,{method:'POST',headers:jsonAuth('admin'),body:JSON.stringify({name:'Seguimiento 1h',delaySeconds:3600,messageTemplate:'¿Sigues interesado?',priority:20})});
   assert.equal(created.status,201);
   const createCall=calls.find(x=>x[0]==='createRule');
-  assert.deepEqual(createCall?.[1],{name:'Seguimiento 1h',eventType:'BOT_MESSAGE_SENT',delaySeconds:3600,actionType:'SEND_TEXT',messageTemplate:'¿Sigues interesado?',active:true,priority:20});
+  assert.deepEqual(createCall?.[1],{name:'Seguimiento 1h',eventType:'BOT_MESSAGE_SENT',delaySeconds:3600,actionType:'SEND_TEXT',messageTemplate:'¿Sigues interesado?',mediaUrl:null,active:true,priority:20});
   const toggle=await fetch(`${base}/api/automations/rules/r1/disable`,{method:'POST',headers:auth('admin')});assert.equal(toggle.status,200);
   assert.ok(calls.some(x=>x[0]==='setActive'&&x[1]==='r1'&&x[2]===false));
 }));
