@@ -12,6 +12,7 @@ export type RagPresentationMode='PRODUCT_OVERVIEW'|'ATTRIBUTE'|'INSTITUTIONAL'|'
 
 export type CommercialResponseMode =
   | 'FACTUAL_DIRECT'
+  | 'PRODUCT_OVERVIEW'
   | 'DISCOVERY_SPIN'
   | 'CONTEXTUAL_FAB'
   | 'GUIDED_CHOICE'

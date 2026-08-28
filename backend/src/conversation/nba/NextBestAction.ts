@@ -1,6 +1,5 @@
 import type { ConversationState } from '../../domain/types.ts';
 import { fold } from '../../shared/text.ts';
-import { evaluateSpinReadiness } from './SpinProgression.ts';
 
 function specificActionablePain(problem:string|null|undefined):boolean{
   const value=fold(problem??'');
@@ -8,17 +7,20 @@ function specificActionablePain(problem:string|null|undefined):boolean{
 }
 
 /**
- * Bounded commercial next-best-action catalog.
- * Facts still come from SQL/RAG authorities; this layer only controls the one
- * executable +1 after the current customer request is answered.
+ * Conservative deterministic fallback for the semantic planner.
+ *
+ * This function is deliberately not a conversation state machine. GPT may
+ * propose the one useful commercial +1; deterministic code only supplies a
+ * safe fallback when that proposal is absent/incompatible. SQL/RAG and side
+ * effects remain authoritative elsewhere.
  */
 export function nextBestAction(intent: string, state: ConversationState = {}): string | null {
   const normalized=String(intent??'').toUpperCase();
   const multiUnit=(state.quantity??1)>=2;
   const resolvedProduct=Boolean(state.activeProduct||state.selectedProduct||state.recommendedProduct);
-  const actionableFit=Boolean(
+  const enoughRecommendationContext=Boolean(
     specificActionablePain(state.problem)
-    || (state.useCase&&state.problem)
+    || state.useCase
     || (state.priorities?.length??0)>0
     || (state.explicitPriorities?.length??0)>0
   );
@@ -32,55 +34,39 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'PRICE_AVAILABILITY':
     case 'PRICE':
     case 'STOCK':
-      return resolvedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
-
-    case 'PRODUCT_INFO': {
-      const spin=evaluateSpinReadiness(state);
-      return spin.nextMissingFact ? 'ASK_MISSING_FACT' : 'ANSWER_ONLY';
-    }
-
     case 'ATTRIBUTE':
     case 'CAPABILITY':
     case 'IMAGES':
     case 'IMAGE':
     case 'WARRANTY':
     case 'ORDER_STATUS':
+    case 'POLICY':
       return 'ANSWER_ONLY';
+
+    case 'PRODUCT_INFO':
+      return enoughRecommendationContext ? 'ANSWER_ONLY' : 'ASK_MISSING_FACT';
 
     case 'FULFILLMENT_SELECTION':
       return resolvedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
-    case 'POLICY':
-      return state.activeProduct && String(state.pendingCommercialAction??state.lastNba??'').toUpperCase()==='SOFT_CLOSE'
-        ? 'SOFT_CLOSE'
-        : 'ANSWER_ONLY';
-
-    case 'EVALUATE_USE': {
-      if(resolvedProduct&&actionableFit)return'SOFT_CLOSE';
-      const spin=evaluateSpinReadiness(state);
-      if(spin.nextMissingFact)return'ASK_MISSING_FACT';
-      if(!resolvedProduct)return'RECOMMEND';
-      return'ANSWER_ONLY';
-    }
+    case 'EVALUATE_USE':
+      if (resolvedProduct) return 'ANSWER_ONLY';
+      return enoughRecommendationContext ? 'RECOMMEND' : 'ASK_MISSING_FACT';
 
     case 'BUDGET_CONSTRAINT':
-      return state.problem || state.useCase || (state.priorities?.length ?? 0) > 0
-        ? 'RECOMMEND'
-        : 'ASK_MISSING_FACT';
+      return enoughRecommendationContext ? 'RECOMMEND' : 'ASK_MISSING_FACT';
 
     case 'RECOMMEND':
-    case 'RECOMMEND_WITHIN_BUDGET': {
-      if(resolvedProduct&&actionableFit)return'SOFT_CLOSE';
-      const spin=evaluateSpinReadiness(state);
-      return spin.nextMissingFact ? 'ASK_MISSING_FACT' : 'ANSWER_ONLY';
-    }
+    case 'RECOMMEND_WITHIN_BUDGET':
+      if (!resolvedProduct && !enoughRecommendationContext) return 'ASK_MISSING_FACT';
+      return resolvedProduct ? 'ANSWER_ONLY' : 'RECOMMEND';
 
     case 'COMPARE':
-      return (state.priorities?.length ?? 0) > 0 ? 'RECOMMEND' : 'COMPARE';
+      return 'COMPARE';
 
     case 'OBJECTION':
     case 'HANDLE_PRICE_OBJECTION':
-      return 'OFFER_ALTERNATIVE';
+      return 'ANSWER_ONLY';
 
     case 'PURCHASE':
       return multiUnit ? 'ASSISTED_HANDOFF' : 'COLLECT_RESERVATION_DATA';

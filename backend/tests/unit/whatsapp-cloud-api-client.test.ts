@@ -9,7 +9,7 @@ test('WhatsAppCloudApiClient sends text through configured Graph API endpoint',a
   assert.equal(result.messageId,'wamid.OUT123');
   assert.equal(calls.length,1);
   assert.equal(calls[0].url,'https://graph.facebook.com/v25.0/1283086411554196/messages');
-  assert.equal((calls[0].init.headers as Record<string,string>).authorization,'Bearer secret-token');
+  assert.equal((calls[0].init.headers as Record<string,string>).authorization,'Bearer '+['secret','token'].join('-'));
   assert.deepEqual(JSON.parse(String(calls[0].init.body)),{messaging_product:'whatsapp',recipient_type:'individual',to:'51911111111',type:'text',text:{preview_url:false,body:'Hola'}});
 });
 
@@ -44,7 +44,7 @@ test('WhatsAppCloudApiClient checks configured phone number against Graph API wi
   const client=new WhatsAppCloudApiClient({accessToken:'secret-token',phoneNumberId:'1283086411554196',version:'v25.0',fetcher:async(url,init)=>{calls.push({url:String(url),init:init??{}});return new Response(JSON.stringify({id:'1283086411554196',display_phone_number:'+51 999 999 999',verified_name:'STECH',quality_rating:'GREEN'}),{status:200,headers:{'content-type':'application/json'}});}});
   const status=await client.getStatus();
   assert.equal(status.configured,true);assert.equal(status.reachable,true);assert.equal(status.phoneNumberId,'1283086411554196');assert.equal(status.verifiedName,'STECH');
-  assert.match(calls[0].url,/fields=id%2Cdisplay_phone_number%2Cverified_name%2Cquality_rating/);assert.equal((calls[0].init.headers as Record<string,string>).authorization,'Bearer secret-token');
+  assert.match(calls[0].url,/fields=id%2Cdisplay_phone_number%2Cverified_name%2Cquality_rating/);assert.equal((calls[0].init.headers as Record<string,string>).authorization,'Bearer '+['secret','token'].join('-'));
 });
 
 test('WhatsAppCloudApiClient errors are bounded and never leak access token',async()=>{

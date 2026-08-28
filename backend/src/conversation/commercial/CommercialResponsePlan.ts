@@ -42,6 +42,7 @@ function responseMode(input: LlmWriteInput, nba: string): CommercialResponseMode
   ) return 'PURCHASE_PROGRESS';
   if (intent === 'HANDLE_PRICE_OBJECTION' || strategy === 'LAER' || Boolean(input.objection)) return 'OBJECTION_LAER';
   if (intent === 'COMPARE' || strategy === 'ELECCION_GUIADA') return 'GUIDED_CHOICE';
+  if (intent === 'PRODUCT_INFO') return 'PRODUCT_OVERVIEW';
   if (nba === 'ASK_MISSING_FACT') return 'DISCOVERY_SPIN';
   if (nba === 'SOFT_CLOSE') return 'SOFT_CLOSE';
   if (hasContextualMove || (strategy === 'FAB_SPIN' && hasVerifiedFeatures && hasGenuineContext)) return 'CONTEXTUAL_FAB';
@@ -80,7 +81,7 @@ export function buildCommercialResponsePlan(input: LlmWriteInput, factualCore: s
     mode,
     strategy: String(input.state?.commercialStrategy ?? '').trim() || null,
     shouldUseLlm: !['FACTUAL_DIRECT', 'HANDOFF'].includes(mode),
-    acknowledgeContext: contextFocus.length > 0 && mode !== 'FACTUAL_DIRECT',
+    acknowledgeContext: contextFocus.length > 0 && mode !== 'FACTUAL_DIRECT' && mode !== 'PRODUCT_OVERVIEW',
     contextFocus,
     factualCore: String(factualCore ?? '').trim(),
     exactNba: nba,
@@ -95,7 +96,7 @@ function authorizedActionInstruction(plan:CommercialResponsePlan): string {
   const exactNba=plan.exactNba;
   if (exactNba === 'ANSWER_ONLY') return 'termina después de responder';
   if (exactNba === 'RELATED_VALUE') return 'añade solo el valor relacionado ya autorizado, sin CTA adicional';
-  if (exactNba === 'ASK_MISSING_FACT') return 'formula únicamente la pregunta SPIN faltante ya autorizada';
+  if (exactNba === 'ASK_MISSING_FACT') return 'formula únicamente la pregunta comercial faltante ya autorizada';
   if (exactNba === 'OFFER_ALTERNATIVE') return 'ofrece solo la alternativa ya autorizada';
   if (exactNba === 'COMPARE') return 'presenta solo la comparación autorizada';
   if (exactNba === 'RECOMMEND') return 'verbaliza únicamente la recomendación ya autorizada';
@@ -114,6 +115,9 @@ export function buildCommercialResponseInstruction(plan: CommercialResponsePlan)
   const action = authorizedActionInstruction(plan);
   const safety = 'No inventes escasez, urgencia, popularidad, prueba social, rendimiento, precio, stock ni capacidades.';
 
+  if (plan.mode === 'PRODUCT_OVERVIEW') {
+    return `RESPUESTA_DIRECTA es únicamente la fuente de hechos verificados: no la copies, no la recites literalmente y no mantengas su estructura de ficha técnica. Presenta el producto como lo haría un asesor comercial humano en 2 a 4 frases naturales. Selecciona solo 3 o 4 datos realmente representativos y agrúpalos por valor práctico; traduce memoria/almacenamiento, batería/carga, resistencia u otros hechos disponibles a lo que significan en el uso diario, sin asumir un uso que el cliente no haya dicho. Evita expresiones mecánicas como “en memoria viene con”, “en autonomía equipa” o “en resistencia destaca por certificaciones”. No hagas una lista de especificaciones salvo que el cliente la pida. No inventes beneficios técnicos que no puedan sostenerse con los hechos. Si exactNba es ASK_MISSING_FACT, después del overview formula exactamente una sola pregunta breve y natural para obtener el dato faltante autorizado; debe sonar como una conversación de venta, no como formulario ni interrogatorio. Si falta el uso principal, pregunta de forma natural si lo busca para trabajo, uso diario o algo más exigente. Si exactNba es ANSWER_ONLY, termina sin pregunta, sin CTA y sin volver a discovery. ${SIMPLE_HUMAN_LANGUAGE} ${action}. ${safety}`;
+  }
   if (plan.mode === 'DISCOVERY_SPIN') {
     return `Conserva los hechos de RESPUESTA_DIRECTA, pero no la conviertas en una ficha técnica. Responde primero lo actual y luego formula solo la pregunta faltante autorizada, como máximo una. No preguntes presupuesto salvo que ese sea exactamente el dato faltante; no repitas situación, problema, consecuencia o prioridad ya conocidos. Si ya existe una consecuencia en el contexto (${context}), no vuelvas a preguntarla. ${SIMPLE_HUMAN_LANGUAGE} ${GROUNDED_PAIN_EMPATHY} No completes por tu cuenta el dato que realmente falte. ${action}. ${safety}`;
   }
@@ -124,7 +128,7 @@ export function buildCommercialResponseInstruction(plan: CommercialResponsePlan)
     return `Conserva los hechos de RESPUESTA_DIRECTA. ${SIMPLE_HUMAN_LANGUAGE} Reduce el esfuerzo de decisión usando solo 2 a 4 diferencias verificadas y prioriza el contexto conocido (${context}). Explica qué cambia en la vida real, no solo qué especificación es mayor. Recomienda solo si la evidencia sustenta una opción y no inventes trade-offs. ${action}. ${safety}`;
   }
   if (plan.mode === 'OBJECTION_LAER') {
-    return `Conserva RESPUESTA_DIRECTA. ${SIMPLE_HUMAN_LANGUAGE} Reconoce primero que el precio le parece alto sin decir “te entiendo”, “lo siento” ni repetirlo como etiqueta. Si ayuda, usa una sola escena cotidiana basada en el contexto (${context}) para mostrar qué gasto o molestia puede evitar una característica relevante, sin inventar experiencias personales. Responde con hechos verificados y luego ${action}. No mezcles alternativa y cierre en el mismo turno salvo que la acción lo autorice. No seas defensivo ni presiones. ${safety}`;
+    return `Conserva RESPUESTA_DIRECTA. ${SIMPLE_HUMAN_LANGUAGE} Atiende exactamente la objeción, duda o preocupación que expresó el cliente; no la conviertas en objeción de precio si no habló de precio. Reconócela brevemente sin decir “te entiendo” ni “lo siento”, y responde primero con evidencia verificada relevante para esa preocupación. Si ayuda, usa una sola escena cotidiana basada en el contexto (${context}), sin inventar experiencias personales. Después ${action}. Si la acción es ANSWER_ONLY, termina ahí sin otra pregunta. No mezcles alternativa y cierre salvo autorización explícita, no seas defensivo ni presiones. ${safety}`;
   }
   if (plan.mode === 'SOFT_CLOSE') {
     if(plan.closePurpose==='PRICE_AVAILABILITY'){

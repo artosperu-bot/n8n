@@ -14,6 +14,25 @@ test('isolated factual capability remains deterministic', () => {
   assert.equal(plan.maxQuestions, 0);
 });
 
+test('broad product info uses a commercial overview instead of copying the factual kernel',()=>{
+  const plan=buildCommercialResponsePlan({
+    ...base,
+    message:'Info del Armor 22',
+    intent:'PRODUCT_INFO',
+    resolvedCurrentIntent:'PRODUCT_INFO',
+    state:{activeProduct:'Armor 22',commercialStrategy:'FAB_SPIN'},
+    finalExecutableNba:'ANSWER_ONLY',
+  },'Armor 22: 8 GB de RAM física, 6600 mAh, IP68, IP69K y MIL-STD-810H.');
+  assert.equal(plan.mode,'PRODUCT_OVERVIEW');
+  assert.equal(plan.shouldUseLlm,true);
+  assert.equal(plan.maxQuestions,0);
+  const instruction=buildCommercialResponseInstruction(plan);
+  assert.match(instruction,/no copies|no repitas.*literal|no recites/i);
+  assert.match(instruction,/beneficio|ventaja|vida real|uso diario/i);
+  assert.match(instruction,/sin pregunta|termina.*pregunta|no.*pregunta/i);
+  assert.match(instruction,/3|tres|4|cuatro/);
+});
+
 test('verified customer context selects contextual FAB', () => {
   const plan = buildCommercialResponsePlan({
     ...base,
