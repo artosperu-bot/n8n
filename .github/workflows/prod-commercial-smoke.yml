@@ -32,8 +32,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SESSION_ID="qa-prod-generic-objection-${GITHUB_RUN_ID}"
-          MESSAGE_ID="qa-prod-generic-objection-${GITHUB_RUN_ID}-01"
+          SESSION_ID="qa-prod-generic-objection-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          MESSAGE_ID="qa-prod-generic-objection-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-01"
           BODY="$(python - "$SESSION_ID" "$MESSAGE_ID" <<'PY'
           import json, sys
           print(json.dumps({
