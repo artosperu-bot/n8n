@@ -62,7 +62,7 @@ export class AutomationWorker {
   }
 
   async #terminal(job: AutomationClaimedJob, status: 'CANCELLED'|'SKIPPED'|'FAILED'|'AMBIGUOUS', reason: string): Promise<void> {
-    await this.#options.repository.recordExecution({jobId: job.id, sessionId: job.sessionId, outcome: status, providerMessageId: null, detail: {reason,actionType:job.actionType,mediaUrl:job.mediaUrl,mediaProductId:job.mediaProductId,mediaSource:job.mediaSource}}).catch(()=>undefined);
+    await this.#options.repository.recordExecution({jobId: job.id, sessionId: job.sessionId, outcome: status, providerMessageId: null, detail: {reason,actionType:job.actionType,mediaUrl:job.mediaUrl,mediaUrls:job.mediaUrls,mediaProductId:job.mediaProductId,mediaSource:job.mediaSource}}).catch(()=>undefined);
     await this.#options.repository.markTerminal(job.id, status, reason);
   }
 
@@ -83,15 +83,17 @@ export class AutomationWorker {
     const window = evaluateWhatsAppWindow(state.latestCustomerAt, this.#now(), this.#windowHours);
     if (!window.allowed) return this.#terminal(job, 'SKIPPED', window.reason ?? 'WHATSAPP_WINDOW_CLOSED');
 
-    const result = await this.#executor.execute({recipient:job.recipient,content:job.messageTemplate,actionType:job.actionType,mediaUrl:job.mediaUrl});
+    const result = await this.#executor.execute({recipient:job.recipient,content:job.messageTemplate,actionType:job.actionType,mediaUrl:job.mediaUrl,mediaUrls:job.mediaUrls});
     if (result.outcome !== 'SENT') {
       await this.#options.repository.recordExecution({
         jobId:job.id,sessionId:job.sessionId,outcome:result.outcome,providerMessageId:null,
-        detail:{reason:result.reason,actionType:job.actionType,mediaUrl:job.mediaUrl,mediaProductId:job.mediaProductId,mediaSource:job.mediaSource,fallbackToText:Boolean(result.fallbackToText),imageError:result.imageError??null},
+        detail:{reason:result.reason,actionType:job.actionType,mediaUrl:job.mediaUrl,mediaUrls:job.mediaUrls,mediaProductId:job.mediaProductId,mediaSource:job.mediaSource,fallbackToText:Boolean(result.fallbackToText),imageError:result.imageError??null},
       }).catch(()=>undefined);
       return this.#options.repository.markTerminal(job.id,result.outcome,result.reason);
     }
 
+    let auditWarning:string|null=result.warning??null;
+    let auditError:string|null=null;
     try {
       await this.#options.crm.recordAutomationMessage({
         sessionId: job.sessionId,
@@ -101,28 +103,28 @@ export class AutomationWorker {
         jobId: job.id,
         actionType:job.actionType,
         mediaUrl:job.mediaUrl,
+        mediaUrls:job.mediaUrls,
         mediaProductId:job.mediaProductId,
         mediaSource:job.mediaSource,
         fallbackToText:Boolean(result.fallbackToText),
       });
-      await this.#options.repository.recordExecution({
-        jobId: job.id,
-        sessionId: job.sessionId,
-        outcome: 'SENT',
-        providerMessageId: result.providerMessageId,
-        detail: {actionType:job.actionType,mediaUrl:job.mediaUrl,mediaProductId:job.mediaProductId,mediaSource:job.mediaSource,fallbackToText:Boolean(result.fallbackToText),imageError:result.imageError??null},
-      });
-      await this.#options.repository.markTerminal(job.id, 'SENT', null);
     } catch (error) {
-      const reason = 'OUTBOUND_AUDIT_FAILED_AFTER_SEND';
-      await this.#options.repository.recordExecution({
-        jobId: job.id,
-        sessionId: job.sessionId,
-        outcome: 'FAILED',
-        providerMessageId: result.providerMessageId,
-        detail: {reason, error: error instanceof Error ? error.message.slice(0, 180) : String(error).slice(0, 180),actionType:job.actionType,mediaUrl:job.mediaUrl,mediaProductId:job.mediaProductId,mediaSource:job.mediaSource},
-      }).catch(()=>undefined);
-      await this.#options.repository.markTerminal(job.id, 'FAILED', reason);
+      auditWarning=auditWarning??'OUTBOUND_AUDIT_FAILED_AFTER_SEND';
+      auditError=error instanceof Error?error.message.slice(0,180):String(error).slice(0,180);
     }
+
+    await this.#options.repository.recordExecution({
+      jobId: job.id,
+      sessionId: job.sessionId,
+      outcome: 'SENT',
+      providerMessageId: result.providerMessageId,
+      detail: {
+        actionType:job.actionType,mediaUrl:job.mediaUrl,mediaUrls:job.mediaUrls,mediaProductId:job.mediaProductId,mediaSource:job.mediaSource,
+        fallbackToText:Boolean(result.fallbackToText),imageError:result.imageError??null,providerMessageIds:result.providerMessageIds??[result.providerMessageId],
+        mediaSentCount:result.mediaSentCount??(job.actionType==='SEND_TEXT'?0:1),warning:auditWarning,auditError,
+      },
+    }).catch(error=>this.#options.onError?.(error));
+
+    await this.#options.repository.markTerminal(job.id, 'SENT', auditWarning);
   }
 }
