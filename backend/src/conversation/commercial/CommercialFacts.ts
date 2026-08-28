@@ -114,7 +114,7 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
   else if (/\bdelivery\b|\brepart(?:o|idor|iendo)\b/.test(t)) useCase = 'delivery';
   else if (/\btrabaj(?:o|an|amos)\s+en\s+campo\b/.test(t)) useCase = 'trabajo_en_campo';
   else if (/\buso\s+diario\b/.test(t)) useCase = 'uso_diario';
-  else if (/\btrabajo\b/.test(t) && !useCase) useCase = 'trabajo';
+  else if (/\b(?:trabajo|obrero|obrera|operario|operaria)\b/.test(t) && !useCase) useCase = 'trabajo';
 
   let problem = previous.problem ?? null;
   if(!featureQuestion){
