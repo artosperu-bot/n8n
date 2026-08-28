@@ -27,7 +27,7 @@ function hasSpinFact(state:ConversationState,pattern:RegExp):boolean{
  * reservation or another commercial action.
  *
  * The sequence is flexible rather than rigid: when the customer already states
- * a concrete need/priority, we skip redundant P/I questions and mark discovery
+ * a concrete need/priority, we skip redundant S/P/I questions and mark discovery
  * ready. Otherwise we progress one useful question at a time S -> P -> I -> N.
  */
 export function evaluateSpinReadiness(state:ConversationState={}):SpinReadiness{
@@ -57,15 +57,16 @@ export function evaluateSpinReadiness(state:ConversationState={}):SpinReadiness{
     || hasSpinFact(state,/^prioridad:/i)
   );
 
-  if(!hasSituation){
-    return{hasSituation:false,hasProblem,hasImplication,hasNeed,stage:'SITUATION',nextMissingFact:'uso principal',readyForRecommendation:false,readyForStock:false,reason:'NO_SITUATION'};
+  // An explicit decision criterion is already useful commercial context. Do not
+  // force the customer back through Situation/Problem/Implication just to fill
+  // SPIN boxes. Constraints such as budget alone are intentionally not treated
+  // as a need here, so useful discovery still happens when criteria are absent.
+  if(hasNeed){
+    return{hasSituation,hasProblem,hasImplication,hasNeed:true,stage:'READY',nextMissingFact:null,readyForRecommendation:true,readyForStock:true,reason:'NEED_CONFIRMED'};
   }
 
-  // A need explicitly supplied by the customer is enough to avoid making SPIN
-  // feel like an interview. We retain S/P/I facts if they exist, but do not ask
-  // questions merely to fill boxes.
-  if(hasNeed){
-    return{hasSituation:true,hasProblem,hasImplication,hasNeed:true,stage:'READY',nextMissingFact:null,readyForRecommendation:true,readyForStock:true,reason:'NEED_CONFIRMED'};
+  if(!hasSituation){
+    return{hasSituation:false,hasProblem,hasImplication,hasNeed:false,stage:'SITUATION',nextMissingFact:'uso principal',readyForRecommendation:false,readyForStock:false,reason:'NO_SITUATION'};
   }
 
   if(!hasProblem){
