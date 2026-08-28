@@ -34,7 +34,6 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'PRICE_AVAILABILITY':
     case 'PRICE':
     case 'STOCK':
-    case 'PRODUCT_INFO':
     case 'ATTRIBUTE':
     case 'CAPABILITY':
     case 'IMAGES':
@@ -43,6 +42,9 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'ORDER_STATUS':
     case 'POLICY':
       return 'ANSWER_ONLY';
+
+    case 'PRODUCT_INFO':
+      return enoughRecommendationContext ? 'ANSWER_ONLY' : 'ASK_MISSING_FACT';
 
     case 'FULFILLMENT_SELECTION':
       return resolvedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
