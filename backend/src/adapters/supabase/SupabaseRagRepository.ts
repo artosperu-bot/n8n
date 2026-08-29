@@ -149,6 +149,7 @@ export class SupabaseRagRepository implements RagRepository {
   async searchProduct(query: string, productId: string, sections: string[] = [], limit = 8): Promise<RagEvidence[]> {
     const pid = productId.trim();
     if (!pid) throw new Error('productId is required for product RAG');
+    if(!sections.length)return[];
     if(!this.#embeddingProvider){
       this.#warnFallback('PRODUCT','NO_EMBEDDING_PROVIDER',{productId:pid});
       return this.#lexicalProduct(query,pid,sections,limit,'NO_EMBEDDING_PROVIDER');
