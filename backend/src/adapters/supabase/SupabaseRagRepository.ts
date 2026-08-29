@@ -22,6 +22,7 @@ type Cache = { loadedAt: number; products: Product[]; docs: ProductDoc[]; instit
 type VectorFallbackReason = 'VECTOR_EMPTY' | 'VECTOR_ERROR' | 'NO_EMBEDDING_PROVIDER';
 
 const STOP = new Set(['que','cual','como','tiene','para','del','de','el','la','los','las','una','uno','con','por']);
+const LEGACY_PRODUCT_SECTIONS=['AUDIO','BATERIA','CAMARA','CONECTIVIDAD','FISICO','FUNCIONES','IDENTIFICACION','LANZAMIENTO','MEMORIA','PANTALLA','POSICIONAMIENTO','REDES','RENDIMIENTO','RESISTENCIA','SEGURIDAD','SENSORES','SIM','SISTEMA','TERMICA'];
 function tokens(value: string): string[] { return [...new Set(fold(value).split(/[^a-z0-9]+/).filter(x => x.length >= 3 && !STOP.has(x)))]; }
 function validText(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
 function searchable(value: unknown): string { return fold(typeof value === 'string' ? value : JSON.stringify(value ?? '')); }
@@ -238,7 +239,7 @@ export class SupabaseRagRepository implements RagRepository {
     const cache = await this.#load();
     if (product) {
       const productId = this.#resolveProduct(cache.products, product);
-      return productId ? this.searchProduct(query, productId) : [];
+      return productId ? this.searchProduct(query, productId, LEGACY_PRODUCT_SECTIONS) : [];
     }
     return this.searchInstitutional(query);
   }
