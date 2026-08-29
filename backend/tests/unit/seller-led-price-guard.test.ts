@@ -44,3 +44,20 @@ test('ordinary EVALUATE_USE answer still rejects an unsolicited price when fulfi
   assert.equal(r.fallback.delivered,false);
   assert.equal(r.fallback.error,'UNSOLICITED_PRICE');
 });
+
+test('discovery with a known use and fall problem cannot leak price availability or fulfillment',async()=>{
+  const fallback='El Armor 22 tiene resistencia a caídas de 1.5 m y está preparado para golpes, agua y polvo. ¿Cuando se te cae termina dañándose o te hace perder tiempo en el trabajo?';
+  const r=await safeWrite(llm('El Armor 22 aguanta caídas de 1.5 m. Está a S/ 1399 y tenemos disponibilidad. ¿Prefieres envío o recojo?'),{
+    message:'se me cae mucho',intent:'EVALUATE_USE',
+    state:{activeProduct:'Armor 22',useCase:'trabajo',problem:'caidas_frecuentes',spinFacts:['uso:trabajo','problema:caidas_frecuentes']},
+    resolvedProduct:'Armor 22',allowedProducts:['Armor 22'],
+    quote:{product:'Armor 22',shortName:'Armor 22',price:1399,stock:9,currency:'PEN',source:'TEST'},
+    rag:[{text:rugged,source:'TEST',productId:'P-ARMOR-22-256G',section:'RESISTENCIA',domain:'PRODUCT'}],
+    nextBestAction:'ASK_MISSING_FACT',finalExecutableNba:'ASK_MISSING_FACT',executableNba:'ASK_MISSING_FACT',missingFact:'impacto',
+  } as any,fallback);
+  assert.equal(r.fallback.delivered,false);
+  assert.equal(r.fallback.error,'UNSOLICITED_PRICE');
+  assert.doesNotMatch(r.answer,/S\/\s*1399|disponib|env[ií]o|recojo/i);
+  assert.match(r.answer,/ca[ií]da|golpe/i);
+  assert.equal((r.answer.match(/\?/g)??[]).length,1);
+});
