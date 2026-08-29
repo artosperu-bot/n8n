@@ -86,6 +86,8 @@ export function reduceState(previous:ConversationState,patch:StatePatch):Convers
     updatedAt:new Date().toISOString(),
   };
   next.useCase=normalizeGenuineUseCase(next.useCase);
+  const comparisonProducts=[...new Set((next.comparisonProducts??[]).map(product=>String(product??'').trim()).filter(Boolean))];
+  next.comparisonProducts=comparisonProducts.length>=2?comparisonProducts.slice(0,2):[];
 
   // A queried attribute is not automatically a purchase priority. Keep a
   // separate memory only for preference/requirement language such as
