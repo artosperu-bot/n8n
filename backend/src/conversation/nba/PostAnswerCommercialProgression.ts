@@ -31,6 +31,13 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
   const spin=evaluateSpinReadiness(state);
   const previousNba=String(state.lastNba??state.pendingCommercialAction??'').toUpperCase();
   const resolved=Boolean(input.resolvedProduct);
+  const completedRecommendation=Boolean(
+    current==='RECOMMEND'
+    && resolved
+    && input.verifiedCurrentAnswer
+    && state.recommendedProduct
+    && fold(state.recommendedProduct)===fold(input.resolvedProduct??'')
+  );
   const actionableFit=Boolean(
     specificActionablePain(state.problem)
     || (state.useCase&&state.problem)
@@ -44,6 +51,10 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
   if(/^CIERRE/.test(String(state.commercialStage??'').toUpperCase())&&current==='ASK_MISSING_FACT')return{level:'HIGH',candidateNba:'ANSWER_ONLY',reason:'CLOSING_STAGE_BLOCKS_DISCOVERY'};
 
   if(state.objection&&(input.verifiedAlternatives??0)>0)return{level:'MEDIUM',candidateNba:'OFFER_ALTERNATIVE',reason:'OBJECTION_WITH_VERIFIED_ALTERNATIVE'};
+
+  if(completedRecommendation){
+    return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'COMPLETED_RECOMMENDATION_READY_FOR_COMMERCIAL_RESULT'};
+  }
 
   if(consultative&&spin.nextMissingFact){
     return{level:'LOW',candidateNba:'ASK_MISSING_FACT',reason:`SPIN_NEEDS_${spin.stage}`};
@@ -68,7 +79,7 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
 
   if(consultative&&actionableFit&&spin.readyForStock&&resolved&&input.verifiedCurrentAnswer&&previousNba!=='SOFT_CLOSE')return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'ACTIONABLE_FIT_READY_FOR_COMMERCIAL_RESULT'};
 
-  if(['PRODUCT_INFO'].includes(intent)&&spin.nextMissingFact){
+  if(intent==='PRODUCT_INFO'&&spin.nextMissingFact){
     return{level:'LOW',candidateNba:'ASK_MISSING_FACT',reason:`SPIN_NEEDS_${spin.stage}`};
   }
 
