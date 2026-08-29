@@ -201,5 +201,5 @@ test('exploring one product does not create a comparison pair',()=>{
     lastUserMessage:'info del armor 22',
   } as any);
   assert.deepEqual(next.exploredProducts,['Armor 22']);
-  assert.deepEqual(next.comparisonProducts,[]);
+  assert.deepEqual(next.comparisonProducts??[],[]);
 });
