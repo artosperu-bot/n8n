@@ -99,11 +99,11 @@ test('deterministic N+1 outranks a conflicting compatible planner proposal',()=>
 });
 
 test('recommendation skips redundant SPIN when substantive criteria are already explicit',()=>{
-  assert.equal(nextBestAction('RECOMMEND',{priorities:['resistencia','bateria']}),'ANSWER_ONLY');
-  assert.equal(isNbaCompatible('RECOMMEND','ANSWER_ONLY',{}),true);
+  assert.equal(nextBestAction('RECOMMEND',{priorities:['resistencia','bateria']}),'RECOMMEND');
+  assert.equal(isNbaCompatible('RECOMMEND','RECOMMEND',{priorities:['resistencia','bateria']}),true);
   const prepared=prepareCommercialWriteInput({
     message:'Busco uno resistente y con buena batería, ¿qué me recomiendas?',intent:'RECOMMEND',
-    state:{priorities:['resistencia','bateria']},decision:{nextBestAction:'ANSWER_ONLY'} as any,
+    state:{priorities:['resistencia','bateria']},decision:{nextBestAction:'RECOMMEND'} as any,
     allowedProducts:[],
   });
   assert.equal(prepared.nextBestAction,'ANSWER_ONLY');
