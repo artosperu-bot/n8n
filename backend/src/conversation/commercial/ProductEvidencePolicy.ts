@@ -49,7 +49,6 @@ function inferredSections(state:ConversationState):string[]{
   if(/trabajo nocturno|noche|nocturn|vigilancia/.test(combined))result.push('CAMARA','BATERIA','RESISTENCIA');
   if(/termic|temperatura|calor|inspeccion.*temperatura/.test(combined))result.push('TERMICA','RESISTENCIA','BATERIA','SENSORES');
   if(/oficina|multitarea|varias apps|whatsapp|correo|navegador/.test(combined))result.push('RENDIMIENTO','MEMORIA','BATERIA');
-  else if(/\btrabajo\b/.test(use)&&result.length===0)result.push('RENDIMIENTO','MEMORIA','BATERIA');
   if(/foto|fotografia|camara|video|contenido|redes sociales|subir.*red/.test(combined))result.push('CAMARA','MEMORIA','PANTALLA');
 
   return unique(result);
