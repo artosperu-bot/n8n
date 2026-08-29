@@ -8,6 +8,7 @@ import { extractCommercialFacts } from '../../src/conversation/commercial/Commer
 import { buildGroundedDirectAnswer } from '../../src/conversation/commercial/GroundedDirectAnswer.ts';
 import { resolveIntentPlan } from '../../src/conversation/intent/IntentPlan.ts';
 import { validateTurnDecision } from '../../src/conversation/decision/DecisionValidator.ts';
+import { reduceState } from '../../src/conversation/state/StateReducer.ts';
 
 function turnDecision(primaryIntent:string):any{
   return {
@@ -188,4 +189,17 @@ test('evaluate-use attributes come from the current deterministic message instea
   const deterministic={...turnDecision('EVALUATE_USE'),attributes:['RESISTENCIA']};
   const resistance=validateTurnDecision(planner,{activeProduct:'Armor 22',useCase:'trabajo'},['Armor 22'],deterministic);
   assert.deepEqual(resistance.attributes,['RESISTENCIA']);
+});
+
+test('exploring one product does not create a comparison pair',()=>{
+  const next=reduceState({}, {
+    lastIntent:'PRODUCT_INFO',
+    lastRoute:'RAG_PRODUCT',
+    queryTarget:'Armor 22',
+    salientProduct:'Armor 22',
+    activeProduct:'Armor 22',
+    lastUserMessage:'info del armor 22',
+  } as any);
+  assert.deepEqual(next.exploredProducts,['Armor 22']);
+  assert.deepEqual(next.comparisonProducts,[]);
 });
