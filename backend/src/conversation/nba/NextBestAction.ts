@@ -1,4 +1,5 @@
 import type { ConversationState } from '../../domain/types.ts';
+import { fold } from '../../shared/text.ts';
 import { evaluateSpinReadiness } from './SpinProgression.ts';
 
 /**
@@ -10,6 +11,10 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
   const normalized=String(intent??'').toUpperCase();
   const multiUnit=(state.quantity??1)>=2;
   const resolvedProduct=Boolean(state.activeProduct||state.selectedProduct||state.recommendedProduct);
+  const completedRecommendation=Boolean(
+    state.recommendedProduct
+    && (!state.activeProduct||fold(state.recommendedProduct)===fold(state.activeProduct))
+  );
 
   if (state.purchaseSignal) return multiUnit ? 'ASSISTED_HANDOFF' : 'COLLECT_RESERVATION_DATA';
 
@@ -45,6 +50,7 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
 
     case 'EVALUATE_USE': {
       const spin=evaluateSpinReadiness(state);
+      if(completedRecommendation)return'SOFT_CLOSE';
       if(spin.nextMissingFact)return'ASK_MISSING_FACT';
       if(!resolvedProduct)return'RECOMMEND';
       return spin.readyForStock?'SOFT_CLOSE':'ANSWER_ONLY';
@@ -58,6 +64,7 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
     case 'RECOMMEND':
     case 'RECOMMEND_WITHIN_BUDGET': {
       const spin=evaluateSpinReadiness(state);
+      if(completedRecommendation)return'SOFT_CLOSE';
       if(spin.nextMissingFact)return'ASK_MISSING_FACT';
       if(!resolvedProduct)return'RECOMMEND';
       return spin.readyForStock?'SOFT_CLOSE':'ANSWER_ONLY';
