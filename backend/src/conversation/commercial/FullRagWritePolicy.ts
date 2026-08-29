@@ -26,13 +26,36 @@ function mode(input:LlmWriteInput):RagPresentationMode{
   if(intent==='PRODUCT_INFO')return'PRODUCT_OVERVIEW';
   return'DEFAULT';
 }
+function executableNba(input:LlmWriteInput):string{
+  return String(input.finalExecutableNba??input.executableNba??input.nextBestAction??input.decision?.nextBestAction??'').toUpperCase();
+}
+function discoveryHidesCommercialFacts(input:LlmWriteInput):boolean{
+  const intent=String(input.intent??'').toUpperCase();
+  return executableNba(input)==='ASK_MISSING_FACT'&&['PRODUCT_INFO','EVALUATE_USE','CAPABILITY','ATTRIBUTE'].includes(intent);
+}
+function visibleFacts(input:LlmWriteInput):LlmWriteInput['verifiedFacts']{
+  if(!discoveryHidesCommercialFacts(input))return input.verifiedFacts;
+  return (input.verifiedFacts??[]).filter(fact=>{
+    if(String(fact.domain??'').toUpperCase()!=='SQL')return true;
+    const key=String(fact.key??'').toUpperCase();
+    return !['PRECIO','PRICE','STOCK','DISPONIBILIDAD','AVAILABILITY'].includes(key);
+  });
+}
 export function applyFullRagWritePolicy(input:LlmWriteInput):LlmWriteInput{
   const presentationMode=mode(input);
-  const productHighlights=selectProductHighlights({intent:input.intent,attribute:input.attribute??null,facts:input.verifiedFacts??[],limit:presentationMode==='PRODUCT_OVERVIEW'?3:2});
+  const facts=visibleFacts(input);
+  const productHighlights=selectProductHighlights({intent:input.intent,attribute:input.attribute??null,facts:facts??[],limit:presentationMode==='PRODUCT_OVERVIEW'?3:2});
   let directAnswer=input.directAnswer??null;
   if(presentationMode==='PRODUCT_OVERVIEW'){
     const product=String(input.resolvedProduct??input.activeProduct??input.quote?.shortName??input.quote?.product??'Este equipo').trim();
     const overview=overviewAnswer(product,productHighlights);if(overview)directAnswer=overview;
   }
-  return{...input,presentationMode,productHighlights,directAnswer};
+  return{
+    ...input,
+    quote:discoveryHidesCommercialFacts(input)?null:input.quote,
+    verifiedFacts:facts,
+    presentationMode,
+    productHighlights,
+    directAnswer,
+  };
 }
