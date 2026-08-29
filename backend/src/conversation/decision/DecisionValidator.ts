@@ -14,7 +14,9 @@ const INTENT_ALIASES:Record<string,string>={
 const NBAS=new Set(['ANSWER_ONLY','ASK_MISSING_FACT','OFFER_ALTERNATIVE','COMPARE','RECOMMEND','SOFT_CLOSE','ASSISTED_HANDOFF','COLLECT_RESERVATION_DATA','EXECUTE_RESERVATION']);
 const NBA_ALIASES:Record<string,string>={ASK_NEED:'ASK_MISSING_FACT',ASK_USE:'ASK_MISSING_FACT',ASK_BUDGET:'ASK_MISSING_FACT',ASK_PRIORITY:'ASK_MISSING_FACT',DISCOVER_ONE_FACT:'ASK_MISSING_FACT',CLARIFY_OR_HANDOFF:'ASK_MISSING_FACT',CONTINUE_BY_NEED:'ANSWER_ONLY',CONNECT_TO_USE:'ANSWER_ONLY',WAIT_FOR_NEXT_QUESTION:'ANSWER_ONLY',WAIT_FOR_PRODUCT_QUESTION:'ANSWER_ONLY',RETURN_TO_PRODUCT:'ANSWER_ONLY',ADVANCE_IF_INTEREST:'SOFT_CLOSE',RECOMMEND_BY_NEED:'RECOMMEND',RECOMMEND_BY_PRIORITY:'RECOMMEND',EXPLAIN_FIT:'SOFT_CLOSE',ADDRESS_OBJECTION:'OFFER_ALTERNATIVE',OFFER_ALTERNATIVES:'OFFER_ALTERNATIVE',GUIDE_SELECTION:'OFFER_ALTERNATIVE'};
 const STAGES=new Set(['INICIAL','DESCUBRIMIENTO','CONSIDERACION','EVALUACION','OBJECION','CIERRE','CIERRE_ASISTIDO']);
+const ATTRIBUTE_CODES=new Set(['NFC','5G','TERMICA','BATERIA','CAMARA','RESISTENCIA','CONECTIVIDAD','REDES','SIM','MEMORIA','RENDIMIENTO','PANTALLA','SEGURIDAD','FISICO','SENSORES','POSICIONAMIENTO']);
 function unique(values:Array<string|null|undefined>):string[]{return[...new Set(values.map(v=>String(v??'').trim()).filter(Boolean))];}
+function canonicalAttributes(values:Array<string|null|undefined>):string[]{return unique(values).map(x=>x.toUpperCase()).filter(x=>ATTRIBUTE_CODES.has(x));}
 function editDistance(a:string,b:string):number{const rows=a.length+1,cols=b.length+1,d=Array.from({length:rows},()=>Array<number>(cols).fill(0));for(let i=0;i<rows;i++)d[i][0]=i;for(let j=0;j<cols;j++)d[0][j]=j;for(let i=1;i<rows;i++)for(let j=1;j<cols;j++){const cost=a[i-1]===b[j-1]?0:1;d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+cost);if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);}return d[a.length][b.length];}
 function fuzzyCanonical(raw:string,bUniverse:string[]):string|null{const parts=fold(raw).match(/[a-z0-9]+/g)??[],model=parts.find(x=>/\d/.test(x));if(!model)return null;const scored=bUniverse.map(product=>{const p=fold(product).match(/[a-z0-9]+/g)??[],modelMatch=p.includes(model)?3:0,family=p.filter(x=>!/[0-9]/.test(x)&&x.length>=4),familyMatch=family.some(word=>parts.some(q=>q===word||(q.length>=4&&editDistance(q,word)<=1)))?1:0;return{product,score:modelMatch+familyMatch};}).filter(x=>x.score>=3).sort((a,b)=>b.score-a.score);if(!scored.length||scored[1]&&scored[1].score===scored[0].score)return null;return scored[0].product;}
 function knownCanonical(value:string|null|undefined,universe:string[]):string|null{const raw=String(value??'').trim();if(!raw)return null;const f=fold(raw);return universe.find(p=>fold(p)===f||fold(p).includes(f)||f.includes(fold(p)))??fuzzyCanonical(raw,universe);}
@@ -34,7 +36,7 @@ function factualSemanticIntent(intent:string):boolean{return['PRODUCT_INFO','ATT
 
 export function validateTurnDecision(decision:TurnDecision,state:ConversationState,catalogCandidates:string[]=[],fallbackDecision?:TurnDecision):TurnDecision{
   const universe=unique([...catalogCandidates,state.activeProduct,state.queryTarget,state.salientProduct,state.selectedProduct,state.recommendedProduct,...(state.comparisonProducts??[])]);
-  const fallbackIntent=canonicalIntent(fallbackDecision?.primaryIntent),fallbackReference=canonicalReference(fallbackDecision?.referenceType,null),plannerReference=canonicalReference(decision.referenceType,fallbackDecision?.referenceType),decisionAttributes=unique((decision.attributes??[]).map(x=>String(x).toUpperCase())),fallbackAttributes=unique((fallbackDecision?.attributes??[]).map(x=>String(x).toUpperCase()));
+  const fallbackIntent=canonicalIntent(fallbackDecision?.primaryIntent),fallbackReference=canonicalReference(fallbackDecision?.referenceType,null),plannerReference=canonicalReference(decision.referenceType,fallbackDecision?.referenceType),decisionAttributes=canonicalAttributes(decision.attributes??[]),fallbackAttributes=canonicalAttributes(fallbackDecision?.attributes??[]);
   const currentMentions=unique([...(decision.mentionedProducts??[]).map(p=>knownCanonical(p,universe)),...(fallbackDecision?.mentionedProducts??[]).map(p=>knownCanonical(p,universe))]).filter(Boolean);
   const rawComparisonProducts=unique([...(decision.comparisonProducts??[]),...(fallbackDecision?.comparisonProducts??[]),...(state.comparisonProducts??[])]).map(p=>canonicalOrModel(p,universe)).filter((p):p is string=>Boolean(p));
   const plannerIntent=canonicalIntent(decision.primaryIntent);
@@ -99,14 +101,14 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
   const proposedNba=canonicalNba(decision.nextBestAction);
   const deterministicNba=canonicalNba(deterministicNextBestAction(primaryIntent,state)??fallbackDecision?.nextBestAction);
   const nextBestAction=compatibleNba(primaryIntent,state,proposedNba,deterministicNba);
-  let comparisonProducts=rawComparisonProducts.slice(0,2);
+  let comparisonProducts:string[]=[];
   const active=knownCanonical(state.activeProduct,universe);
 
   const currentTurnTarget=canonicalOrModel(targetProduct,universe);
-  if(active&&currentTurnTarget&&!explicitSwitch&&!sameProduct(active,currentTurnTarget))comparisonProducts=unique([active,currentTurnTarget,...currentMentions,...comparisonProducts]).slice(0,2);
-  else comparisonProducts=comparisonProducts.slice(0,2);
+  if(active&&currentTurnTarget&&!explicitSwitch&&!sameProduct(active,currentTurnTarget))comparisonProducts=unique([active,currentTurnTarget,...currentMentions,...rawComparisonProducts]).slice(0,2);
+  else if(rawComparisonProducts.length>=2)comparisonProducts=rawComparisonProducts.slice(0,2);
 
-  const attributes=primaryIntent==='CAPABILITY'&&specificAttributeAuthority?fallbackAttributes:decisionAttributes;
+  const attributes=primaryIntent==='EVALUATE_USE'?fallbackAttributes:(primaryIntent==='CAPABILITY'&&specificAttributeAuthority?fallbackAttributes:decisionAttributes);
   const targetNeedsResolution=Boolean(targetProduct&&!universe.some(p=>sameProduct(p,targetProduct)));
   const normalizedMentions=currentTurnTarget&&!sameStringListContains(currentMentions,currentTurnTarget)&&uniqueNewCatalogTarget&&sameProduct(currentTurnTarget,uniqueNewCatalogTarget)?unique([...currentMentions,currentTurnTarget]):currentMentions;
   const commercialStage=strongStage(primaryIntent)??canonicalStage(decision.commercialStage)??canonicalStage(fallbackDecision?.commercialStage);
@@ -116,8 +118,9 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
   const customerNeed=factual?null:decision.customerNeed;
   const customerProblem=factual?null:decision.customerProblem;
   const spinContribution=factual?null:(typeof decision.spinContribution==='string'&&decision.spinContribution.trim()&&!decision.spinContribution.includes('[object Object]')?decision.spinContribution.trim().slice(0,240):null);
+  const secondaryIntents=unique(decision.secondaryIntents??[]).map(x=>canonicalIntent(x)).filter((x):x is string=>Boolean(x)&&x!==primaryIntent);
 
   if(state.sessionId&&(uniqueNewCatalogTarget||knownDecisionTarget&&state.activeProduct&&!sameProduct(knownDecisionTarget,state.activeProduct)||referenceType!=='ACTIVE_PRODUCT_FALLBACK'))console.log(JSON.stringify({event:'STECH_REFERENCE_TRACE',sessionId:state.sessionId,activeBefore:state.activeProduct??null,selectedBefore:state.selectedProduct??null,recommendedBefore:state.recommendedProduct??null,plannerTarget:decision.targetProduct??null,deterministicTarget:fallbackDecision?.targetProduct??null,plannerReference:decision.referenceType??null,deterministicReference:fallbackDecision?.referenceType??null,catalogCandidates,newCatalogCandidates,currentMentions:normalizedMentions,comparisonProducts,finalTarget:targetProduct??null,finalReference:referenceType??null,selectedProduct:selectedProduct??null,explicitSwitch,authorityReason,finalIntent:primaryIntent}));
 
-  return{...decision,primaryIntent,secondaryIntents:unique(decision.secondaryIntents??[]).map(x=>canonicalIntent(x)).filter((x):x is string=>Boolean(x)),targetProduct,mentionedProducts:normalizedMentions,referenceType,explicitSwitch,selectedProduct,comparisonProducts,attributes,customerNeed,customerProblem,priorities:deterministicPriorities,commercialStage,spinContribution,nextBestAction,needsSql:forcedSql(primaryIntent)||targetNeedsResolution,needsProductRag:forcedProductRag(primaryIntent),needsInstitutionalRag:forcedInstitutionalRag(primaryIntent),confidence:Number.isFinite(decision.confidence)?Math.max(0,Math.min(1,decision.confidence)):0.5};
+  return{...decision,primaryIntent,secondaryIntents,targetProduct,mentionedProducts:normalizedMentions,referenceType,explicitSwitch,selectedProduct,comparisonProducts,attributes,customerNeed,customerProblem,priorities:deterministicPriorities,commercialStage,spinContribution,nextBestAction,needsSql:forcedSql(primaryIntent)||targetNeedsResolution,needsProductRag:forcedProductRag(primaryIntent),needsInstitutionalRag:forcedInstitutionalRag(primaryIntent),confidence:Number.isFinite(decision.confidence)?Math.max(0,Math.min(1,decision.confidence)):0.5};
 }
