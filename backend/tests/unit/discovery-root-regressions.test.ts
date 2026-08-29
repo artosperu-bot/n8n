@@ -7,6 +7,7 @@ import { MemoryConversationRepository } from '../../src/adapters/fake/MemoryConv
 import { FakeErpRepository } from '../../src/adapters/fake/FakeErpRepository.ts';
 import { SupabaseRagRepository } from '../../src/adapters/supabase/SupabaseRagRepository.ts';
 
+// Discovery may resolve product identity internally, but it must not surface SQL commercial facts until the turn explicitly authorizes them.
 const usage={inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0};
 const resistanceFacts=[
   {domain:'PRODUCT_RAG',key:'RESISTENCIA_CAIDAS',value:'1.5 m',productId:'P-ARMOR-22-256G',source:'TEST'},
