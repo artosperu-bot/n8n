@@ -5,6 +5,7 @@ import { safeWrite } from '../../src/conversation/writer/WriterGuard.ts';
 import { HybridConversationEngine } from '../../src/conversation/HybridConversationEngine.ts';
 import { MemoryConversationRepository } from '../../src/adapters/fake/MemoryConversationRepository.ts';
 import { FakeErpRepository } from '../../src/adapters/fake/FakeErpRepository.ts';
+import { SupabaseRagRepository } from '../../src/adapters/supabase/SupabaseRagRepository.ts';
 
 const usage={inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0};
 const resistanceFacts=[
@@ -26,7 +27,8 @@ test('discovery pain cannot leak quote price or availability through the fallbac
     state:{activeProduct:'Armor 22',queryTarget:'Armor 22',useCase:'trabajo',problem:'caidas_frecuentes',spinFacts:['uso:trabajo','problema:caidas_frecuentes'],commercialStrategy:'FAB_SPIN'},
     resolvedProduct:'Armor 22',allowedProducts:['Armor 22'],
     quote:{product:'Armor 22',shortName:'Armor 22',productCode:'P000049',productRagId:'P-ARMOR-22-256G',price:1399,stock:9,currency:'PEN',source:'TEST'} as any,
-    verifiedFeatures:resistanceFacts,verifiedFacts:resistanceFacts,
+    verifiedFeatures:resistanceFacts,
+    verifiedFacts:[...resistanceFacts,{domain:'SQL',key:'PRECIO',value:'1399',productId:'P-ARMOR-22-256G',source:'TEST'},{domain:'SQL',key:'DISPONIBILIDAD',value:'9',productId:'P-ARMOR-22-256G',source:'TEST'}] as any,
     decision:{nextBestAction:'ASK_MISSING_FACT'} as any,
     nextBestAction:'ASK_MISSING_FACT',finalExecutableNba:'ASK_MISSING_FACT',missingFact:'impacto',
   } as any,'');
@@ -37,7 +39,34 @@ test('discovery pain cannot leak quote price or availability through the fallbac
   assert.match(result.answer,/genera|afecta|pierdes?|interrump|parar|detener/i);
 });
 
-test('a pure situation answer such as para mi trabajo does not query broad product RAG',async()=>{
+test('discovery guard rejects availability wording even without a price',async()=>{
+  const llm={async write(){return{text:'El Armor 22 está pensado para aguantar golpes. Tenemos disponibilidad. ¿Y eso qué te genera en el trabajo?',model:'test-writer',usage,durationMs:0};}};
+  const result=await safeWrite(llm as any,{
+    message:'Se me cae mucho',intent:'EVALUATE_USE',resolvedCurrentIntent:'EVALUATE_USE',
+    state:{activeProduct:'Armor 22',useCase:'trabajo',problem:'caidas_frecuentes'},
+    resolvedProduct:'Armor 22',allowedProducts:['Armor 22'],verifiedFeatures:resistanceFacts,verifiedFacts:resistanceFacts,
+    directAnswer:'Armor 22 está pensado para aguantar mejor los golpes.',
+    decision:{nextBestAction:'ASK_MISSING_FACT'} as any,nextBestAction:'ASK_MISSING_FACT',finalExecutableNba:'ASK_MISSING_FACT',missingFact:'impacto',
+  } as any,'');
+  assert.doesNotMatch(result.answer,/stock|disponib/i);
+  assert.equal(result.fallback.delivered,false);
+  assert.equal(result.fallback.error,'UNSOLICITED_AVAILABILITY');
+});
+
+test('empty product RAG sections mean no retrieval rather than broad retrieval',async()=>{
+  let embeds=0;let fetches=0;
+  const rag=new SupabaseRagRepository({
+    url:'https://example.supabase.co',key:'unit-test-key',
+    embeddingProvider:{async embed(){embeds+=1;return[0.1,0.2];}} as any,
+    fetcher:async()=>{fetches+=1;return new Response('unexpected',{status:500});},
+  });
+  const rows=await rag.searchProduct('Para mi trabajo','P-ARMOR-22-256G',[],8);
+  assert.deepEqual(rows,[]);
+  assert.equal(embeds,0);
+  assert.equal(fetches,0);
+});
+
+test('a pure situation answer such as para mi trabajo does not retrieve broad product RAG',async()=>{
   const conversations=new MemoryConversationRepository();
   await conversations.saveState('qa-discovery-work',{
     sessionId:'qa-discovery-work',contextVersion:1,turnCount:2,
@@ -48,10 +77,14 @@ test('a pure situation answer such as para mi trabajo does not query broad produ
     commercialStage:'DESCUBRIMIENTO',commercialStrategy:'FAB_SPIN',
   } as any);
 
-  let productRagCalls=0;
+  let productRetrievals=0;
   const rag={
-    async search(){productRagCalls+=1;return[];},
-    async searchProduct(){productRagCalls+=1;return[{text:'BATERIA_MAH: 6600 mAh. CARGA: 33 W.',source:'TEST:BATERIA',score:10,productId:'P-ARMOR-22-256G',section:'BATERIA',domain:'PRODUCT'}];},
+    async search(){productRetrievals+=1;return[];},
+    async searchProduct(_query:string,_productId:string,sections:string[]=[]){
+      if(!sections.length)return[];
+      productRetrievals+=1;
+      return[{text:'BATERIA_MAH: 6600 mAh. CARGA: 33 W.',source:'TEST:BATERIA',score:10,productId:'P-ARMOR-22-256G',section:'BATERIA',domain:'PRODUCT'}];
+    },
     async searchInstitutional(){return[];},
   };
   const delegate={
@@ -68,7 +101,7 @@ test('a pure situation answer such as para mi trabajo does not query broad produ
   } as any);
 
   const result=await engine.processTurn({sessionId:'qa-discovery-work',message:'Para mi trabajo',messageId:'qa:work'} as any);
-  assert.equal(productRagCalls,0);
+  assert.equal(productRetrievals,0);
   assert.equal(result.state.useCase,'trabajo');
   assert.equal(result.state.problem??null,null);
   assert.equal(result.debug.nextBestAction,'ASK_MISSING_FACT');
