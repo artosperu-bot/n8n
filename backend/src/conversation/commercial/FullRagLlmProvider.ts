@@ -178,7 +178,7 @@ function painContext(input:LlmWriteInput):boolean{
 function currentMessagePain(message:string):string{
   const current=fold(message);
   if(/repar/.test(current))return /\b(?:dos|2)\b/.test(current)?'Si ya lo reparaste dos veces por caídas, lo importante es no volver al mismo gasto.':'Si ya lo reparaste varias veces, lo importante es no volver al mismo gasto.';
-  if(/caida|construccion|obra/.test(current))return'En obra una caída pasa en un segundo; conviene que el celular esté hecho para aguantar ese ritmo.';
+  if(/se me cae|\bcae\b|caida|golpe/.test(current))return'Si se te cae seguido, tiene sentido fijarnos primero en qué tan bien aguanta los golpes.';
   if(/bateria|cargador|no llega a la tarde/.test(current))return'Si a media tarde ya buscas dónde cargarlo, necesitas más margen para terminar la jornada sin estar pendiente de la batería.';
   if(/polvo|lluvia|agua|humedad/.test(current))return'Si trabajas entre polvo o lluvia, conviene que el equipo esté preparado para ese ambiente.';
   return'';
@@ -207,7 +207,8 @@ function naturalFallback(input:LlmWriteInput,core:string):string{
 }
 function shouldForceHumanPainResponse(input:LlmWriteInput,core:string):boolean{
   const intent=String(input.intent??'').toUpperCase();
-  return Boolean(core)&&painContext(input)&&['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
+  const nba=String(input.commercialResponsePlan?.exactNba??input.finalExecutableNba??input.nextBestAction??'').toUpperCase();
+  return Boolean(core)&&nba!=='ASK_MISSING_FACT'&&painContext(input)&&['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
 }
 function missesRequiredCloseResult(text:string,input:LlmWriteInput):boolean{
   const plan=input.commercialResponsePlan;if(plan?.exactNba!=='SOFT_CLOSE')return false;
