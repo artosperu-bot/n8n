@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SupabaseConversationRepository } from '../../src/adapters/supabase/SupabaseConversationRepository.ts';
 
+const FORBIDDEN_CONTEXT_KEYS=[
+  'producto_activo','producto_objetivo_turno','producto_recomendado','cliente','venta','conversacion','debug_trace',
+  'actividad_activa','problema_activo','senal_compra','context_version','customer','commercial','pendingQuestion','pendingAction','arbitrary_adapter_key',
+] as const;
+
 test('saveState projects commercial memory and trace ids into ia_contexto', async()=>{
   const calls:any[]=[];
   const fetcher:any=async(url:any,init:any={})=>{
@@ -13,8 +18,9 @@ test('saveState projects commercial memory and trace ids into ia_contexto', asyn
   const repo=new SupabaseConversationRepository({url:'https://example.supabase.co',key:'service',fetcher});
   await repo.appendMessage('qa-commercial','user','Somos empresa, 12 equipos',{messageId:'m-1',requestId:'r-1'});
   await repo.saveState('qa-commercial',{
-    sessionId:'qa-commercial',turnCount:1,lastIntent:'RECOMMEND',lastNba:'EXPLAIN_FIT',customerType:'BUSINESS',sector:'construccion',useCase:'trabajo',problem:'caidas_frecuentes',priorities:['resistencia','bateria'],quantity:12,invoiceRequired:true,objection:'precio',purchaseSignal:true,lastUserMessage:'Somos empresa, 12 equipos',lastAssistantMessage:'Armor 22 encaja por resistencia.',comparisonProducts:[],spinFacts:['cantidad:12']
-  });
+    sessionId:'qa-commercial',turnCount:1,lastIntent:'RECOMMEND',lastNba:'EXPLAIN_FIT',customerType:'BUSINESS',sector:'construccion',useCase:'trabajo',problem:'caidas_frecuentes',priorities:['resistencia','bateria'],quantity:12,invoiceRequired:true,objection:'precio',purchaseSignal:true,lastUserMessage:'Somos empresa, 12 equipos',lastAssistantMessage:'Armor 22 encaja por resistencia.',comparisonProducts:[],spinFacts:['cantidad:12'],lastDecisionTrace:{finalIntent:'RECOMMEND'},
+    debug_trace:{legacy:true},producto_activo:{nombre:'legacy'},pendingAction:{type:'SOFT_CLOSE'},arbitrary_adapter_key:'must-not-persist',
+  } as any);
   const ctx=calls.find(c=>c.url.includes('/rest/v1/ia_contexto')&&c.method==='POST').body[0];
   assert.equal(ctx.actividad_activa,'trabajo');
   assert.equal(ctx.problema_activo,'caidas_frecuentes');
@@ -25,6 +31,10 @@ test('saveState projects commercial memory and trace ids into ia_contexto', asyn
   assert.equal(ctx.ultimo_message_id,'m-1');
   assert.equal(ctx.ultimo_request_id,'r-1');
   assert.equal(ctx.contexto.customerType,'BUSINESS');
+  assert.deepEqual(ctx.contexto.lastDecisionTrace,{finalIntent:'RECOMMEND'});
+  for(const forbidden of FORBIDDEN_CONTEXT_KEYS){
+    assert.equal(Object.hasOwn(ctx.contexto,forbidden),false,`contexto.${forbidden}`);
+  }
 });
 
 test('saveState never persists a query purpose as customer activity or use case',async()=>{
