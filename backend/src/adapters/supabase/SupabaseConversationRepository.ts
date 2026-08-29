@@ -2,6 +2,7 @@ import type { ConversationMessageMeta, ConversationRepository, TurnCompletionMet
 import type { ConversationState } from '../../domain/types.ts';
 import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from '../../conversation/commercial/UseCaseNormalizer.ts';
 import { projectCommercialPersistence } from './PersistenceProjection.ts';
+import { hydrateConversationState, serializeConversationState } from './ConversationStateCodec.ts';
 
 type Options = {
   url: string;
@@ -38,89 +39,6 @@ function normalizedCommercialState(state:ConversationState):ConversationState{
 function recommendationCandidates(state:ConversationState):string[]{
   const traced=state.lastDecisionTrace?.recommendation?.eligibleCandidates?.map(x=>x.product)??[];
   return cleanStrings(traced.length?traced:state.comparisonProducts);
-}
-function storedCanonicalState(value:unknown):ConversationState {
-  const raw=value&&typeof value==='object'?value as Record<string,any>:{};
-  const {
-    producto_activo:legacyActive,
-    producto_objetivo_turno:legacyTarget,
-    producto_recomendado:legacyRecommended,
-    cliente:legacyCustomer,
-    venta:legacySale,
-    conversacion:legacyConversation,
-    debug_trace:legacyTrace,
-    ...canonical
-  }=raw;
-  const text=(primary:unknown,fallback:unknown)=>typeof primary==='string'&&primary.trim()?primary:typeof fallback==='string'&&fallback.trim()?fallback:undefined;
-  const valueOr=<T>(primary:T|undefined,fallback:T|undefined)=>primary!==undefined?primary:fallback;
-  return {
-    ...canonical,
-    activeProduct:text(canonical.activeProduct,legacyActive?.nombre??legacyActive?.nombre_corto),
-    queryTarget:text(canonical.queryTarget,legacyTarget?.nombre),
-    recommendedProduct:text(canonical.recommendedProduct,legacyRecommended?.nombre??legacyRecommended?.nombre_corto),
-    customerType:text(canonical.customerType,legacyCustomer?.tipo),
-    sector:text(canonical.sector,legacyCustomer?.sector),
-    useCase:normalizeGenuineUseCase(text(canonical.useCase,legacyCustomer?.actividad)),
-    problem:text(canonical.problem,legacyCustomer?.problema),
-    priorities:valueOr(canonical.priorities,Array.isArray(legacyCustomer?.prioridades)?legacyCustomer.prioridades:undefined),
-    budget:valueOr(canonical.budget,legacyCustomer?.presupuesto),
-    quantity:valueOr(canonical.quantity,legacyCustomer?.cantidad),
-    invoiceRequired:valueOr(canonical.invoiceRequired,legacyCustomer?.requiere_factura),
-    purchaseSignal:valueOr(canonical.purchaseSignal,legacySale?.senal_compra),
-    objection:text(canonical.objection,legacySale?.objecion),
-    commercialStage:text(canonical.commercialStage,legacySale?.etapa),
-    lastNba:text(canonical.lastNba,legacyConversation?.accion_pendiente),
-    lastIntent:text(canonical.lastIntent,legacyConversation?.ultima_intencion),
-    lastRoute:text(canonical.lastRoute,legacyConversation?.ultima_ruta),
-    lastDecisionTrace:canonical.lastDecisionTrace??legacyTrace,
-  } as ConversationState;
-}
-function canonicalContext(state:ConversationState) {
-  state=normalizedCommercialState(state);
-  const normalizedUseCase=state.useCase??null;
-  const flat={
-    ...state,
-    useCase:normalizedUseCase,
-    spinFacts:cleanStrings(state.spinFacts).map(normalizeUseCaseSpinFact).filter((value):value is string=>Boolean(value)),
-    priorities:cleanStrings(state.priorities),
-    comparisonProducts:cleanStrings(state.comparisonProducts),
-  };
-  return {
-    ...flat,
-    debug_trace:state.lastDecisionTrace ?? null,
-    producto_activo: state.activeProduct ? {
-      producto_id:state.activeProductId ?? null,
-      producto_codigo:state.activeProductCode ?? null,
-      nombre:state.activeProduct,
-      nombre_corto:state.activeProduct,
-    } : null,
-    producto_objetivo_turno: state.queryTarget ? {
-      producto_id:state.lastResolvedProductId ?? null,
-      producto_codigo:state.lastResolvedProductCode ?? null,
-      nombre:state.queryTarget,
-    } : null,
-    producto_recomendado: state.recommendedProduct ? { nombre:state.recommendedProduct, nombre_corto:state.recommendedProduct } : null,
-    cliente:{
-      tipo:state.customerType ?? null,
-      sector:state.sector ?? null,
-      actividad:normalizedUseCase ?? state.sector ?? null,
-      problema:state.problem ?? null,
-      prioridades:cleanStrings(state.priorities),
-      presupuesto:state.budget ?? null,
-      cantidad:state.quantity ?? null,
-      requiere_factura:state.invoiceRequired ?? null,
-    },
-    venta:{
-      senal_compra:state.purchaseSignal ?? false,
-      objecion:state.objection ?? null,
-      etapa:state.commercialStage ?? null,
-    },
-    conversacion:{
-      accion_pendiente:state.lastNba ?? null,
-      ultima_intencion:state.lastIntent ?? null,
-      ultima_ruta:state.lastRoute ?? null,
-    },
-  };
 }
 
 export class SupabaseConversationRepository implements ConversationRepository {
@@ -205,7 +123,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const rows: any[] = await r.json();
     const row=rows[0];
     const base=row?.contexto
-      ?storedCanonicalState(row.contexto)
+      ?hydrateConversationState(row.contexto)
       :{sessionId,turnCount:0,comparisonProducts:[],spinFacts:[],priorities:[]};
     const result={ ...base, sessionId, contextVersion:Number(row?.context_version ?? base.contextVersion ?? 0) };
     this.#lastState.set(sessionId,structuredClone(result));
@@ -222,15 +140,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
     const status=productStatus(state);
     const requiresClarification=state.lastRoute==='CLARIFICATION' || status==='AMBIGUO' || Boolean(state.explicitSwitch && !state.lastResolvedProductId);
     const projection=projectCommercialPersistence(previous,state,{messageId:lease.messageId});
-    const baseContext=canonicalContext(state);
-    const context={
-      ...baseContext,
-      ...projection.context,
-      conversacion:{
-        ...baseContext.conversacion,
-        accion_pendiente:projection.context.pendingAction?.type??(projection.context.pendingQuestion?'ASK_MISSING_FACT':null),
-      },
-    };
+    const context=serializeConversationState(state);
     const candidateNames=recommendationCandidates(state);
     const metricsDetail=[{
       model:meta.model ?? null,
@@ -339,8 +249,8 @@ export class SupabaseConversationRepository implements ConversationRepository {
   async saveState(sessionId: string, state: ConversationState): Promise<void> {
     await this.#ensureSession(sessionId);
     const normalized = { ...normalizedCommercialState(state), sessionId };
-    const legacyContext={...normalized,debug_trace:normalized.lastDecisionTrace??null};
-    const body = [{ session_id:sessionId, canal:sessionId.startsWith('qa-')?'qa_live':'backend', contexto:legacyContext,
+    const canonicalContext=serializeConversationState(normalized);
+    const body = [{ session_id:sessionId, canal:sessionId.startsWith('qa-')?'qa_live':'backend', contexto:canonicalContext,
       ultima_intencion:normalized.lastIntent??null, ultima_accion:normalized.lastNba??null, ultima_ruta:normalized.lastRoute??null,
       ultimo_mensaje_cliente:normalized.lastUserMessage??null, ultima_respuesta_bot:normalized.lastAssistantMessage??null,
       actividad_activa:normalized.useCase??normalized.sector??null, problema_activo:normalized.problem??null,
@@ -354,7 +264,7 @@ export class SupabaseConversationRepository implements ConversationRepository {
       ultimo_turno_fecha:new Date().toISOString(), updated_by:'stech_backend_legacy', updated_at:new Date().toISOString() }];
     const r=await this.#fetcher(`${this.#url}/rest/v1/${this.#contextTable}?on_conflict=session_id`,{method:'POST',headers:this.#headers({Prefer:'resolution=merge-duplicates'}),body:JSON.stringify(body)});
     if(!r.ok) throw new Error(`Supabase state write HTTP ${r.status}`);
-    this.#lastState.set(sessionId,structuredClone(normalized));
+    this.#lastState.set(sessionId,structuredClone(canonicalContext));
   }
 
   async appendMessage(sessionId: string, role: 'user' | 'assistant', content: string, meta: ConversationMessageMeta = {}): Promise<void> {
