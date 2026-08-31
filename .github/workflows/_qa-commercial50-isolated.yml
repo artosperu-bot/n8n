@@ -1,0 +1,59 @@
+name: QA Commercial50 Pain2 Isolated
+
+on:
+  push:
+    branches:
+      - qa/commercial50-pain2-20260831
+  workflow_dispatch:
+
+jobs:
+  commercial50:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend
+        working-directory: backend
+        run: npm ci
+      - name: Start isolated backend
+        working-directory: backend
+        env:
+          STECH_PROFILE: test
+          PORT: '3000'
+        run: |
+          npm start > /tmp/stech-commercial50.log 2>&1 &
+          echo $! > /tmp/stech-commercial50.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/stech-commercial50.log
+          exit 1
+      - name: Run 50 coherent conversations
+        working-directory: backend
+        env:
+          QA_BASE_URL: http://127.0.0.1:3000
+          STECH_PROFILE: test
+        run: |
+          set +e
+          npm run qa:commercial50
+          rc=$?
+          echo "QA_COMMERCIAL50_EXIT=$rc"
+          exit 0
+      - name: Capture backend log
+        if: always()
+        run: cp /tmp/stech-commercial50.log backend/qa-results/stech-commercial50-backend.log || true
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-commercial50-isolated
+          path: |
+            backend/qa-results/commercial50
+            backend/qa-results/stech-commercial50-backend.log
+          if-no-files-found: warn
