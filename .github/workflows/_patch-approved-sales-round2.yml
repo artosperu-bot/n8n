@@ -1,0 +1,168 @@
+name: Apply round2 approved sales fixes
+
+on:
+  push:
+    branches:
+      - qa/live-10-20260831
+    paths:
+      - .github/workflows/_patch-approved-sales-round2.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/canonical-conversation-state
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply bounded fixes from live QA
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p=Path(path)
+              text=p.read_text(encoding='utf-8')
+              count=text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, got {count}')
+              p.write_text(text.replace(old,new,1),encoding='utf-8')
+
+          # 1) Customer-visible fulfillment must be deterministic once authorized.
+          replace_once(
+            'backend/src/conversation/commercial/ResponsePolicy.ts',
+            "export function imageResponse(images:ProductImage[]):string{return images.map(x=>x.url).filter(x=>/^https?:\\/\\//i.test(x)).join('\\n');}",
+            """export function fulfillmentSelectionResponse(message:string,product:string|null|undefined):string{
+            const text=message.toLocaleLowerCase('es').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');
+            const name=shortProduct(product);
+            const pickup=/\\b(?:recoger|recojo|retirar|local|tienda)\\b/.test(text);
+            if(pickup)return`Perfecto, puedes recoger ${name} en nuestro local. ¿Quieres que te lo reserve para recojo?`;
+            const location=message.match(/\\b(?:env[ií]o|delivery|entrega)(?:\\s+(?:a|para))?\\s+([^¿?!.]{2,60})/i)?.[1]?.replace(/^a\\s+/i,'').trim();
+            return`Perfecto, coordinamos el envío${location?` a ${location}`:''} de ${name}. ¿Quieres que te lo reserve?`;
+          }
+          export function imageResponse(images:ProductImage[]):string{return images.map(x=>x.url).filter(x=>/^https?:\\/\\//i.test(x)).join('\\n');}"""
+          )
+          replace_once(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            "import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, sqlUnavailableResponse, stockResponse } from './commercial/ResponsePolicy.ts';",
+            "import { fulfillmentSelectionResponse, imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, sqlUnavailableResponse, stockResponse } from './commercial/ResponsePolicy.ts';"
+          )
+          replace_once(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            """      }else if(intent==='POLICY'||intent==='WARRANTY'){
+        route='RAG_INSTITUTIONAL';""",
+            """      }else if(intent==='FULFILLMENT_SELECTION'){
+        route='FULFILLMENT_SELECTION';nba='SOFT_CLOSE';answer=fulfillmentSelectionResponse(input.message,target);
+      }else if(intent==='POLICY'||intent==='WARRANTY'){
+        route='RAG_INSTITUTIONAL';"""
+          )
+
+          # 2) A price objection needs a budget before suggesting alternatives.
+          replace_once(
+            'backend/src/conversation/nba/NextBestAction.ts',
+            """    case 'OBJECTION':
+    case 'HANDLE_PRICE_OBJECTION':
+      return 'OFFER_ALTERNATIVE';""",
+            """    case 'OBJECTION':
+      return 'OFFER_ALTERNATIVE';
+    case 'HANDLE_PRICE_OBJECTION':
+      return state.budget==null ? 'ASK_MISSING_FACT' : 'OFFER_ALTERNATIVE';"""
+          )
+          replace_once(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            """      }else if(['PRODUCT_INFO','CAPABILITY','EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','OBJECTION','HANDLE_PRICE_OBJECTION'].includes(intent)){
+        const hasDecisionContext=Boolean(commercialState.useCase||commercialState.problem||(commercialState.priorities?.length??0)>0);""",
+            """      }else if(intent==='HANDLE_PRICE_OBJECTION'&&commercialState.budget==null){
+        route='COMMERCIAL_REASONING';nba='ASK_MISSING_FACT';answer='Claro, no tendría sentido mostrarte opciones que se salgan de lo que quieres gastar. ¿Hasta cuánto tienes pensado invertir?';
+      }else if(['PRODUCT_INFO','CAPABILITY','EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','OBJECTION','HANDLE_PRICE_OBJECTION'].includes(intent)){
+        const hasDecisionContext=Boolean(commercialState.useCase||commercialState.problem||(commercialState.priorities?.length??0)>0);"""
+          )
+          replace_once(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            """      }else if(intent==='BUDGET_CONSTRAINT'&&commercialState.budget!=null){answer=`Listo, tomo S/ ${commercialState.budget} como tu tope.`;route='MEMORY_BUDGET';}""",
+            """      }else if(intent==='BUDGET_CONSTRAINT'&&commercialState.budget!=null){
+        route='MEMORY_BUDGET';
+        answer=nba==='ASK_MISSING_FACT'?`Listo, tomo S/ ${commercialState.budget} como tu tope. ¿Para qué uso principal necesitas el equipo?`:`Listo, tomo S/ ${commercialState.budget} como tu tope.`;
+      }"""
+          )
+
+          # 3) Persist the pair actually used by the comparison branch.
+          replace_once(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            """      }else if(intent==='COMPARE'){
+        route='RAG_COMPARISON';const pair=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[]),...(decision.mentionedProducts??[])]).slice(0,2);
+        if(pair.length<2){answer='¿Qué dos modelos quieres comparar?';route='CLARIFICATION';}""",
+            """      }else if(intent==='COMPARE'){
+        route='RAG_COMPARISON';const pair=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[]),...(decision.mentionedProducts??[])]).slice(0,2);
+        if(pair.length>=2)decision={...decision,comparisonProducts:pair};
+        if(pair.length<2){answer='¿Qué dos modelos quieres comparar?';route='CLARIFICATION';}"""
+          )
+
+          # 4) “Ahora dime del X13” is an explicit topic/product switch.
+          replace_once(
+            'backend/src/conversation/reference/ReferenceResolver.ts',
+            """    return new RegExp(`\\\\b(?:mejor\\\\s+)?(?:hablemos|hablame|pasemos|cambiemos)\\\\s+(?:ahora\\\\s+)?(?:del?|al|a)\\\\s+(?:el\\\\s+)?${escaped}\\\\b`,'i').test(t);""",
+            """    return new RegExp(`\\\\b(?:ahora\\\\s+)?(?:mejor\\\\s+)?(?:hablemos|hablame|pasemos|cambiemos|dime|cuentame)\\\\s+(?:ahora\\\\s+)?(?:del?|al|a)\\\\s+(?:el\\\\s+)?${escaped}\\\\b`,'i').test(t);"""
+          )
+
+          # 5) Resolve “se malogró por eso” from the immediately previous water/dust context.
+          replace_once(
+            'backend/src/conversation/commercial/CommercialFacts.ts',
+            """  let problem = previous.problem ?? null;
+  if(!featureQuestion){""",
+            """  let problem = previous.problem ?? null;
+  const previousMessage=fold(previous.lastUserMessage??'');
+  const anaphoricDamage=/\\b(?:por eso|por lo mismo)\\b/.test(t)&&/\\b(?:malogro|malogró|rompio|rompió|daño|dan[oó])\\b/.test(t);
+  if(!featureQuestion){"""
+          )
+          replace_once(
+            'backend/src/conversation/commercial/CommercialFacts.ts',
+            """    else if(/\\b(?:polvo|lluvia|agua|humedad)\\b[^.!?]{0,70}\\b(?:malogro|malogró|malogra|daño|dan[oó]|rompio|rompió)\\b|\\b(?:malogro|malogró|daño|dan[oó])\\b[^.!?]{0,70}\\b(?:polvo|lluvia|agua|humedad)\\b/.test(t)) problem='exposicion_agua_polvo';""",
+            """    else if(/\\b(?:polvo|lluvia|agua|humedad)\\b[^.!?]{0,70}\\b(?:malogro|malogró|malogra|daño|dan[oó]|rompio|rompió)\\b|\\b(?:malogro|malogró|daño|dan[oó])\\b[^.!?]{0,70}\\b(?:polvo|lluvia|agua|humedad)\\b/.test(t)||(anaphoricDamage&&/\\b(?:polvo|lluvia|agua|humedad)\\b/.test(previousMessage))) problem='exposicion_agua_polvo';"""
+          )
+          PY
+      - name: Install
+        working-directory: backend
+        run: npm ci
+      - name: Root regression suite
+        working-directory: backend
+        run: node --experimental-strip-types --test tests/unit/live-commercial-root-regressions.test.ts
+      - name: Existing salesperson regressions
+        working-directory: backend
+        run: node --experimental-strip-types --test tests/unit/commercial-salesperson-regressions.test.ts
+      - name: Build
+        working-directory: backend
+        run: npm run build
+      - name: Start isolated current canonical
+        working-directory: backend
+        env:
+          STECH_PROFILE: test
+          HOST: 127.0.0.1
+          PORT: 3000
+        run: |
+          nohup npm start > round2-server.log 2>&1 &
+          for i in $(seq 1 40); do curl --fail --silent http://127.0.0.1:3000/health >/dev/null && exit 0; sleep 1; done
+          cat round2-server.log
+          exit 1
+      - name: Approved 10-conversation gate
+        working-directory: backend
+        env:
+          QA_BASE_URL: http://127.0.0.1:3000
+          QA_STRICT: 'false'
+        run: npm run qa:human-sales
+      - name: Push only after approved QA passes
+        shell: bash
+        run: |
+          git config user.name "artosperu-bot"
+          git config user.email "artosperu@gmail.com"
+          git add backend/src/conversation/commercial/ResponsePolicy.ts backend/src/conversation/HybridConversationEngine.ts backend/src/conversation/nba/NextBestAction.ts backend/src/conversation/reference/ReferenceResolver.ts backend/src/conversation/commercial/CommercialFacts.ts
+          git commit -m "fix: preserve sales stage and product continuity"
+          git push origin HEAD:refactor/canonical-conversation-state
