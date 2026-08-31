@@ -43,7 +43,13 @@ function currentImplicationFacts(text:string):string[]{
   const facts:string[]=[];
   const losesTime=/\b(?:pierdo|perdemos|me\s+hace\s+perder|nos\s+hace\s+perder)\s+(?:tiempo|(?:\d+\s+)?horas?(?:\s+de\s+trabajo)?)\b/.test(text);
   const mustStop=/\btengo\s+que\s+(?:parar|detener)\b|\bme\s+interrumpe\b/.test(text);
+  const damagedEquipment=/\b(?:se\s+(?:me|nos|les)\s+)?(?:malogro|rompio|dano)\b|\b(?:celular|telefono|equipo)\b[^.!?]{0,45}\b(?:se\s+)?(?:malogro|rompio|dano)\b/.test(text);
+  const repairConsequence=/\b(?:por\s+eso\s+)?(?:ya\s+)?(?:tuve|tuvimos|he\s+tenido|hemos\s+tenido)\s+que\s+(?:mandar\s+a\s+)?reparar(?:lo|la)?\b|\b(?:mande|he\s+mandado)\s+(?:a\s+)?reparar\b|\brepar(?:e|ado)\b[^.!?]{0,45}\b(?:dos|2|varias|otra)\s+veces?\b/.test(text);
+  const repairCost=/\b(?:gaste|gastamos|pague|pagamos)\b[^.!?]{0,45}\b(?:reparacion|repararlo|arreglo|tecnico)\b|\b(?:reparacion|arreglo)\b[^.!?]{0,45}\b(?:costo|cuesta|gasto|pague)\b/.test(text);
   if(losesTime||mustStop)facts.push('implicacion:perdida_tiempo_interrupcion');
+  if(damagedEquipment)facts.push('implicacion:dano_equipo');
+  if(repairConsequence)facts.push('implicacion:reparacion_recurrente');
+  if(repairCost)facts.push('implicacion:costo_reparacion');
   if(/\b(?:pierdo|perdemos)\s+(?:ventas?|clientes?|pedidos?)\b/.test(text))facts.push('implicacion:perdida_comercial');
   if(/\b(?:no puedo|no podemos)\s+(?:trabajar|continuar|seguir)\b/.test(text))facts.push('implicacion:interrupcion_operativa');
   return unique(facts);
