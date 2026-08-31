@@ -1,0 +1,101 @@
+name: QA 10 live conversations
+
+on:
+  push:
+    branches:
+      - qa/live-10-20260831
+  workflow_dispatch:
+
+jobs:
+  branch-harness:
+    name: Current branch isolated 10 conversations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install backend
+        working-directory: backend
+        run: npm ci
+      - name: Start isolated backend
+        working-directory: backend
+        env:
+          STECH_PROFILE: test
+          HOST: 127.0.0.1
+          PORT: 3000
+        run: |
+          set -euo pipefail
+          nohup npm start > branch-server.log 2>&1 &
+          echo $! > branch-server.pid
+          for i in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:3000/health > branch-health.json; then
+              cat branch-health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat branch-server.log
+          exit 1
+      - name: Run existing human-sales suite against current branch
+        working-directory: backend
+        env:
+          QA_BASE_URL: http://127.0.0.1:3000
+          QA_STRICT: 'false'
+        run: |
+          set +e
+          npm run qa:human-sales 2>&1 | tee branch-human-sales.log
+          CODE=${PIPESTATUS[0]}
+          echo "QA_COMMAND_EXIT_CODE=$CODE" | tee branch-exit.txt
+          exit 0
+      - name: Upload isolated QA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-current-branch-10
+          path: |
+            backend/qa-results/human-sales/**
+            backend/branch-human-sales.log
+            backend/branch-health.json
+            backend/branch-server.log
+            backend/branch-exit.txt
+          if-no-files-found: warn
+
+  deployed-live:
+    name: Deployed backend 10 real conversations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install backend runner
+        working-directory: backend
+        run: npm ci
+      - name: Record deployed backend identity
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 https://whatsapp.artos.pe/health | tee deployed-health.json
+      - name: Run existing human-sales suite against deployed backend
+        working-directory: backend
+        env:
+          QA_BASE_URL: https://whatsapp.artos.pe
+          QA_STRICT: 'false'
+        run: |
+          set +e
+          npm run qa:human-sales 2>&1 | tee deployed-human-sales.log
+          CODE=${PIPESTATUS[0]}
+          echo "QA_COMMAND_EXIT_CODE=$CODE" | tee deployed-exit.txt
+          exit 0
+      - name: Upload deployed QA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-deployed-live-10
+          path: |
+            backend/qa-results/human-sales/**
+            backend/deployed-human-sales.log
+            backend/deployed-health.json
+            backend/deployed-exit.txt
+          if-no-files-found: warn
