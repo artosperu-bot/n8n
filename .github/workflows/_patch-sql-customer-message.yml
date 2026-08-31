@@ -1,0 +1,81 @@
+name: Patch customer-safe SQL unavailable response
+
+on:
+  push:
+    branches:
+      - qa/live-10-20260831
+    paths:
+      - .github/workflows/_patch-sql-customer-message.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/canonical-conversation-state
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply customer-safe SQL failure wording
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p=Path(path)
+              text=p.read_text(encoding='utf-8')
+              count=text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, got {count}')
+              p.write_text(text.replace(old,new,1),encoding='utf-8')
+
+          replace_once(
+              'backend/src/conversation/commercial/ResponsePolicy.ts',
+              "export function noEvidenceResponse():string{return'No tengo confirmado ese dato exacto.';}",
+              """export function sqlUnavailableResponse(product:string|null|undefined):string{
+            const name=String(product??'').trim();
+            return name
+              ?`Ahora no puedo confirmar el precio, stock o disponibilidad de ${name}. Prefiero no darte un dato sin confirmar.`
+              :'Ahora no puedo confirmar ese dato de precio, stock o disponibilidad. Prefiero no darte un dato sin confirmar.';
+          }
+          export function noEvidenceResponse():string{return'No tengo confirmado ese dato exacto.';}"""
+          )
+
+          replace_once(
+              'backend/src/conversation/HybridConversationEngine.ts',
+              "import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, stockResponse } from './commercial/ResponsePolicy.ts';",
+              "import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, sqlUnavailableResponse, stockResponse } from './commercial/ResponsePolicy.ts';"
+          )
+          replace_once(
+              'backend/src/conversation/HybridConversationEngine.ts',
+              "answer=target?`Temporalmente no puedo consultar el ERP para confirmar ese dato de ${target}. Prefiero no inventarte el precio, stock o disponibilidad.`:'Temporalmente no puedo consultar el ERP para confirmar ese dato. Prefiero no inventarlo.';",
+              "answer=sqlUnavailableResponse(target);"
+          )
+          PY
+      - name: Install
+        working-directory: backend
+        run: npm ci
+      - name: Root regressions
+        working-directory: backend
+        run: node --experimental-strip-types --test tests/unit/live-commercial-root-regressions.test.ts
+      - name: Existing salesperson regressions
+        working-directory: backend
+        run: node --experimental-strip-types --test tests/unit/commercial-salesperson-regressions.test.ts
+      - name: Build
+        working-directory: backend
+        run: npm run build
+      - name: Push bounded fix
+        shell: bash
+        run: |
+          git config user.name "artosperu-bot"
+          git config user.email "artosperu@gmail.com"
+          git add backend/src/conversation/commercial/ResponsePolicy.ts backend/src/conversation/HybridConversationEngine.ts
+          git commit -m "fix: hide internal SQL adapter terminology from customers"
+          git push origin HEAD:refactor/canonical-conversation-state
