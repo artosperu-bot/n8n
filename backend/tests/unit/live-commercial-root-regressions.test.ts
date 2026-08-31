@@ -34,10 +34,12 @@ function decision(primaryIntent:string,overrides:Partial<TurnDecision>={}):TurnD
 }
 
 class StubLlm implements LlmProvider{
-  constructor(
-    readonly decided:TurnDecision=decision('OTHER'),
-    readonly written='Lo tienes pensado para trabajo construccion.',
-  ){}
+  decided:TurnDecision;
+  written:string;
+  constructor(decided:TurnDecision=decision('OTHER'),written='Lo tienes pensado para trabajo construccion.'){
+    this.decided=decided;
+    this.written=written;
+  }
   async decide():Promise<LlmDecisionResult>{
     return{decision:this.decided,model:'stub',usage,durationMs:0};
   }
