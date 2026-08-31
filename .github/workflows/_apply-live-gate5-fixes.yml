@@ -1,0 +1,140 @@
+name: Apply Live Gate5 Root Fixes
+
+on:
+  push:
+    branches:
+      - qa/apply-live-gate5-fixes-20260831
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/canonical-conversation-state
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Apply bounded root fixes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new, count=1):
+              p=Path(path)
+              text=p.read_text(encoding='utf-8')
+              actual=text.count(old)
+              if actual < count:
+                  raise SystemExit(f'{path}: expected at least {count} match(es), found {actual}: {old[:100]!r}')
+              text=text.replace(old,new,count)
+              p.write_text(text,encoding='utf-8')
+
+          # 1) Writer: natural acknowledgement + open SPIN question.
+          replace(
+            'backend/src/conversation/writer/WriterGuard.ts',
+            "const acknowledgement=useCase?`Lo tienes pensado para ${humanizeCommercialFact(useCase)}.`:problem?`Entonces el punto a resolver es ${humanizeCommercialFact(problem)}.`:priorities[0]?`Tomo como prioridad ${humanizeCommercialFact(priorities[0])}.`:'';",
+            "const acknowledgement=useCase?`Perfecto, si es para ${humanizeCommercialFact(useCase)},`:problem?`Entiendo; entonces el punto importante es ${humanizeCommercialFact(problem)}.`:priorities[0]?`Perfecto, tomo ${humanizeCommercialFact(priorities[0])} como prioridad.`:'';"
+          )
+          replace(
+            'backend/src/conversation/writer/WriterGuard.ts',
+            ":/impacto|implicacion|consecuencia/.test(missing)?'¿Y eso qué te genera en el trabajo: interrupciones, pérdida de tiempo u otro problema?'",
+            ":/impacto|implicacion|consecuencia/.test(missing)?'¿Y cuando pasa eso, cómo te afecta en el trabajo?'"
+          )
+          replace(
+            'backend/src/conversation/writer/WriterGuard.ts',
+            "const sellerLedPrice=executableNbaForPrice==='SOFT_CLOSE'\n    && input.commercialResponsePlan?.closePurpose==='FULFILLMENT'",
+            "const sellerLedPrice=executableNbaForPrice==='SOFT_CLOSE'\n    && intent!=='STOCK'\n    && input.commercialResponsePlan?.closePurpose==='FULFILLMENT'"
+          )
+          replace(
+            'backend/src/conversation/writer/WriterGuard.ts',
+            "const roboticMeta=/\\b(?:cat[aá]logo\\s+verificado|evidencia\\s+verificada|datos\\s+(?:disponibles|suministrados)|seg[uú]n\\s+(?:mi|el)\\s+sistema(?:\\s+interno)?|seg[uú]n\\s+el\\s+rag|querytarget|\\bintent\\b)\\b/i;",
+            "const roboticMeta=/\\b(?:lo\\s+tienes\\s+pensado\\s+para|cat[aá]logo\\s+verificado|evidencia\\s+verificada|datos\\s+(?:disponibles|suministrados)|seg[uú]n\\s+(?:mi|el)\\s+sistema(?:\\s+interno)?|seg[uú]n\\s+el\\s+rag|querytarget|\\bintent\\b)\\b/i;"
+          )
+          replace(
+            'backend/src/conversation/writer/WriterGuard.ts',
+            "const executableNba=String(input.executableNba??input.nextBestAction??input.decision?.nextBestAction??'ANSWER_ONLY').toUpperCase();if(executableNba==='RELATED_VALUE'&&!commercialMoveDelivered(input,answer))return 'COMMERCIAL_MOVE_NOT_DELIVERED';const hasQuestion=/[¿?]/.test(answer);",
+            "const executableNba=String(input.executableNba??input.nextBestAction??input.decision?.nextBestAction??'ANSWER_ONLY').toUpperCase();if(executableNba==='RELATED_VALUE'&&!commercialMoveDelivered(input,answer))return 'COMMERCIAL_MOVE_NOT_DELIVERED';const hasQuestion=/[¿?]/.test(answer);const discoveryQuestion=executableNba==='ASK_MISSING_FACT'?trailingQuestion(answer):null;if(discoveryQuestion&&/:\\s*[^?]+(?:,|;)[^?]+\\b(?:o|u)\\b/i.test(discoveryQuestion))return 'ROBOTIC_DISCOVERY_MENU';"
+          )
+
+          # 2) STOCK asks availability only; do not use price as an N+1 related fact.
+          replace(
+            'backend/src/conversation/commercial/CommercialWriteContract.ts',
+            "PRICE:new Set(['PRECIO']),PRICE_AVAILABILITY:new Set(['PRECIO','DISPONIBILIDAD']),STOCK:new Set(['DISPONIBILIDAD']),",
+            "PRICE:new Set(['PRECIO']),PRICE_AVAILABILITY:new Set(['PRECIO','DISPONIBILIDAD']),STOCK:new Set(['DISPONIBILIDAD','PRECIO']),"
+          )
+
+          # 3) Grounded EVALUATE_USE answers inherit the canonical use/problem context.
+          replace(
+            'backend/src/conversation/commercial/GroundedDirectAnswer.ts',
+            "type GroundedDirectAnswerInput={message:string;intent:string;attribute:string|null;resolvedProduct:string|null;quote?:ProductQuote|null;rag?:RagEvidence[];verifiedFacts?:VerifiedFact[];};",
+            "type GroundedDirectAnswerInput={message:string;intent:string;attribute:string|null;resolvedProduct:string|null;quote?:ProductQuote|null;rag?:RagEvidence[];verifiedFacts?:VerifiedFact[];useCase?:string|null;problem?:string|null;};"
+          )
+          replace(
+            'backend/src/conversation/commercial/GroundedDirectAnswer.ts',
+            "function workSuitabilityAnswer(input:GroundedDirectAnswerInput):string|null{const asked=fold(input.message);",
+            "function workSuitabilityAnswer(input:GroundedDirectAnswerInput):string|null{const asked=fold(`${input.message} ${input.useCase??''} ${input.problem??''}`);"
+          )
+          replace(
+            'backend/src/conversation/commercial/CommercialWriteContract.ts',
+            "const directAnswer=input.directAnswer??buildGroundedDirectAnswer({message:input.message,intent:input.intent,attribute,resolvedProduct:resolvedTurnProduct,quote:input.quote,rag:input.rag,verifiedFacts});",
+            "const directAnswer=input.directAnswer??buildGroundedDirectAnswer({message:input.message,intent:input.intent,attribute,resolvedProduct:resolvedTurnProduct,quote:input.quote,rag:input.rag,verifiedFacts,useCase,problem});"
+          )
+
+          # 4) Reservation READY must own a short confirmation and preserve collected data.
+          replace(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            "function reservationOwnsTurn(state:ConversationState,message:string):boolean{\n  if(!state.reservationStage)return false;",
+            "function reservationOwnsTurn(state:ConversationState,message:string):boolean{\n  if(!state.reservationStage)return false;\n  const short=fold(message).replace(/[.!¡¿?]+/g,'').replace(/\\s+/g,' ').trim();\n  if(state.reservationStage==='READY'&&/^(?:si|dale|ok|okay|claro|de acuerdo|vamos|avancemos|listo|hazlo|hagamoslo)$/.test(short))return true;"
+          )
+          replace(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            "function reservationAdvance(state:ConversationState,message:string):ReservationAdvance|null{",
+            "export function reservationAdvance(state:ConversationState,message:string):ReservationAdvance|null{"
+          )
+          replace(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            "if(stage==='READY')return{stage,answer:'La reserva aún no está confirmada. No voy a afirmar que existe hasta que la operación autorizada termine correctamente.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};",
+            "if(stage==='READY')return{stage,document:state.reservationDocument??null,name:state.reservationCustomerName??null,address:state.reservationAddress??null,answer:'Ya tengo tus datos. Continúo con el paso autorizado de la reserva; no la daré por confirmada hasta que esa operación termine correctamente.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};"
+          )
+
+          # 5) Writer instruction follows the current factual core instead of forcing price on STOCK-only turns.
+          replace(
+            'backend/src/conversation/commercial/CommercialResponsePlan.ts',
+            "return `Da el resultado comercial completo en este mismo mensaje. Si existe dolor/contexto (${context}), ${GROUNDED_PAIN_EMPATHY} ${NATURAL_NEUROSALES} Usa como máximo 1 o 2 hechos relevantes, no una ficha técnica. Incluye el precio y la disponibilidad/stock ya verificados juntos; no esperes a que el cliente los pregunte ni le preguntes si quiere conocerlos. ${SIMPLE_HUMAN_LANGUAGE} Después ejecuta un solo +1: ${action}. La pregunta debe sonar natural, por ejemplo “¿Prefieres envío o recogerlo en nuestro local?”. No ofrezcas reserva, pago ni pidas datos en este mismo turno. ${safety}`;",
+            "return `Da el resultado comercial de este turno sin recitar datos anteriores que el cliente no pidió. Si existe dolor/contexto (${context}), ${GROUNDED_PAIN_EMPATHY} ${NATURAL_NEUROSALES} Usa como máximo 1 o 2 hechos relevantes, no una ficha técnica. RESPUESTA_DIRECTA manda sobre qué dato comercial debes mostrar: si responde solo stock/disponibilidad, no agregues ni repitas precio; si responde precio y disponibilidad, conserva ambos. ${SIMPLE_HUMAN_LANGUAGE} Después ejecuta un solo +1: ${action}. La pregunta debe sonar natural, por ejemplo “¿Prefieres envío o recogerlo en nuestro local?”. No ofrezcas reserva, pago ni pidas datos en este mismo turno. ${safety}`;"
+          )
+      - name: Install
+        working-directory: backend
+        run: npm ci
+      - name: Run new live-gate regressions
+        working-directory: backend
+        run: |
+          node --experimental-strip-types --test \
+            tests/unit/live-gate5-writer-regressions.test.ts \
+            tests/unit/live-gate5-grounded-followup.test.ts \
+            tests/unit/live-gate5-reservation-ready.test.ts \
+            tests/unit/writer-pain-empathy-regressions.test.ts \
+            tests/unit/seller-led-price-guard.test.ts \
+            tests/unit/live-commercial-root-regressions.test.ts
+      - name: Build
+        working-directory: backend
+        run: npm run build
+      - name: Commit and push canonical
+        run: |
+          git config user.name "artosperu-bot"
+          git config user.email "artosperu@gmail.com"
+          git add backend/src/conversation/writer/WriterGuard.ts \
+                  backend/src/conversation/commercial/CommercialWriteContract.ts \
+                  backend/src/conversation/commercial/GroundedDirectAnswer.ts \
+                  backend/src/conversation/commercial/CommercialResponsePlan.ts \
+                  backend/src/conversation/HybridConversationEngine.ts
+          git commit -m "fix: close live gate5 commercial regressions"
+          git push origin HEAD:refactor/canonical-conversation-state
