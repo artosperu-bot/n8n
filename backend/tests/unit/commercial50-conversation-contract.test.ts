@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { commercial50Scenarios, COMMERCIAL_50_TURN_COUNT } from '../../qa/scenarios/commercial50.ts';
 
-const ALLOWED_SHORT_CONFIRMATIONS=new Set(['si','sí','ok','dale','gracias','ya','listo']);
+const ALLOWED_SHORT_CONFIRMATIONS=new Set(['si','ok','dale','gracias','ya','listo']);
 const fold=(value:string)=>value.toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+const shortToken=(value:string)=>fold(value).replace(/^[¿¡\s]+|[?.!,;:¡¿\s]+$/g,'');
 
 test('commercial50 means 50 complete conversations, not 50 isolated turns',()=>{
   assert.equal(commercial50Scenarios.length,50,'qa:commercial50 must contain exactly 50 independent conversations');
@@ -22,7 +23,7 @@ test('every commercial50 conversation has enough context to test continuity with
     for(const turn of scenario.turns){
       const text=fold(turn.message);
       assert.ok(text.length>=2,`${scenario.id} contains an empty/nonsense customer turn`);
-      if(text.length<=3)assert.ok(ALLOWED_SHORT_CONFIRMATIONS.has(text),`${scenario.id} contains an unexplained short turn: ${turn.message}`);
+      if(text.length<=4)assert.ok(ALLOWED_SHORT_CONFIRMATIONS.has(shortToken(turn.message)),`${scenario.id} contains an unexplained short turn: ${turn.message}`);
     }
   }
 });
