@@ -2,7 +2,7 @@ import type { ConversationState } from '../../domain/types.ts';
 import type { TurnDecision } from '../../ports/LlmProvider.ts';
 import { fold } from '../../shared/text.ts';
 import { compatibleNba } from '../nba/NbaCompatibility.ts';
-import { nextBestAction as deterministicNextBestAction } from '../nba/NextBestAction.ts';
+import { canAdvanceFulfillment, nextBestAction as deterministicNextBestAction } from '../nba/NextBestAction.ts';
 
 const INTENTS=new Set(['GREETING','PRODUCT_INFO','ATTRIBUTE','CAPABILITY','EVALUATE_USE','BUDGET_CONSTRAINT','RECOMMEND','RECOMMEND_WITHIN_BUDGET','COMPARE','PRICE_AVAILABILITY','PRICE','STOCK','IMAGES','IMAGE','POLICY','FULFILLMENT_SELECTION','WARRANTY','OBJECTION','HANDLE_PRICE_OBJECTION','PURCHASE','HUMAN','QUOTE','CATALOG','CATEGORIES','SUBCATEGORIES','ORDER_STATUS','OTHER']);
 const INTENT_ALIASES:Record<string,string>={
@@ -42,6 +42,14 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
   const plannerIntent=canonicalIntent(decision.primaryIntent);
   let primaryIntent=plannerIntent??fallbackIntent??'OTHER';
 
+  if(fallbackIntent==='FULFILLMENT_SELECTION'){
+    const previousIntent=canonicalIntent(state.lastIntent);
+    const resumableDiscoveryIntent=previousIntent&&[
+      'EVALUATE_USE','PRODUCT_INFO','RECOMMEND','RECOMMEND_WITHIN_BUDGET',
+      'BUDGET_CONSTRAINT','OBJECTION','HANDLE_PRICE_OBJECTION',
+    ].includes(previousIntent)?previousIntent:null;
+    primaryIntent=canAdvanceFulfillment(state)?'FULFILLMENT_SELECTION':(resumableDiscoveryIntent??'OTHER');
+  }
   if(fallbackIntent&&['OBJECTION','HANDLE_PRICE_OBJECTION'].includes(fallbackIntent)&&['OBJECTION','HANDLE_PRICE_OBJECTION'].includes(primaryIntent))primaryIntent=fallbackIntent;
   if(fallbackIntent==='EVALUATE_USE'&&['PRODUCT_INFO','OTHER','EVALUATE_USE'].includes(primaryIntent))primaryIntent='EVALUATE_USE';
   if(fallbackIntent&&['PURCHASE','HUMAN','QUOTE'].includes(fallbackIntent))primaryIntent=fallbackIntent;
