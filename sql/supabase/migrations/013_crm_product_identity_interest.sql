@@ -80,11 +80,11 @@ select
   producto_id_canonico as producto_id,
   producto_canonico as producto,
   marca_canonica as marca,
-  count(*)::integer as menciones,
-  count(distinct session_id)::integer as conversaciones,
+  count(*) as menciones,
+  count(distinct session_id) as conversaciones,
   max(fecha) as ultima_mencion,
   null::numeric as probabilidad_compra_promedio,
-  count(distinct session_id) filter (where es_interes_alto)::integer as conversaciones_interes_alto
+  count(distinct session_id) filter (where es_interes_alto) as conversaciones_interes_alto
 from marcado
 group by producto_id_canonico, producto_canonico, marca_canonica;
 
