@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { nextBestAction } from '../../src/conversation/nba/NextBestAction.ts';
 import { validateTurnDecision } from '../../src/conversation/decision/DecisionValidator.ts';
 import { FullRagLlmProvider } from '../../src/conversation/commercial/FullRagLlmProvider.ts';
+import * as ResponsePolicy from '../../src/conversation/commercial/ResponsePolicy.ts';
 import type { LlmDecisionResult, LlmProvider, LlmResult, LlmWriteInput, TurnDecision } from '../../src/ports/LlmProvider.ts';
 
 const usage={inputTokens:0,outputTokens:0,totalTokens:0,cachedInputTokens:0};
@@ -156,4 +157,12 @@ test('pain discovery fallback remains human and still asks exactly one pending q
   assert.doesNotMatch(result.text,/Lo tienes pensado para trabajo/i);
   assert.match(result.text,/cae|caídas|golpes|trabajo|repar/i);
   assert.equal((result.text.match(/\?/g)??[]).length,1);
+});
+
+test('SQL unavailable response does not expose internal ERP terminology',()=>{
+  const fn=(ResponsePolicy as any).sqlUnavailableResponse;
+  assert.equal(typeof fn,'function');
+  const answer=fn('Armor 22');
+  assert.match(answer,/precio|stock|disponibilidad/i);
+  assert.doesNotMatch(answer,/\bERP\b/i);
 });
