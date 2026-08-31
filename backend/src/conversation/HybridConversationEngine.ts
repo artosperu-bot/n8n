@@ -233,6 +233,8 @@ function reservationFieldCompatible(stage:ConversationState['reservationStage'],
 }
 function reservationOwnsTurn(state:ConversationState,message:string):boolean{
   if(!state.reservationStage)return false;
+  const short=fold(message).replace(/[.!¡¿?]+/g,'').replace(/\s+/g,' ').trim();
+  if(state.reservationStage==='READY'&&/^(?:si|dale|ok|okay|claro|de acuerdo|vamos|avancemos|listo|hazlo|hagamoslo)$/.test(short))return true;
   if(isReservationAbandonment(message)||isExplicitReservationOperation(message))return true;
   const bundle=extractReservationBundle(message);
   if(bundle.document||bundle.name||bundle.address)return true;
@@ -240,7 +242,7 @@ function reservationOwnsTurn(state:ConversationState,message:string):boolean{
   if(state.reservationStage==='NEED_ADDRESS'&&!/[?¿]/.test(message)&&/\b(?:av|avenida|jr|jiron|calle|mz|manzana|lote|urbanizacion|distrito)\b/i.test(fold(message)))return true;
   return fallbackDecision(message,state).primaryIntent==='OTHER';
 }
-function reservationAdvance(state:ConversationState,message:string):ReservationAdvance|null{
+export function reservationAdvance(state:ConversationState,message:string):ReservationAdvance|null{
   const stage=state.reservationStage;
   if(!stage)return null;
   const raw=message.trim();
@@ -273,7 +275,7 @@ function reservationAdvance(state:ConversationState,message:string):ReservationA
     if(raw.length<6||!/\p{L}|\d/u.test(raw))return{stage,answer:'Necesito una dirección válida para continuar.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
     return{stage:'READY',address:raw,answer:'Ya tengo los datos necesarios. La reserva todavía no está confirmada; falta registrar la operación autorizada.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};
   }
-  if(stage==='READY')return{stage,answer:'La reserva aún no está confirmada. No voy a afirmar que existe hasta que la operación autorizada termine correctamente.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};
+  if(stage==='READY')return{stage,document:state.reservationDocument??null,name:state.reservationCustomerName??null,address:state.reservationAddress??null,answer:'Ya tengo tus datos. Continúo con el paso autorizado de la reserva; no la daré por confirmada hasta que esa operación termine correctamente.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};
   return{stage,answer:'La reserva ya quedó registrada previamente.',nba:'ANSWER_ONLY',route:'RESERVATION_CONFIRMED'};
 }
 
