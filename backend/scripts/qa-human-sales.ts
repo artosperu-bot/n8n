@@ -4,150 +4,151 @@ import type { QaScenario } from '../qa/types.ts';
 import { runLiveQa } from './qa-live.ts';
 
 const scenarios:QaScenario[]=[
-  {id:'HUMAN-PAIN-DROPS',family:'COMMERCIAL',title:'Construction pain is human and seller-led',turns:[
-    {message:'Trabajo en construcción y ya rompí dos celulares.',expected:{queryTarget:'Armor 22'}},
-    {message:'Envío a Ate.',expected:{queryTarget:'Armor 22'}},
-    {message:'Sí',expected:{queryTarget:'Armor 22'}},
-  ]},
-  {id:'HUMAN-PAIN-IMPACT',family:'COMMERCIAL',title:'Explicit work-hour impact is remembered and not re-asked',turns:[
-    {message:'Trabajo en construcción y se me cae seguido el celular.',expected:{queryTarget:'Armor 22'}},
-    {message:'Cuando se rompe pierdo horas de trabajo.',expected:{queryTarget:'Armor 22'}},
-  ]},
-  {id:'HUMAN-PAIN-BATTERY',family:'COMMERCIAL',title:'Battery pain is human and seller-led',turns:[
-    {message:'Trabajo todo el día afuera y la batería de mi celular no llega a la tarde.'},
-    {message:'Envío a San Miguel.'},
-    {message:'Sí'},
-  ]},
-  {id:'HUMAN-PAIN-REPAIRS',family:'COMMERCIAL',title:'Repeated repairs are recognized as pain and seller-led',turns:[
-    {message:'Ya mandé reparar mi celular dos veces por caídas.'},
-    {message:'Prefiero recogerlo en su local.'},
-    {message:'Dale'},
-  ]},
-  {id:'HUMAN-PAIN-WATER-DUST',family:'COMMERCIAL',title:'Water and dust pain stays grounded and seller-led',turns:[
-    {message:'Trabajo entre polvo y a veces lluvia, ya se me malogró un celular por eso.'},
-    {message:'Prefiero envío a Surco.'},
-    {message:'Sí'},
-  ]},
-  {id:'HUMAN-FACTUAL-NFC',family:'COMMERCIAL',title:'Simple factual NFC stays direct',turns:[
-    {message:'¿El Armor 25T Pro tiene NFC?',expected:{queryTarget:'Armor 25T Pro',answerIncludes:['NFC']}},
-    {message:'Necesito NFC sí o sí porque pago con el celular.',expected:{queryTarget:'Armor 25T Pro'}},
-  ]},
-  {id:'HUMAN-PRICE-OBJECTION',family:'COMMERCIAL',title:'Price objection is acknowledged naturally',turns:[
-    {message:'¿Cuánto está el Armor 22?',expected:{queryTarget:'Armor 22'}},
-    {message:'Está un poco caro para mí.',expected:{queryTarget:'Armor 22'}},
-    {message:'Tengo hasta 1100.'},
-  ]},
-  {id:'HUMAN-CLOSE-DELIVERY',family:'CLOSING',title:'Direct price moves to delivery then reservation',turns:[
-    {message:'¿Cuánto está el Armor 22?',expected:{queryTarget:'Armor 22'}},
-    {message:'Envío a Ate.',expected:{queryTarget:'Armor 22'}},
-    {message:'Sí',expected:{queryTarget:'Armor 22'}},
-  ]},
-  {id:'HUMAN-CLOSE-PICKUP',family:'CLOSING',title:'Direct price moves to pickup then reservation',turns:[
-    {message:'Precio del Armor X13',expected:{queryTarget:'Armor X13'}},
-    {message:'Prefiero recogerlo en su local.',expected:{queryTarget:'Armor X13'}},
-    {message:'Dale',expected:{queryTarget:'Armor X13'}},
-  ]},
-  {id:'HUMAN-POLICY-OVERLAY-PICKUP',family:'CLOSING',title:'Policy question answers and resumes fulfillment without losing purchase flow',turns:[
-    {message:'¿Cuánto está el Armor 22?',expected:{queryTarget:'Armor 22'}},
-    {message:'¿Dónde queda su local?',expected:{queryTarget:'Armor 22'}},
-    {message:'Prefiero recogerlo en su local.',expected:{queryTarget:'Armor 22'}},
+  {id:'SALES-INFO-TO-CLOSE',family:'COMMERCIAL',title:'Product info progresses through pain before price and fulfillment',turns:[
+    {message:'Info del Armor 22',expected:{queryTarget:'Armor 22'}},
+    {message:'Lo quiero para mi trabajo',expected:{queryTarget:'Armor 22'}},
+    {message:'Se me cae seguido',expected:{queryTarget:'Armor 22'}},
+    {message:'Cuando se rompe pierdo horas de trabajo',expected:{queryTarget:'Armor 22'}},
+    {message:'Mi prioridad es que aguante bien las caídas',expected:{queryTarget:'Armor 22'}},
+    {message:'¿Cuánto está?',expected:{queryTarget:'Armor 22'}},
+    {message:'Prefiero recogerlo en su local',expected:{queryTarget:'Armor 22'}},
     {message:'Dale',expected:{queryTarget:'Armor 22'}},
+  ]},
+  {id:'SALES-RAM-DIRECT',family:'FACTUAL',title:'Specific RAM question stays direct',turns:[
+    {message:'Info del Armor 22',expected:{queryTarget:'Armor 22'}},
+    {message:'¿Cuánta RAM tiene?',expected:{queryTarget:'Armor 22'}},
+    {message:'Gracias',expected:{queryTarget:'Armor 22'}},
+  ]},
+  {id:'SALES-NFC-DIRECT',family:'FACTUAL',title:'NFC question answers without forced discovery',turns:[
+    {message:'Info del Armor 25T Pro',expected:{queryTarget:'Armor 25T Pro'}},
+    {message:'¿Tiene NFC?',expected:{queryTarget:'Armor 25T Pro'}},
+    {message:'Lo necesito porque pago con el celular',expected:{queryTarget:'Armor 25T Pro'}},
+  ]},
+  {id:'SALES-WATER-DUST',family:'COMMERCIAL',title:'Water and dust pain remains the active problem',turns:[
+    {message:'Info del Armor 22',expected:{queryTarget:'Armor 22'}},
+    {message:'Trabajo entre polvo y lluvia',expected:{queryTarget:'Armor 22'}},
+    {message:'Ya se me malogró un celular por eso',expected:{queryTarget:'Armor 22'}},
+  ]},
+  {id:'SALES-BATTERY-PAIN',family:'COMMERCIAL',title:'Battery pain stays focused on the customer problem',turns:[
+    {message:'Info del Armor 22',expected:{queryTarget:'Armor 22'}},
+    {message:'Trabajo todo el día afuera',expected:{queryTarget:'Armor 22'}},
+    {message:'La batería de mi celular no llega a la tarde',expected:{queryTarget:'Armor 22'}},
+  ]},
+  {id:'SALES-PRICE-OBJECTION',family:'COMMERCIAL',title:'Price objection asks budget without restarting known context',turns:[
+    {message:'Info del Armor 22',expected:{queryTarget:'Armor 22'}},
+    {message:'¿Cuánto está?',expected:{queryTarget:'Armor 22'}},
+    {message:'Está un poco caro para mí',expected:{queryTarget:'Armor 22'}},
+    {message:'Tengo hasta 1100',expected:{queryTarget:'Armor 22'}},
+  ]},
+  {id:'SALES-COMPARISON',family:'COMMERCIAL',title:'Comparison keeps exactly two products and gives guided choice',turns:[
+    {message:'Compara el Armor 22 con el Armor X13'},
+    {message:'¿Cuál me conviene más para trabajo en campo?'},
+  ]},
+  {id:'SALES-EXPLICIT-SWITCH',family:'REFERENCE',title:'Explicit product change switches current target intentionally',turns:[
+    {message:'Info del Armor 22',expected:{queryTarget:'Armor 22'}},
+    {message:'Ahora dime del Armor X13',expected:{queryTarget:'Armor X13'}},
+    {message:'¿Cuánta batería tiene?',expected:{queryTarget:'Armor X13'}},
+  ]},
+  {id:'SALES-POLICY-OVERLAY',family:'POLICY',title:'Location policy answers without destroying product context',turns:[
+    {message:'Info del Armor 22',expected:{queryTarget:'Armor 22'}},
+    {message:'¿Dónde queda su local?',expected:{queryTarget:'Armor 22'}},
+    {message:'Volviendo al Armor 22, ¿tiene NFC?',expected:{queryTarget:'Armor 22'}},
+  ]},
+  {id:'SALES-PREMATURE-FULFILLMENT',family:'SAFETY',title:'Shipping text cannot skip unfinished discovery',turns:[
+    {message:'Info del Armor 22',expected:{queryTarget:'Armor 22'}},
+    {message:'Lo quiero para mi trabajo',expected:{queryTarget:'Armor 22'}},
+    {message:'Envío a Ate',expected:{queryTarget:'Armor 22'}},
   ]},
 ];
 
-type StyleFinding={scenarioId:string;turn:number;level:'RED'|'YELLOW';code:string;message:string;answer:string};
+type Finding={scenarioId:string;turn:number;level:'RED'|'YELLOW';code:string;message:string;answer:string};
 const result=await runLiveQa({scenarios,outputDir:'qa-results/human-sales'});
-const findings:StyleFinding[]=[];
-const fakeAnecdote=/\b(?:a\s+m[ií]\s+me\s+pas[oó]|a\s+un\s+amigo\s+m[ií]o|un\s+amigo\s+m[ií]o|nos\s+suele\s+pasar|nos\s+pasa\s+mucho)\b/i;
-const roboticEmpathy=/^\s*(?:te\s+entiendo|entiendo\s+(?:tu|lo|que)|comprendo\s+(?:tu|lo|que)|lamento\s+(?:que|lo)|lo\s+siento)/i;
-const stiffSalesLanguage=/\b(?:el\s+verdadero\s+problema|y\s+ah[ií]\s+est[aá]\s+el\s+verdadero\s+problema|reduce\s+el\s+riesgo\s+de\s+interrupciones|interrupci[oó]n\s+operativa|para\s+ese\s+uso,?\s+\w+\s+cuenta\s+con)\b/i;
-const internalJargon=/\b(?:SPIN|FAB|LAER|N\+1|commercial\s+readiness|implicaci[oó]n\s+operativa)\b/i;
-const explicitPain=/\b(?:romp|cae|ca[ií]da|malogr|bater[ií]a|cargador|polvo|lluvia|arreglo|repar|pierdo\s+horas|gastar)\b/i;
-const storyPain=/\b(?:romp|se\s+me\s+cae|ca[ií]das?|malogr|no\s+llega\s+a\s+la\s+tarde|repar|arregl|pierdo\s+horas|polvo|lluvia|seguir\s+gastando)\b/i;
-const humanSceneCue=/\b(?:en\s+obra|en\s+plena\s+jornada|a\s+media\s+jornada|a\s+media\s+tarde|cuando\s+est[aá]s|si\s+justo|mientras\s+trabajas|terminas\s+(?:sin|buscando|otra\s+vez)|te\s+quedas\s+sin|quedarte\s+sin|volver\s+a\s+(?:reparar|gastar)|estar\s+pendiente|cada\s+vez\s+que|otra\s+reparaci[oó]n|mismo\s+gasto|cada\s+nueva\s+ca[ií]da)\b/i;
-const practicalValueCue=/\b(?:aguant|resist|evit|protege|menos\s+pendiente|sin\s+estar\s+pendiente|hecho\s+para|preparado\s+para|te\s+ayuda|te\s+sirve|tranquilidad|ahorr|dejar\s+de\s+gastar|seguir\s+trabajando|durar\s+m[aá]s|m[aá]s\s+margen|reducir\s+el\s+riesgo)\b/i;
-const noisyTechnicalToken=/\b(?:GLONASS|Galileo|BeiDou|Mali|Helio|GHz|GPU)\b/gi;
+const findings:Finding[]=[];
 
-function add(scenarioId:string,turn:number,level:'RED'|'YELLOW',code:string,message:string,answer:string){findings.push({scenarioId,turn,level,code,message,answer});}
-function answerOf(scenario:any,index:number):string{return String(scenario?.turns?.[index]?.observation?.response?.answer??'');}
-function stateOf(scenario:any,index:number):any{return scenario?.turns?.[index]?.observation?.response?.state??{};}
-function requirePriceStockFulfillment(scenario:any,index:number){
-  const answer=answerOf(scenario,index);
-  if(!/S\/\s*\d/i.test(answer)||!/disponib|stock/i.test(answer))add(scenario.id,index+1,'RED','SELLER_DID_NOT_GIVE_PRICE_STOCK','STECH ya tenía suficiente contexto y debía dar precio + disponibilidad sin esperar otra pregunta.',answer);
-  if(!/env[ií]o/i.test(answer)||!/recoger|recojo|local/i.test(answer))add(scenario.id,index+1,'RED','SELLER_DID_NOT_OFFER_FULFILLMENT','Después de precio+stock debe preguntar envío o recojo/local.',answer);
+function scenario(id:string){return result.report.scenarios.find(item=>item.id===id);}
+function answer(s:any,index:number):string{return String(s?.turns?.[index]?.observation?.response?.answer??'').trim();}
+function state(s:any,index:number):any{return s?.turns?.[index]?.observation?.response?.state??{};}
+function debug(s:any,index:number):any{return s?.turns?.[index]?.observation?.response?.debug??{};}
+function add(s:any,index:number,level:'RED'|'YELLOW',code:string,message:string){findings.push({scenarioId:s.id,turn:index+1,level,code,message,answer:answer(s,index)});}
+function noPriceOrAvailability(s:any,index:number){
+  const value=answer(s,index);
+  if(/S\/\s*\d/i.test(value)||/\b(?:tenemos\s+disponibilidad|hay\s+stock|est[aá]\s+disponible|stock\s*:\s*\d)\b/i.test(value))add(s,index,'RED','DISCOVERY_LEAKED_PRICE_STOCK','Discovery no debe mostrar precio/stock antes de que el cliente lo pida.');
 }
-function requireReservationThenPurchase(scenario:any,fulfillmentIndex:number,confirmIndex:number){
-  const fulfillmentAnswer=answerOf(scenario,fulfillmentIndex);const confirmedState=stateOf(scenario,confirmIndex);
-  if(!/reserv/i.test(fulfillmentAnswer))add(scenario.id,fulfillmentIndex+1,'RED','RESERVATION_NOT_OFFERED','Después de elegir envío/local debe preguntar si quiere reservar.',fulfillmentAnswer);
-  if(confirmedState.purchaseSignal!==true)add(scenario.id,confirmIndex+1,'RED','AFFIRMATIVE_NOT_PURCHASE','Un sí/dale a la pregunta explícita de reserva debe activar purchaseSignal.',answerOf(scenario,confirmIndex));
-  if(String(confirmedState.lastNba??'').toUpperCase()!=='COLLECT_RESERVATION_DATA')add(scenario.id,confirmIndex+1,'RED','PURCHASE_DID_NOT_COLLECT_DATA','Después de confirmar reserva debe avanzar a datos de compra.',answerOf(scenario,confirmIndex));
-}
-function requireRuggedFab(scenario:any,index:number){
-  const answer=answerOf(scenario,index);
-  const hasCoreCertification=/\bIP68\b/i.test(answer)&&/\bIP69K\b/i.test(answer)&&/MIL-STD-810H/i.test(answer);
-  const hasAdvantage=/golpes?|ca[ií]das?/i.test(answer)&&/agua/i.test(answer)&&/polvo/i.test(answer);
-  const hasBenefit=/riesgo|repar|quedarte|aguantar|preparado|pendiente/i.test(answer);
-  if(!hasCoreCertification)add(scenario.id,index+1,'RED','RUGGED_CERTIFICATION_EVIDENCE_MISSING','En dolor por caídas/obra debe conservar la evidencia verificada IP68, IP69K y MIL-STD-810H cuando esté disponible.',answer);
-  if(!hasAdvantage)add(scenario.id,index+1,'RED','RUGGED_FAB_ADVANTAGE_MISSING','Debe traducir las certificaciones a la ventaja práctica frente a golpes, caídas, agua y polvo.',answer);
-  if(!hasBenefit)add(scenario.id,index+1,'RED','RUGGED_FAB_BENEFIT_MISSING','Debe conectar esa ventaja con el beneficio del cliente: menos riesgo/preocupación/reparaciones.',answer);
-}
+function oneQuestionMax(s:any,index:number){const count=(answer(s,index).match(/\?/g)??[]).length;if(count>1)add(s,index,'RED','MULTIPLE_QUESTIONS',`La respuesta hizo ${count} preguntas visibles; máximo una.`);}
+function noInternalTerms(s:any,index:number){if(/\bERP\b|SQL_BRIDGE|ASK_MISSING_FACT|SOFT_CLOSE|SPIN|NBA/i.test(answer(s,index)))add(s,index,'RED','INTERNAL_LANGUAGE','La respuesta expuso lenguaje interno al cliente.');}
+function hasSpinFact(s:any,index:number,pattern:RegExp):boolean{return (state(s,index).spinFacts??[]).some((value:string)=>pattern.test(String(value)));}
 
-for(const scenario of result.report.scenarios){
-  scenario.turns.forEach((turn,index)=>{
-    const answer=String(turn?.observation?.response?.answer??'').trim();const message=String(turn.message??'');const questionCount=(answer.match(/\?/g)??[]).length;
-    if(fakeAnecdote.test(answer))add(scenario.id,index+1,'RED','FAKE_PERSONAL_ANECDOTE','La respuesta inventó experiencia personal o social.',answer);
-    if(roboticEmpathy.test(answer))add(scenario.id,index+1,'YELLOW','ROBOTIC_EMPATHY','La respuesta abrió con una fórmula robótica de empatía.',answer);
-    if(stiffSalesLanguage.test(answer))add(scenario.id,index+1,'YELLOW','STIFF_SALES_LANGUAGE','La respuesta usó una frase de venta demasiado escrita/robotizada.',answer);
-    if(internalJargon.test(answer))add(scenario.id,index+1,'RED','INTERNAL_JARGON','La respuesta expuso jerga interna.',answer);
-    if(questionCount>1)add(scenario.id,index+1,'RED','MULTIPLE_QUESTIONS',`La respuesta hizo ${questionCount} preguntas visibles.`,answer);
-    if(explicitPain.test(message)&&answer.length>620)add(scenario.id,index+1,'YELLOW','PAIN_RESPONSE_TOO_LONG',`Respuesta de dolor demasiado larga (${answer.length} caracteres).`,answer);
-    if(explicitPain.test(message)&&(answer.match(noisyTechnicalToken)??[]).length>0)add(scenario.id,index+1,'RED','PAIN_TECHNICAL_DUMP','Ante un dolor real aparecieron especificaciones no relacionadas con ese dolor.',answer);
-    if(storyPain.test(message)&&!humanSceneCue.test(answer))add(scenario.id,index+1,'RED','PAIN_HUMAN_SCENE_MISSING','Ante un dolor real faltó una escena cotidiana y humana.',answer);
-    if(storyPain.test(message)&&!practicalValueCue.test(answer))add(scenario.id,index+1,'RED','PAIN_PRACTICAL_VALUE_MISSING','Ante un dolor real faltó traducir el producto a un alivio práctico.',answer);
+for(const s of result.report.scenarios){
+  s.turns.forEach((_turn,index)=>{
+    oneQuestionMax(s,index);
+    noInternalTerms(s,index);
+    if(!answer(s,index))add(s,index,'RED','EMPTY_ANSWER','El turno quedó sin respuesta.');
   });
 }
 
-for(const id of ['HUMAN-PAIN-DROPS','HUMAN-PAIN-BATTERY','HUMAN-PAIN-REPAIRS','HUMAN-PAIN-WATER-DUST']){
-  const scenario=result.report.scenarios.find(item=>item.id===id);if(!scenario)continue;
-  requirePriceStockFulfillment(scenario,0);requireReservationThenPurchase(scenario,1,2);
-}
-for(const id of ['HUMAN-PAIN-DROPS','HUMAN-PAIN-REPAIRS','HUMAN-PAIN-WATER-DUST']){
-  const scenario=result.report.scenarios.find(item=>item.id===id);if(scenario)requireRuggedFab(scenario,0);
-}
-
-const impact=result.report.scenarios.find(item=>item.id==='HUMAN-PAIN-IMPACT');
-if(impact){
-  requirePriceStockFulfillment(impact,0);requireRuggedFab(impact,0);
-  const state=stateOf(impact,1);const answer=answerOf(impact,1);const implications=state?.customer?.implications??[];
-  if(!Array.isArray(implications)||!implications.some((value:string)=>/perdida|tiempo|horas/i.test(String(value))))add(impact.id,2,'RED','EXPLICIT_IMPACT_NOT_STORED','“Pierdo horas de trabajo” debe quedar como implicación explícita.',answer);
-  if(/cu[aá]nt[oa].*horas|cu[aá]nto tiempo.*pierdes/i.test(answer))add(impact.id,2,'RED','REASKED_KNOWN_IMPACT','No debe volver a preguntar cuánto tiempo pierde.',answer);
+const main=scenario('SALES-INFO-TO-CLOSE');
+if(main){
+  for(const index of [0,1,2,3,4])noPriceOrAvailability(main,index);
+  if(!state(main,1).useCase)add(main,1,'RED','USE_CASE_NOT_STORED','“Para mi trabajo” debe quedar como contexto de uso.');
+  if(!/caida/i.test(String(state(main,2).problem??''))&&!hasSpinFact(main,2,/problema:.*caida/i))add(main,2,'RED','DROP_PAIN_NOT_STORED','“Se me cae seguido” debe quedar como problema de caídas.');
+  if(String(debug(main,2).nextBestAction??'').toUpperCase()!=='ASK_MISSING_FACT')add(main,2,'RED','PAIN_SKIPPED_DISCOVERY','Después de detectar caídas todavía debe avanzar una sola pregunta SPIN, no cerrar.');
+  if(!hasSpinFact(main,3,/implicacion:.*(?:tiempo|interrup)/i))add(main,3,'RED','IMPLICATION_NOT_STORED','“Pierdo horas” debe persistirse como implicación.');
+  if(!/S\/\s*\d/i.test(answer(main,5)))add(main,5,'RED','EXPLICIT_PRICE_NOT_ANSWERED','Cuando el cliente pregunta precio, debe responder el precio SQL disponible.');
+  if(!/disponib|stock/i.test(answer(main,5)))add(main,5,'RED','PRICE_DID_NOT_INCLUDE_AVAILABILITY','En el turno explícito de precio puede acompañar disponibilidad verificada.');
+  if(!/recoger|recojo|local/i.test(answer(main,6))||!/reserv/i.test(answer(main,6)))add(main,6,'RED','PICKUP_DID_NOT_OFFER_RESERVATION','Recojo autorizado debe conservar recojo y ofrecer una sola reserva.');
+  if(state(main,7).purchaseSignal!==true)add(main,7,'RED','AFFIRMATIVE_DID_NOT_CONFIRM_PURCHASE','Dale después de la pregunta de reserva debe activar purchaseSignal.');
+  if(String(state(main,7).lastNba??'').toUpperCase()!=='COLLECT_RESERVATION_DATA')add(main,7,'RED','PURCHASE_DID_NOT_ADVANCE','Después de confirmar reserva debe avanzar a captura de datos.');
 }
 
-for(const id of ['HUMAN-CLOSE-DELIVERY','HUMAN-CLOSE-PICKUP']){
-  const scenario=result.report.scenarios.find(item=>item.id===id);if(!scenario)continue;
-  requirePriceStockFulfillment(scenario,0);requireReservationThenPurchase(scenario,1,2);
+const ram=scenario('SALES-RAM-DIRECT');
+if(ram){
+  if((answer(ram,1).match(/\?/g)??[]).length>0)add(ram,1,'RED','RAM_FORCED_DISCOVERY','Una pregunta puntual de RAM debe responderse directamente, sin forzar otra pregunta.');
+  if(/\?/.test(answer(ram,2)))add(ram,2,'RED','THANKS_FORCED_QUESTION','“Gracias” no debe abrir un discovery nuevo.');
 }
 
-const policyOverlay=result.report.scenarios.find(item=>item.id==='HUMAN-POLICY-OVERLAY-PICKUP');
-if(policyOverlay){
-  requirePriceStockFulfillment(policyOverlay,0);
-  const policyAnswer=answerOf(policyOverlay,1);
-  if(!/local|direcci[oó]n|ubicaci[oó]n/i.test(policyAnswer))add(policyOverlay.id,2,'RED','POLICY_OVERLAY_NOT_ANSWERED','La pregunta de política debe responderse antes de retomar el cierre.',policyAnswer);
-  if(!/env[ií]o/i.test(policyAnswer)||!/recoger|recojo|local/i.test(policyAnswer))add(policyOverlay.id,2,'RED','POLICY_OVERLAY_DID_NOT_RESUME_FULFILLMENT','Después de responder la política debe retomar la elección envío/recojo sin volver a discovery.',policyAnswer);
-  if(/reserv/i.test(policyAnswer))add(policyOverlay.id,2,'RED','POLICY_OVERLAY_JUMPED_TO_RESERVATION','Una pregunta de política no debe interpretarse como si el cliente ya hubiera elegido modalidad.',policyAnswer);
-  requireReservationThenPurchase(policyOverlay,2,3);
+const nfc=scenario('SALES-NFC-DIRECT');
+if(nfc&&(answer(nfc,1).match(/\?/g)??[]).length>0)add(nfc,1,'RED','NFC_FORCED_DISCOVERY','Una pregunta factual de NFC debe terminar después de responder.');
+
+const water=scenario('SALES-WATER-DUST');
+if(water){
+  noPriceOrAvailability(water,1);noPriceOrAvailability(water,2);
+  const finalProblem=String(state(water,2).problem??'');
+  if(!/agua|polvo/i.test(finalProblem)&&!hasSpinFact(water,2,/problema:.*(?:agua|polvo)/i))add(water,2,'RED','WATER_DUST_CONTEXT_LOST','El problema explícito de agua/polvo debe conservarse.');
 }
 
-const objection=result.report.scenarios.find(item=>item.id==='HUMAN-PRICE-OBJECTION');
+const battery=scenario('SALES-BATTERY-PAIN');
+if(battery){
+  noPriceOrAvailability(battery,1);noPriceOrAvailability(battery,2);
+  if(!/bateria|autonomia/i.test(String(state(battery,2).problem??''))&&!hasSpinFact(battery,2,/problema:.*autonomia/i))add(battery,2,'RED','BATTERY_CONTEXT_LOST','La batería insuficiente debe conservarse como problema.');
+}
+
+const objection=scenario('SALES-PRICE-OBJECTION');
 if(objection){
-  requirePriceStockFulfillment(objection,0);const answer=answerOf(objection,1);
-  if(!/precio|caro|presupuesto|se pasa|sale/i.test(answer))add(objection.id,2,'RED','PRICE_OBJECTION_NOT_ACKNOWLEDGED','La objeción de precio debe reconocerse antes de ofrecer alternativas.',answer);
+  if(!/presupuesto|tope|m[aá]ximo/i.test(answer(objection,2)))add(objection,2,'RED','OBJECTION_DID_NOT_ASK_BUDGET','La objeción de precio debe pedir un presupuesto útil cuando todavía no se conoce.');
+  if(Number(state(objection,3).budget??0)!==1100)add(objection,3,'RED','BUDGET_NOT_STORED','El presupuesto S/ 1100 debe persistirse.');
 }
 
-const latest=resolve('qa-results/human-sales/latest');await mkdir(latest,{recursive:true});
-const transcript=result.report.scenarios.map(scenario=>({id:scenario.id,status:scenario.status,sessionId:scenario.sessionId,turns:scenario.turns.map((turn,index)=>({turn:index+1,client:turn.message,stech:String(turn?.observation?.response?.answer??''),state:turn?.observation?.response?.state??null,findings:turn.findings}))}));
-const gate=findings.some(f=>f.level==='RED')?'RED':findings.length?'YELLOW':'GREEN';
-await writeFile(resolve(latest,'human-sales-summary.json'),`${JSON.stringify({runId:result.report.runId,gate,styleFindings:findings,scenarios:transcript},null,2)}\n`,'utf8');
-console.log(`HUMAN SALES STYLE gate=${gate} | styleFindings=${findings.length}`);
-for(const finding of findings)console.log(`${finding.level} ${finding.scenarioId} T${finding.turn} ${finding.code} :: ${finding.message}`);
-console.log('Review: qa-results/human-sales/latest/human-sales-summary.json');process.exitCode=gate==='RED'?1:result.exitCode;
+const compare=scenario('SALES-COMPARISON');
+if(compare){const pair=state(compare,1).comparisonProducts??state(compare,0).comparisonProducts??[];if(!Array.isArray(pair)||pair.length!==2)add(compare,1,'RED','COMPARISON_PAIR_INVALID','La comparación debe conservar exactamente dos productos.');}
+
+const switched=scenario('SALES-EXPLICIT-SWITCH');
+if(switched){if(!/x13/i.test(String(state(switched,1).queryTarget??'')))add(switched,1,'RED','EXPLICIT_SWITCH_LOST','El cambio explícito a Armor X13 debe convertirse en el target actual.');if(!/x13/i.test(String(state(switched,2).queryTarget??'')))add(switched,2,'RED','FOLLOWUP_LOST_SWITCH','La pregunta siguiente debe continuar sobre Armor X13.');}
+
+const policy=scenario('SALES-POLICY-OVERLAY');
+if(policy){if(String(debug(policy,1).route??'').toUpperCase()!=='RAG_INSTITUTIONAL')add(policy,1,'RED','LOCATION_NOT_ROUTED_TO_INSTITUTIONAL_RAG','La ubicación pertenece a RAG institucional.');if(!/armor 22/i.test(String(state(policy,2).queryTarget??'')))add(policy,2,'RED','POLICY_DESTROYED_PRODUCT_CONTEXT','La política no debe destruir el producto activo.');}
+
+const premature=scenario('SALES-PREMATURE-FULFILLMENT');
+if(premature){
+  if(String(state(premature,2).lastIntent??'').toUpperCase()==='FULFILLMENT_SELECTION')add(premature,2,'RED','FULFILLMENT_SKIPPED_DISCOVERY','Un texto de envío no puede saltar discovery si aún hay un dato comercial pendiente.');
+  if(String(state(premature,2).lastNba??'').toUpperCase()==='SOFT_CLOSE')add(premature,2,'RED','PREMATURE_SOFT_CLOSE','No debe cerrar solo porque el cliente escribió una dirección durante discovery.');
+}
+
+const red=findings.filter(f=>f.level==='RED');
+const yellow=findings.filter(f=>f.level==='YELLOW');
+const outDir=resolve('qa-results/human-sales/latest');await mkdir(outDir,{recursive:true});
+const summary={runId:result.report.runId,scenarios:result.report.summary.scenarios,turns:result.report.summary.turns,runner:result.report.summary,approvedContract:{red:red.length,yellow:yellow.length},findings};
+await writeFile(resolve(outDir,'human-sales-summary.json'),`${JSON.stringify(summary,null,2)}\n`,'utf8');
+console.log(`APPROVED SALES FLOW gate=${red.length?'RED':yellow.length?'YELLOW':'GREEN'} | scenarios=${result.report.summary.scenarios} turns=${result.report.summary.turns} RED=${red.length} YELLOW=${yellow.length}`);
+for(const f of findings)console.log(`${f.level} ${f.scenarioId} T${f.turn} ${f.code} :: ${f.message} :: ${f.answer}`);
+console.log(`Review: ${resolve(outDir,'human-sales-summary.json')}`);
+if(red.length)process.exitCode=1;
