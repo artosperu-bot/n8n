@@ -11,7 +11,7 @@ import { updateInterestLevel } from './commercial/InterestLevel.ts';
 import { prepareCommercialWriteInput } from './commercial/CommercialWriteContract.ts';
 import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from './commercial/UseCaseNormalizer.ts';
 import { productEvidenceSections } from './commercial/ProductEvidencePolicy.ts';
-import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, stockResponse } from './commercial/ResponsePolicy.ts';
+import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, sqlUnavailableResponse, stockResponse } from './commercial/ResponsePolicy.ts';
 import { extractReservationBundle, mergeReservationBundle, reservationBundleMissing, reservationBundlePrompt, reservationBundleStage, reservationMissingPrompt } from './commercial/ReservationData.ts';
 import { validateTurnDecision } from './decision/DecisionValidator.ts';
 import { resolveInstitutionalTopic } from './institutional/InstitutionalTopicResolver.ts';
@@ -470,7 +470,7 @@ export class HybridConversationEngine {
 
       if(erpUnavailable&&intent!=='IMAGE'){
         route='ERP_UNAVAILABLE';nba='ANSWER_ONLY';
-        answer=target?`Temporalmente no puedo consultar el ERP para confirmar ese dato de ${target}. Prefiero no inventarte el precio, stock o disponibilidad.`:'Temporalmente no puedo consultar el ERP para confirmar ese dato. Prefiero no inventarlo.';
+        answer=sqlUnavailableResponse(target);
       }else if(requestedUnknown&&intent!=='IMAGE'){
         const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
         const ranked=await this.#rankCandidates(commercialState,query,commercialState.budget??99999999,target,2);const alternatives=ranked.ranks;recommendationTrace=ranked.trace;

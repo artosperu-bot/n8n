@@ -166,4 +166,10 @@ export function quoteRequestResponse(state:ConversationState):string{
   return`Con ${state.quantity} unidades de ${shortProduct(product)}, ya tengo lo necesario para que un asesor continúe con la cotización.`;
 }
 export function ambiguousReferenceResponse():string{return'¿A qué modelo te refieres?';}
+export function sqlUnavailableResponse(product:string|null|undefined):string{
+  const name=String(product??'').trim();
+  return name
+    ?`Ahora no puedo confirmar el precio, stock o disponibilidad de ${name}. Prefiero no darte un dato sin confirmar.`
+    :'Ahora no puedo confirmar ese dato de precio, stock o disponibilidad. Prefiero no darte un dato sin confirmar.';
+}
 export function noEvidenceResponse():string{return'No tengo confirmado ese dato exacto.';}
