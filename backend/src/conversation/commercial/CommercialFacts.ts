@@ -43,15 +43,17 @@ function currentImplicationFacts(text:string):string[]{
   const facts:string[]=[];
   const losesTime=/\b(?:pierdo|perdemos|me\s+hace\s+perder|nos\s+hace\s+perder)\s+(?:tiempo|(?:\d+\s+)?horas?(?:\s+de\s+trabajo)?)\b/.test(text);
   const mustStop=/\btengo\s+que\s+(?:parar|detener)\b|\bme\s+interrumpe\b/.test(text);
+  const downtime=/\b(?:me|nos|los|las)\s+deja(?:n)?\s+sin\s+(?:equipo|celular|telefono)\b|\b(?:quedarme|quedarnos)\s+sin\s+(?:equipo|celular|telefono)\b/.test(text);
   const damagedEquipment=/\b(?:se\s+(?:me|nos|les)\s+)?(?:malogro|rompio|dano)\b|\b(?:celular|telefono|equipo)\b[^.!?]{0,45}\b(?:se\s+)?(?:malogro|rompio|dano)\b/.test(text);
   const repairConsequence=/\b(?:por\s+eso\s+)?(?:ya\s+)?(?:tuve|tuvimos|he\s+tenido|hemos\s+tenido)\s+que\s+(?:mandar\s+a\s+)?reparar(?:lo|la)?\b|\b(?:mande|he\s+mandado)\s+(?:a\s+)?reparar\b|\brepar(?:e|ado)\b[^.!?]{0,45}\b(?:dos|2|varias|otra)\s+veces?\b/.test(text);
   const repairCost=/\b(?:gaste|gastamos|pague|pagamos)\b[^.!?]{0,45}\b(?:reparacion|repararlo|arreglo|tecnico)\b|\b(?:reparacion|arreglo)\b[^.!?]{0,45}\b(?:costo|cuesta|gasto|pague)\b/.test(text);
   if(losesTime||mustStop)facts.push('implicacion:perdida_tiempo_interrupcion');
+  if(downtime)facts.push('implicacion:interrupcion_operativa');
   if(damagedEquipment)facts.push('implicacion:dano_equipo');
   if(repairConsequence)facts.push('implicacion:reparacion_recurrente');
   if(repairCost)facts.push('implicacion:costo_reparacion');
   if(/\b(?:pierdo|perdemos)\s+(?:ventas?|clientes?|pedidos?)\b/.test(text))facts.push('implicacion:perdida_comercial');
-  if(/\b(?:no puedo|no podemos)\s+(?:trabajar|continuar|seguir)\b/.test(text))facts.push('implicacion:interrupcion_operativa');
+  if(/\b(?:no puedo|no podemos)\s+(?:trabajar|continuar|seguir|responder)\b/.test(text))facts.push('implicacion:interrupcion_operativa');
   return unique(facts);
 }
 
@@ -99,6 +101,7 @@ function explicitBudgetRecommendation(text:string):boolean {
 
 export function extractCommercialFacts(message: string, previous: ConversationState): CommercialFacts {
   const t = fold(message);
+  const previousMessage=fold(previous.lastUserMessage??'');
   const featureQuestion=isFeatureQuestion(t);
   const business = /\b(empresa|corporativo|institucion|negocio|ruc|factura|tecnicos|personal|equipo\s+de\s+trabajo)\b/.test(t);
   const customerType = business ? 'BUSINESS' : (previous.customerType ?? null);
@@ -124,7 +127,11 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
 
   let problem = previous.problem ?? null;
   if(!featureQuestion){
-    if(/\b(?:mande|mandé|he\s+mandado|tuve\s+que)\s+reparar\b|\brepar(?:e|é|ado|aciones?)\b[^.!?]{0,55}\b(?:dos|2|varias|otra)\s+veces?\b|\b(?:dos|2|varias)\s+reparaciones?\b/.test(t)) problem='reparaciones_repetidas';
+    const currentDamage=/\b(?:se\s+(?:me|nos|les)\s+)?(?:malogro|rompio|dano)\b/.test(t);
+    if(!problem&&currentDamage&&/\b(?:polvo|lluvia|agua|humedad)\b/.test(previousMessage)) problem='exposicion_agua_polvo';
+    else if(!problem&&currentDamage&&/\b(?:se\s+(?:me|nos|les)\s+cae|caidas?|golpes?)\b/.test(previousMessage)) problem='caidas_frecuentes';
+    else if(!problem&&currentDamage&&/\b(?:bateria|autonomia|cargar|carga)\b/.test(previousMessage)) problem='autonomia_insuficiente';
+    else if(/\b(?:mande|mandé|he\s+mandado|tuve\s+que)\s+(?:a\s+)?reparar\b|\brepar(?:e|é|ado|aciones?)\b[^.!?]{0,55}\b(?:dos|2|varias|otra)\s+veces?\b|\b(?:dos|2|varias)\s+reparaciones?\b/.test(t)) problem='reparaciones_repetidas';
     else if (/\b(se\s+me|se\s+nos|se\s+les)\s+cae[n]?\b|\bcaidas?\s+(?:frecuentes?|seguidas?|constantes?)\b/.test(t)) problem = 'caidas_frecuentes';
     else if (/\bbateria\b[^.!?]{0,65}\b(se\s+acaba|no\s+aguanta|dura\s+poco|no\s+llega\s+a\s+la\s+tarde)\b|\bno\s+llega\s+a\s+la\s+tarde\b[^.!?]{0,30}\bbateria\b|\bcasi\s+no\s+tengo\s+donde\s+cargar/.test(t)) problem = 'autonomia_insuficiente';
     else if(/\b(?:polvo|lluvia|agua|humedad)\b[^.!?]{0,70}\b(?:malogro|malogró|malogra|daño|dan[oó]|rompio|rompió)\b|\b(?:malogro|malogró|daño|dan[oó])\b[^.!?]{0,70}\b(?:polvo|lluvia|agua|humedad)\b/.test(t)) problem='exposicion_agua_polvo';
