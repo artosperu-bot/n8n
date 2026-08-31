@@ -120,7 +120,9 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const browsingProduct = has(/\b(estoy viendo|quiero ver|revisando|ahora si quiero ver|muestrame el)\b/) && hasProductLike;
   const requirementFollowup = has(/\b(cumple|cumpliria|cumple\s+con\s+eso|tiene\s+eso)\b/);
   const productInfo = explicitProductInfo || browsingProduct;
-  const directUse = has(/\b(trabajo|trabajar|trabajando|construccion|campo|tecnico|juego|juegos|jugar|gaming|free fire|pubg|cod mobile|call of duty|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para|delivery)\b/);
+  const directUse = has(/\b(trabajo|trabajar|trabajando|construccion|campo|tecnico|juego|juegos|jugar|gaming|free fire|pubg|cod mobile|call of duty|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para|delivery)\b/)
+    || has(/\b(?:se\s+(?:me|nos|les)\s+)?(?:malogro|rompio|dano)\b/)
+    || has(/\b(?:tuve|tuvimos|he\s+tenido|hemos\s+tenido)\s+que\s+(?:mandar\s+a\s+)?reparar(?:lo|la)?\b/);
   const everydayNeed = has(/\b(uso simple|uso basico|whatsapp|llamadas?|mensajeria|comunicacion)\b/)
     && has(/\b(quiero un|quiero una|busco|necesito|para usar|para uso|lo quiero para|la quiero para)\b/);
   const use = directUse || everydayNeed || useCaseLoQuiero;
