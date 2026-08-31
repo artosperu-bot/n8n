@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { safeWrite } from '../../src/conversation/writer/WriterGuard.ts';
 import type { LlmProvider, LlmWriteInput } from '../../src/ports/LlmProvider.ts';
 
+// These regressions mirror the first-five live sentinel gate and must stay green before any 500-conversation run.
 function llm(text:string):LlmProvider{return{async write(){return{text,model:'live-gate-stub',usage:{inputTokens:1,outputTokens:1,totalTokens:2,cachedInputTokens:0},durationMs:1};}};}
 
 const quote={product:'Armor X13',shortName:'Armor X13',productRagId:'P-ARMOR-X13',price:899,stock:5,currency:'PEN',source:'TEST'} as any;
