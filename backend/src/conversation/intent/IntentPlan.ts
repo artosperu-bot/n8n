@@ -118,11 +118,16 @@ export function resolveIntentPlan(message: string): IntentPlan {
     || (has(/\b(que\s+tal\s+es|como\s+es|que\s+tal\s+esta)\b/) && hasProductLike)
     || (has(/\bque\s+tal\b/) && hasProductLike && attributes.length===0);
   const browsingProduct = has(/\b(estoy viendo|quiero ver|revisando|ahora si quiero ver|muestrame el)\b/) && hasProductLike;
-  const requirementFollowup = has(/\b(cumple|cumpliria|cumple\s+con\s+eso|tiene\s+eso)\b/);
+  const contextualFitFollowup=has(/\bque\s+tiene\b[^?.!]{0,80}\b(?:me|nos)\s+ayud(?:e|a)\s+con\s+(?:eso|esto)\b|\bcomo\b[^?.!]{0,50}\b(?:me|nos)\s+ayud(?:a|aria)\s+con\s+(?:eso|esto)\b/);
+  const requirementFollowup = has(/\b(cumple|cumpliria|cumple\s+con\s+eso|tiene\s+eso)\b/)||contextualFitFollowup;
   const productInfo = explicitProductInfo || browsingProduct;
   const directUse = has(/\b(trabajo|trabajar|trabajando|construccion|campo|tecnico|juego|juegos|jugar|gaming|free fire|pubg|cod mobile|call of duty|uso diario|se me cae|se me caen|necesito algo|necesitamos|me sirve|sirve para|delivery)\b/)
     || has(/\b(?:se\s+(?:me|nos|les)\s+)?(?:malogro|rompio|dano)\b/)
-    || has(/\b(?:tuve|tuvimos|he\s+tenido|hemos\s+tenido)\s+que\s+(?:mandar\s+a\s+)?reparar(?:lo|la)?\b/);
+    || has(/\b(?:tuve|tuvimos|he\s+tenido|hemos\s+tenido)\s+que\s+(?:mandar\s+a\s+)?reparar(?:lo|la)?\b|\b(?:mande|he\s+mandado)\s+(?:a\s+)?reparar\b/)
+    || has(/\b(?:pierdo|perdemos)\s+(?:ventas?|clientes?|pedidos?|tiempo|horas?)\b/)
+    || has(/\b(?:me|nos)\s+deja(?:n)?\s+sin\s+(?:equipo|celular|telefono)\b|\b(?:quedarme|quedarnos)\s+sin\s+(?:equipo|celular|telefono)\b/)
+    || has(/\b(?:no puedo|no podemos)\s+(?:responder|trabajar|continuar|seguir)\b/)
+    || contextualFitFollowup;
   const everydayNeed = has(/\b(uso simple|uso basico|whatsapp|llamadas?|mensajeria|comunicacion)\b/)
     && has(/\b(quiero un|quiero una|busco|necesito|para usar|para uso|lo quiero para|la quiero para)\b/);
   const use = directUse || everydayNeed || useCaseLoQuiero;
