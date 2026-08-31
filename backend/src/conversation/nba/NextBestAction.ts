@@ -3,6 +3,20 @@ import { fold } from '../../shared/text.ts';
 import { evaluateSpinReadiness } from './SpinProgression.ts';
 
 /**
+ * Fulfillment is a commercial consequence, not a standalone intent authority.
+ * A resolved product alone is not enough: the conversation must already be in
+ * an authorized close/reservation path.
+ */
+export function canAdvanceFulfillment(state: ConversationState = {}): boolean {
+  const resolvedProduct=Boolean(state.activeProduct||state.selectedProduct||state.recommendedProduct);
+  if(!resolvedProduct)return false;
+  if(state.purchaseSignal===true||Boolean(state.reservationStage))return true;
+  const pending=String(state.pendingCommercialAction??state.lastNba??'').toUpperCase();
+  const stage=String(state.commercialStage??'').toUpperCase();
+  return pending==='SOFT_CLOSE'||['CIERRE','CIERRE_ASISTIDO'].includes(stage);
+}
+
+/**
  * Bounded commercial next-best-action catalog.
  * Facts still come from SQL/RAG authorities; this layer only controls the one
  * executable +1 after the current customer request is answered.
@@ -41,7 +55,7 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
       return 'ANSWER_ONLY';
 
     case 'FULFILLMENT_SELECTION':
-      return resolvedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
+      return canAdvanceFulfillment(state) ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
     case 'POLICY':
       return state.activeProduct && String(state.pendingCommercialAction??state.lastNba??'').toUpperCase()==='SOFT_CLOSE'
