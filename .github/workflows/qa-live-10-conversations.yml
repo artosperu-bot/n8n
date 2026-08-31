@@ -8,11 +8,13 @@ on:
 
 jobs:
   branch-harness:
-    name: Current branch isolated 10 conversations
+    name: Current canonical isolated 10 conversations
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refactor/canonical-conversation-state
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -38,7 +40,7 @@ jobs:
           done
           cat branch-server.log
           exit 1
-      - name: Run existing human-sales suite against current branch
+      - name: Run approved human-sales suite against canonical branch
         working-directory: backend
         env:
           QA_BASE_URL: http://127.0.0.1:3000
@@ -52,7 +54,7 @@ jobs:
       - name: Upload isolated QA evidence
         uses: actions/upload-artifact@v4
         with:
-          name: qa-current-branch-10
+          name: qa-current-canonical-10
           path: |
             backend/qa-results/human-sales/**
             backend/branch-human-sales.log
@@ -67,6 +69,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refactor/canonical-conversation-state
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -78,7 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --max-time 20 https://whatsapp.artos.pe/health | tee deployed-health.json
-      - name: Run existing human-sales suite against deployed backend
+      - name: Run approved human-sales suite against deployed backend
         working-directory: backend
         env:
           QA_BASE_URL: https://whatsapp.artos.pe
@@ -92,7 +96,7 @@ jobs:
       - name: Upload deployed QA evidence
         uses: actions/upload-artifact@v4
         with:
-          name: qa-deployed-live-10
+          name: qa-deployed-approved-10
           path: |
             backend/qa-results/human-sales/**
             backend/deployed-human-sales.log
