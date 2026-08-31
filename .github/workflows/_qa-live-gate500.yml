@@ -1,0 +1,40 @@
+name: QA Live Gate500
+
+on:
+  push:
+    branches:
+      - qa/live-gate500-20260831
+  workflow_dispatch:
+
+jobs:
+  gate5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend
+        working-directory: backend
+        run: npm ci
+      - name: Verify deployed build
+        run: |
+          echo '=== /health ==='
+          curl -fsS https://whatsapp.artos.pe/health | tee /tmp/health.json
+          echo
+      - name: Run five live sentinel conversations
+        working-directory: backend
+        env:
+          QA_BASE_URL: https://whatsapp.artos.pe
+          QA_REQUIRED_BUILD: cbe80fc
+        run: node --experimental-strip-types scripts/qa-live-gate5.ts
+      - name: Upload gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-live-gate5
+          path: backend/qa-results/gate500
+          if-no-files-found: warn
