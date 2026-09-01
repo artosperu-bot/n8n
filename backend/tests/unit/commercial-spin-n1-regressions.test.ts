@@ -145,7 +145,8 @@ test('writer executes the authorized implication question and only one question'
   const result=await safeWrite(echoWriter,prepared,'Tomo ese dato como contexto.');
   assert.equal(result.nextBestAction,'ASK_MISSING_FACT');
   assert.equal(result.missingFact,'impacto');
-  assert.match(result.answer,/genera|interrupciones|p[eé]rdida de tiempo/i);
+  assert.match(result.answer,/afecta|genera|ocasiona|impacta|complica/i);
+  assert.doesNotMatch(result.answer,/interrupciones,|p[eé]rdida de tiempo u otro/i);
   assert.equal((result.answer.match(/\?/g)??[]).length,1);
 });
 

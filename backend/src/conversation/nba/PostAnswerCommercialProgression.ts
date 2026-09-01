@@ -47,7 +47,7 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
   const consultative=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
   const hasImplication=String(state.lastSpinContribution??'').toUpperCase()==='IMPLICACION'||(state.spinFacts??[]).some(value=>/^(?:implicacion|impacto):/i.test(String(value)));
   const hasChosenSolution=Boolean(state.selectedProduct||state.recommendedProduct);
-  const contextOnlyEvaluate=intent==='EVALUATE_USE'&&!state.problem&&!hasImplication&&!hasChosenSolution&&!spin.nextMissingFact;
+  const contextOnlyEvaluate=intent==='EVALUATE_USE'&&current!=='RECOMMEND'&&!state.problem&&!hasImplication&&!hasChosenSolution&&!spin.nextMissingFact;
 
   if(state.purchaseSignal||intent==='PURCHASE'||CLOSING_ACTIONS.has(current))return{level:'HIGH',candidateNba:CLOSING_ACTIONS.has(current)?current:'COLLECT_RESERVATION_DATA',reason:'PURCHASE_CONTINUITY'};
 
