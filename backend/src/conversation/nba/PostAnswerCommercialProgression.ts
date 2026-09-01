@@ -45,6 +45,9 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
     || (state.explicitPriorities?.length??0)>0
   );
   const consultative=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
+  const hasImplication=String(state.lastSpinContribution??'').toUpperCase()==='IMPLICACION'||(state.spinFacts??[]).some(value=>/^(?:implicacion|impacto):/i.test(String(value)));
+  const hasChosenSolution=Boolean(state.selectedProduct||state.recommendedProduct);
+  const contextOnlyEvaluate=intent==='EVALUATE_USE'&&!state.problem&&!hasImplication&&!hasChosenSolution&&!spin.nextMissingFact;
 
   if(state.purchaseSignal||intent==='PURCHASE'||CLOSING_ACTIONS.has(current))return{level:'HIGH',candidateNba:CLOSING_ACTIONS.has(current)?current:'COLLECT_RESERVATION_DATA',reason:'PURCHASE_CONTINUITY'};
 
@@ -55,6 +58,8 @@ export function evaluatePostAnswerCommercialProgression(input:ProgressionInput):
   if(completedRecommendation){
     return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'COMPLETED_RECOMMENDATION_READY_FOR_COMMERCIAL_RESULT'};
   }
+
+  if(contextOnlyEvaluate)return{level:'LOW',candidateNba:'ANSWER_ONLY',reason:'EVALUATE_CONTEXT_ONLY_NO_CLOSE'};
 
   if(consultative&&spin.nextMissingFact){
     return{level:'LOW',candidateNba:'ASK_MISSING_FACT',reason:`SPIN_NEEDS_${spin.stage}`};

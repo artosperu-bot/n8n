@@ -102,7 +102,8 @@ export function resolveIntentPlan(message: string): IntentPlan {
   const useCaseLoQuiero=has(/\b(?:lo|la)\s+quiero\s+para\b/);
   const explicitPurchase = has(/\b(quiero comprar|quiero comprarlo|quiero comprarla|comprarlo|comprarla|como compro|lo compro|la compro|me llevo (?:ese|esa|este|esta)|me quedo con|quiero (?:ese|esa|este|esta)|ya (?:ese|esa|este|esta) quiero|me decidi(?: por (?:ese|esa|este|esta))?|ya me decidi|avanzar con la compra|quiero avanzar)\b/)
     || (!useCaseLoQuiero&&has(/\b(?:lo|la)\s+quiero\b/))
-    || has(/\bya\s+(?:el|la)\s+(?:[a-z]*\d+[a-z0-9 -]{0,24}|\d{2,})\s+quiero\b/);
+    || has(/\bya\s+(?:el|la)\s+(?:[a-z]*\d+[a-z0-9 -]{0,24}|\d{2,})\s+quiero\b/)
+    || has(/\b(?:si\s*,?\s*)?(?:quiero|deseo|quisiera)\s+(?:reservar|separar)(?:lo|la)?\b|\b(?:lo|la)\s+quiero\s+(?:reservar|separar)\b/);
   if(explicitPurchase)hits.push('PURCHASE');
 
   if (has(/\b(cotiza|cotizar|cotizacion|cotizarnos)\b/)) hits.push('QUOTE');

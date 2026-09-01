@@ -217,7 +217,8 @@ function isReservationAbandonment(message:string):boolean{
 function isExplicitReservationOperation(message:string):boolean{
   const text=fold(message);
   return /\b(?:continu|seguir|retom|avanz)\w*\b[^.!?]{0,45}\b(?:reserva|separacion)\b/.test(text)
-    || /\b(?:reserva|separacion)\b[^.!?]{0,45}\b(?:continu|seguir|retom|avanz)\w*\b/.test(text);
+    || /\b(?:reserva|separacion)\b[^.!?]{0,45}\b(?:continu|seguir|retom|avanz)\w*\b/.test(text)
+    || /\b(?:si\s*,?\s*)?(?:quiero|deseo|quisiera)\s+(?:reservar|separar)(?:lo|la)?\b/.test(text);
 }
 function reservationFieldCompatible(stage:ConversationState['reservationStage'],message:string):boolean{
   const bundle=extractReservationBundle(message);
@@ -247,6 +248,12 @@ export function reservationAdvance(state:ConversationState,message:string):Reser
   if(!stage)return null;
   const raw=message.trim();
   if(isReservationAbandonment(message))return{stage:null,document:null,name:null,address:null,cancelled:true,answer:'Entendido, detuve la captura de datos para la reserva. La reserva no llegó a confirmarse.',nba:'ANSWER_ONLY',route:'RESERVATION_CANCELLED'};
+
+  if(isExplicitReservationOperation(message)){
+    const existing={document:state.reservationDocument??null,name:state.reservationCustomerName??null,address:state.reservationAddress??null};
+    const missing=reservationBundleMissing(existing);
+    if(missing.length)return{stage:reservationBundleStage(existing),document:existing.document,name:existing.name,address:existing.address,answer:reservationMissingPrompt(missing),nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
+  }
 
   const incoming=extractReservationBundle(raw);
   if(incoming.document||incoming.name||incoming.address){
@@ -426,7 +433,7 @@ export class HybridConversationEngine {
       const strongReference=['COMPARISON_ALTERNATIVE','RECOMMENDED_REFERENT','SELECTION_REFERENT'].includes(String(deterministicDecision.referenceType??'').toUpperCase())&&['PRICE','STOCK','CAPABILITY','IMAGE','PURCHASE'].includes(deterministicDecision.primaryIntent);
       const strongRecommendation=['RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)&&/\b(mejor|mas|conviene|recomiend|alternativa|presupuesto)\b/.test(fold(input.message));
       const budgetAuthority=['BUDGET_CONSTRAINT','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)&&!['PURCHASE','HUMAN','QUOTE'].includes(rawDecision.primaryIntent);
-      const comparisonAuthority=deterministicDecision.primaryIntent==='COMPARE'&&(baseState.comparisonProducts?.length??0)>=2;
+      const comparisonAuthority=deterministicDecision.primaryIntent==='COMPARE';
       const needTargetConflict=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)&&!deterministicDecision.targetProduct&&Boolean(rawDecision.targetProduct)&&!explicitUnknownTarget(input.message,rawDecision);
       const forceDeterministic=(rawDecision.primaryIntent==='OTHER'&&deterministicOverride)||cameraImageConflict||strongReference||strongRecommendation||budgetAuthority||comparisonAuthority||needTargetConflict;
       const guardedDecision=forceDeterministic?{...rawDecision,primaryIntent:deterministicDecision.primaryIntent,targetProduct:deterministicDecision.targetProduct,referenceType:deterministicDecision.referenceType,selectedProduct:deterministicDecision.selectedProduct,mentionedProducts:deterministicDecision.mentionedProducts,comparisonProducts:deterministicDecision.comparisonProducts,attributes:deterministicDecision.attributes,nextBestAction:deterministicDecision.nextBestAction}:rawDecision;

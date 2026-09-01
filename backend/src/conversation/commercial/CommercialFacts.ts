@@ -133,7 +133,7 @@ export function extractCommercialFacts(message: string, previous: ConversationSt
     else if(!problem&&currentDamage&&/\b(?:bateria|autonomia|cargar|carga)\b/.test(previousMessage)) problem='autonomia_insuficiente';
     else if(/\b(?:mande|mandé|he\s+mandado|tuve\s+que)\s+(?:a\s+)?reparar\b|\brepar(?:e|é|ado|aciones?)\b[^.!?]{0,55}\b(?:dos|2|varias|otra)\s+veces?\b|\b(?:dos|2|varias)\s+reparaciones?\b/.test(t)) problem='reparaciones_repetidas';
     else if (/\b(se\s+me|se\s+nos|se\s+les)\s+cae[n]?\b|\bcaidas?\s+(?:frecuentes?|seguidas?|constantes?)\b/.test(t)) problem = 'caidas_frecuentes';
-    else if (/\bbateria\b[^.!?]{0,65}\b(se\s+acaba|no\s+aguanta|dura\s+poco|no\s+llega\s+a\s+la\s+tarde)\b|\bno\s+llega\s+a\s+la\s+tarde\b[^.!?]{0,30}\bbateria\b|\bcasi\s+no\s+tengo\s+donde\s+cargar/.test(t)) problem = 'autonomia_insuficiente';
+    else if (/\bbateria\b[^.!?]{0,65}\b(se\s+acaba|no\s+aguanta|dura\s+poco|no\s+llega\s+a\s+la\s+tarde)\b|\bno\s+llega\s+a\s+la\s+tarde\b[^.!?]{0,30}\bbateria\b|\bcasi\s+no\s+tengo\s+donde\s+cargar|\b(?:se\s+queda|me\s+quedo|nos\s+quedamos|quedarme|quedarnos)\s+sin\s+bateria\b/.test(t)) problem = 'autonomia_insuficiente';
     else if(/\b(?:polvo|lluvia|agua|humedad)\b[^.!?]{0,70}\b(?:malogro|malogró|malogra|daño|dan[oó]|rompio|rompió)\b|\b(?:malogro|malogró|daño|dan[oó])\b[^.!?]{0,70}\b(?:polvo|lluvia|agua|humedad)\b/.test(t)) problem='exposicion_agua_polvo';
     else if (/\bse\s+rompe[n]?\b|\b(?:es|me\s+resulta)\s+fragil\b/.test(t) && !problem) problem = 'durabilidad';
   }

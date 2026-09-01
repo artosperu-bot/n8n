@@ -61,6 +61,7 @@ export function validateTurnDecision(decision:TurnDecision,state:ConversationSta
   if(primaryIntent==='COMPARE'&&fallbackIntent&&['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET','BUDGET_CONSTRAINT'].includes(fallbackIntent))primaryIntent=fallbackIntent;
 
   const comparisonAuthority=fallbackIntent==='COMPARE'||(state.comparisonProducts?.length??0)>=2;
+  if(fallbackIntent==='COMPARE')primaryIntent='COMPARE';
   if(primaryIntent==='COMPARE'&&!comparisonAuthority)primaryIntent=fallbackIntent??'OTHER';
   if(comparisonAuthority&&rawComparisonProducts.length>=2&&fallbackIntent==='COMPARE')primaryIntent='COMPARE';
 
