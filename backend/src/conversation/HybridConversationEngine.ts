@@ -11,7 +11,7 @@ import { updateInterestLevel } from './commercial/InterestLevel.ts';
 import { prepareCommercialWriteInput } from './commercial/CommercialWriteContract.ts';
 import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from './commercial/UseCaseNormalizer.ts';
 import { productEvidenceSections } from './commercial/ProductEvidencePolicy.ts';
-import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, stockResponse } from './commercial/ResponsePolicy.ts';
+import { imageResponse, institutionalResponse, noEvidenceResponse, priceResponse, purchaseResponse, quoteRequestResponse, sqlUnavailableResponse, stockResponse } from './commercial/ResponsePolicy.ts';
 import { extractReservationBundle, mergeReservationBundle, reservationBundleMissing, reservationBundlePrompt, reservationBundleStage, reservationMissingPrompt } from './commercial/ReservationData.ts';
 import { validateTurnDecision } from './decision/DecisionValidator.ts';
 import { resolveInstitutionalTopic } from './institutional/InstitutionalTopicResolver.ts';
@@ -217,7 +217,8 @@ function isReservationAbandonment(message:string):boolean{
 function isExplicitReservationOperation(message:string):boolean{
   const text=fold(message);
   return /\b(?:continu|seguir|retom|avanz)\w*\b[^.!?]{0,45}\b(?:reserva|separacion)\b/.test(text)
-    || /\b(?:reserva|separacion)\b[^.!?]{0,45}\b(?:continu|seguir|retom|avanz)\w*\b/.test(text);
+    || /\b(?:reserva|separacion)\b[^.!?]{0,45}\b(?:continu|seguir|retom|avanz)\w*\b/.test(text)
+    || /\b(?:si\s*,?\s*)?(?:quiero|deseo|quisiera)\s+(?:reservar|separar)(?:lo|la)?\b/.test(text);
 }
 function reservationFieldCompatible(stage:ConversationState['reservationStage'],message:string):boolean{
   const bundle=extractReservationBundle(message);
@@ -233,6 +234,8 @@ function reservationFieldCompatible(stage:ConversationState['reservationStage'],
 }
 function reservationOwnsTurn(state:ConversationState,message:string):boolean{
   if(!state.reservationStage)return false;
+  const short=fold(message).replace(/[.!¡¿?]+/g,'').replace(/\s+/g,' ').trim();
+  if(state.reservationStage==='READY'&&/^(?:si|dale|ok|okay|claro|de acuerdo|vamos|avancemos|listo|hazlo|hagamoslo)$/.test(short))return true;
   if(isReservationAbandonment(message)||isExplicitReservationOperation(message))return true;
   const bundle=extractReservationBundle(message);
   if(bundle.document||bundle.name||bundle.address)return true;
@@ -240,11 +243,17 @@ function reservationOwnsTurn(state:ConversationState,message:string):boolean{
   if(state.reservationStage==='NEED_ADDRESS'&&!/[?¿]/.test(message)&&/\b(?:av|avenida|jr|jiron|calle|mz|manzana|lote|urbanizacion|distrito)\b/i.test(fold(message)))return true;
   return fallbackDecision(message,state).primaryIntent==='OTHER';
 }
-function reservationAdvance(state:ConversationState,message:string):ReservationAdvance|null{
+export function reservationAdvance(state:ConversationState,message:string):ReservationAdvance|null{
   const stage=state.reservationStage;
   if(!stage)return null;
   const raw=message.trim();
   if(isReservationAbandonment(message))return{stage:null,document:null,name:null,address:null,cancelled:true,answer:'Entendido, detuve la captura de datos para la reserva. La reserva no llegó a confirmarse.',nba:'ANSWER_ONLY',route:'RESERVATION_CANCELLED'};
+
+  if(isExplicitReservationOperation(message)){
+    const existing={document:state.reservationDocument??null,name:state.reservationCustomerName??null,address:state.reservationAddress??null};
+    const missing=reservationBundleMissing(existing);
+    if(missing.length)return{stage:reservationBundleStage(existing),document:existing.document,name:existing.name,address:existing.address,answer:reservationMissingPrompt(missing),nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
+  }
 
   const incoming=extractReservationBundle(raw);
   if(incoming.document||incoming.name||incoming.address){
@@ -273,7 +282,7 @@ function reservationAdvance(state:ConversationState,message:string):ReservationA
     if(raw.length<6||!/\p{L}|\d/u.test(raw))return{stage,answer:'Necesito una dirección válida para continuar.',nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};
     return{stage:'READY',address:raw,answer:'Ya tengo los datos necesarios. La reserva todavía no está confirmada; falta registrar la operación autorizada.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};
   }
-  if(stage==='READY')return{stage,answer:'La reserva aún no está confirmada. No voy a afirmar que existe hasta que la operación autorizada termine correctamente.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};
+  if(stage==='READY')return{stage,document:state.reservationDocument??null,name:state.reservationCustomerName??null,address:state.reservationAddress??null,answer:'Ya tengo tus datos. Continúo con el paso autorizado de la reserva; no la daré por confirmada hasta que esa operación termine correctamente.',nba:'EXECUTE_RESERVATION',route:'RESERVATION_READY'};
   return{stage,answer:'La reserva ya quedó registrada previamente.',nba:'ANSWER_ONLY',route:'RESERVATION_CONFIRMED'};
 }
 
@@ -470,7 +479,7 @@ export class HybridConversationEngine {
 
       if(erpUnavailable&&intent!=='IMAGE'){
         route='ERP_UNAVAILABLE';nba='ANSWER_ONLY';
-        answer=target?`Temporalmente no puedo consultar el ERP para confirmar ese dato de ${target}. Prefiero no inventarte el precio, stock o disponibilidad.`:'Temporalmente no puedo consultar el ERP para confirmar ese dato. Prefiero no inventarlo.';
+        answer=sqlUnavailableResponse(target);
       }else if(requestedUnknown&&intent!=='IMAGE'){
         const query=`${input.message} ${(commercialState.priorities??[]).join(' ')} ${commercialState.problem??''} ${commercialState.useCase??''}`;
         const ranked=await this.#rankCandidates(commercialState,query,commercialState.budget??99999999,target,2);const alternatives=ranked.ranks;recommendationTrace=ranked.trace;

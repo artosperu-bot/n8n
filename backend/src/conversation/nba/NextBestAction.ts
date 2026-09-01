@@ -2,9 +2,18 @@ import type { ConversationState } from '../../domain/types.ts';
 import { fold } from '../../shared/text.ts';
 import { evaluateSpinReadiness } from './SpinProgression.ts';
 
-function specificActionablePain(problem:string|null|undefined):boolean{
-  const value=fold(problem??'');
-  return /reparaciones repetidas|reparaciones_repetidas|caidas frecuentes|caidas_frecuentes|autonomia insuficiente|autonomia_insuficiente|exposicion agua polvo|exposicion_agua_polvo|polvo|humedad|lluvia|bateria.*(?:no dura|no llega)|(?:no dura|no llega).*bateria/.test(value);
+/**
+ * Fulfillment is a commercial consequence, not a standalone intent authority.
+ * A resolved product alone is not enough: the conversation must already be in
+ * an authorized close/reservation path.
+ */
+export function canAdvanceFulfillment(state: ConversationState = {}): boolean {
+  const resolvedProduct=Boolean(state.activeProduct||state.selectedProduct||state.recommendedProduct);
+  if(!resolvedProduct)return false;
+  if(state.purchaseSignal===true||Boolean(state.reservationStage))return true;
+  const pending=String(state.pendingCommercialAction??state.lastNba??'').toUpperCase();
+  const stage=String(state.commercialStage??'').toUpperCase();
+  return pending==='SOFT_CLOSE'||['CIERRE','CIERRE_ASISTIDO'].includes(stage);
 }
 
 /**
@@ -16,11 +25,9 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
   const normalized=String(intent??'').toUpperCase();
   const multiUnit=(state.quantity??1)>=2;
   const resolvedProduct=Boolean(state.activeProduct||state.selectedProduct||state.recommendedProduct);
-  const actionableFit=Boolean(
-    specificActionablePain(state.problem)
-    || (state.useCase&&state.problem)
-    || (state.priorities?.length??0)>0
-    || (state.explicitPriorities?.length??0)>0
+  const completedRecommendation=Boolean(
+    state.recommendedProduct
+    && (!state.activeProduct||fold(state.recommendedProduct)===fold(state.activeProduct))
   );
 
   if (state.purchaseSignal) return multiUnit ? 'ASSISTED_HANDOFF' : 'COLLECT_RESERVATION_DATA';
@@ -48,7 +55,7 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
       return 'ANSWER_ONLY';
 
     case 'FULFILLMENT_SELECTION':
-      return resolvedProduct ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
+      return canAdvanceFulfillment(state) ? 'SOFT_CLOSE' : 'ANSWER_ONLY';
 
     case 'POLICY':
       return state.activeProduct && String(state.pendingCommercialAction??state.lastNba??'').toUpperCase()==='SOFT_CLOSE'
@@ -56,11 +63,11 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
         : 'ANSWER_ONLY';
 
     case 'EVALUATE_USE': {
-      if(resolvedProduct&&actionableFit)return'SOFT_CLOSE';
       const spin=evaluateSpinReadiness(state);
+      if(completedRecommendation)return'SOFT_CLOSE';
       if(spin.nextMissingFact)return'ASK_MISSING_FACT';
       if(!resolvedProduct)return'RECOMMEND';
-      return'ANSWER_ONLY';
+      return spin.readyForStock?'SOFT_CLOSE':'ANSWER_ONLY';
     }
 
     case 'BUDGET_CONSTRAINT':
@@ -70,9 +77,11 @@ export function nextBestAction(intent: string, state: ConversationState = {}): s
 
     case 'RECOMMEND':
     case 'RECOMMEND_WITHIN_BUDGET': {
-      if(resolvedProduct&&actionableFit)return'SOFT_CLOSE';
       const spin=evaluateSpinReadiness(state);
-      return spin.nextMissingFact ? 'ASK_MISSING_FACT' : 'ANSWER_ONLY';
+      if(completedRecommendation)return'SOFT_CLOSE';
+      if(spin.nextMissingFact)return'ASK_MISSING_FACT';
+      if(!resolvedProduct)return'RECOMMEND';
+      return spin.readyForStock?'SOFT_CLOSE':'ANSWER_ONLY';
     }
 
     case 'COMPARE':

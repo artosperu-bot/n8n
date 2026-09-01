@@ -1,112 +1,115 @@
 import type { QaScenario } from '../types.ts';
 
 /**
- * 10 realistic commercial conversations x 5 customer turns = 50 turns.
- *
- * This suite is intentionally multi-turn. Its purpose is continuity across the SAME
- * session: canonical context, product reference, SPIN contribution, contextual FAB,
- * guided comparison, objection handling, NBA, interest/purchase progression and
- * anti-pressure safety.
- *
- * Run locally against the real backend with:
- *   npm run qa:commercial50
- *
- * The companion runner audits the final /api/sessions/:sessionId snapshot. When
- * PERSISTENCE_MODE=supabase, that endpoint reads ia_contexto through getState() and
- * ia_conversaciones through getMessages().
+ * 50 coherent multi-turn commercial conversations.
+ * These are conversations, not isolated prompts. They cover info-first sales,
+ * SPIN/FAB pain discovery, factual questions, budget/objections, comparisons,
+ * explicit product switches, institutional policy and purchase/reservation.
+ * Reservation identities/addresses are deliberately fictitious QA-only data.
  */
 export const commercial50Scenarios:QaScenario[]=[
-  {
-    id:'C50-F01-DISCOVERY-THEN-FACTS',family:'COMMERCIAL',title:'Broad product info opens one SPIN question; factual follow-ups stay direct',turns:[
-      {message:'Hola, estoy viendo el Armor 22, qué tal es?',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},
-      {message:'¿Tiene NFC?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},
-      {message:'¿Y cuánto pesa?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},
-      {message:'¿Qué batería tiene?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},
-      {message:'¿Es 5G?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},
-    ],
-  },
-  {
-    id:'C50-F02-CONSTRUCTION-FAB',family:'COMMERCIAL',title:'Construction context becomes useful FAB instead of repeated discovery',turns:[
-      {message:'Trabajo en construcción y se me cae seguido el celular.',expected:{intent:'EVALUATE_USE'}},
-      {message:'Estoy viendo el Armor 22.',expected:{queryTarget:'Armor 22'}},
-      {message:'¿Aguanta caídas?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},
-      {message:'¿Y agua y polvo?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},
-      {message:'Entonces para mi trabajo, ¿sí te parece una buena opción?',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},
-    ],
-  },
-  {
-    id:'C50-F03-FIELD-BATTERY-COMPARE',family:'COMPARISON',title:'Field-work battery context survives product switch and comparison',turns:[
-      {message:'Trabajo todo el día fuera y casi nunca tengo dónde cargar.',expected:{intent:'EVALUATE_USE'}},
-      {message:'¿Qué tal la batería del X13 para eso?',expected:{queryTarget:'Armor X13'}},
-      {message:'¿Y la del Armor 22?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},
-      {message:'¿Cuál de los dos tiene mejor batería?',expected:{intent:'COMPARE'}},
-      {message:'Entonces, para mi uso, ¿cuál me conviene más?'},
-    ],
-  },
-  {
-    id:'C50-F04-BUDGET-RECOMMEND',family:'COMMERCIAL',title:'Need plus budget becomes recommendation without forgetting constraints',turns:[
-      {message:'Busco uno resistente y con buena batería, ¿qué me recomiendas?',expected:{intent:'RECOMMEND'}},
-      {message:'Mi tope es 1500 soles.',expected:{budget:1500}},
-      {message:'Con ese presupuesto, ¿cuál elegirías?',expected:{intent:'RECOMMEND_WITHIN_BUDGET',budget:1500}},
-      {message:'¿Por qué ese y no el X13?',expected:{intent:'COMPARE'}},
-      {message:'¿Cuánto cuesta el que me recomiendas?',expected:{intent:'PRICE'}},
-    ],
-  },
-  {
-    id:'C50-F05-PRICE-OBJECTION',family:'COMMERCIAL',title:'Price objection uses acknowledgement and preserves product context',turns:[
-      {message:'Estoy interesado en el Armor 22 para trabajo.',expected:{queryTarget:'Armor 22'}},
-      {message:'¿Cuánto cuesta?',expected:{intent:'PRICE',queryTarget:'Armor 22'}},
-      {message:'Está caro para mí.',expected:{intent:'HANDLE_PRICE_OBJECTION',queryTarget:'Armor 22'}},
-      {message:'¿Qué alternativa más económica tengo sin irme a algo frágil?'},
-      {message:'¿Qué estaría sacrificando frente al Armor 22?'},
-    ],
-  },
-  {
-    id:'C50-F06-COMPARE-CONTINUITY',family:'COMPARISON',title:'X13 versus Armor 22 keeps pair, criteria and customer use',turns:[
-      {message:'Compárame el X13 y el Armor 22.',expected:{intent:'COMPARE'}},
-      {message:'¿Cuál tiene mejor batería?',expected:{intent:'COMPARE'}},
-      {message:'¿Y cuál aguanta más golpes?',expected:{intent:'COMPARE'}},
-      {message:'Para delivery, ¿cuál escogerías?',expected:{intent:'EVALUATE_USE'}},
-      {message:'Ok, me interesa el que recomiendas.'},
-    ],
-  },
-  {
-    id:'C50-F07-PURCHASE-PROGRESSION',family:'CLOSING',title:'Conditional interest remains interest until explicit purchase',turns:[
-      {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},
-      {message:'¿Cuánto cuesta?',expected:{intent:'PRICE',queryTarget:'Armor 22'}},
-      {message:'¿Está disponible?',expected:{intent:'STOCK',queryTarget:'Armor 22'}},
-      {message:'Si está disponible me interesa.',expected:{queryTarget:'Armor 22'}},
-      {message:'Ya, lo quiero comprar.',expected:{intent:'PURCHASE',queryTarget:'Armor 22'}},
-    ],
-  },
-  {
-    id:'C50-F08-THERMAL-TRUTH',family:'COMMERCIAL',title:'Thermal recommendation and follow-up facts remain grounded',turns:[
-      {message:'Necesito un celular con cámara térmica para hacer inspecciones.'},
-      {message:'¿Cuál tienen que me sirva para eso?'},
-      {message:'¿El Armor 25T Pro tiene cámara térmica?',expected:{intent:'CAPABILITY',queryTarget:'Armor 25T Pro'}},
-      {message:'¿Qué resolución térmica tiene?',expected:{intent:'CAPABILITY',queryTarget:'Armor 25T Pro'}},
-      {message:'¿Hasta qué temperatura mide?',expected:{intent:'CAPABILITY',queryTarget:'Armor 25T Pro'}},
-    ],
-  },
-  {
-    id:'C50-F09-NFC-HARD-PRIORITY',family:'COMMERCIAL',title:'NFC hard priority plus field-work resistance drives recommendation',turns:[
-      {message:'Necesito NFC sí o sí porque pago con el celular.'},
-      {message:'También quiero que sea resistente porque trabajo en campo.',expected:{intent:'EVALUATE_USE'}},
-      {message:'Entonces, ¿cuál me conviene?',expected:{intent:'RECOMMEND'}},
-      {message:'¿Ese tiene NFC?',expected:{intent:'CAPABILITY'}},
-      {message:'¿Y aguanta agua?',expected:{intent:'CAPABILITY'}},
-    ],
-  },
-  {
-    id:'C50-F10-NO-FAKE-PRESSURE',family:'COMMERCIAL',title:'No fabricated scarcity urgency or social proof',turns:[
-      {message:'Estoy viendo el Armor 22.',expected:{queryTarget:'Armor 22'}},
-      {message:'¿Cuánto cuesta?',expected:{intent:'PRICE',queryTarget:'Armor 22'}},
-      {message:'¿Hay pocas unidades o todavía hay stock?',expected:{intent:'STOCK',queryTarget:'Armor 22'}},
-      {message:'¿Se acaba hoy? porque si no lo compro luego.'},
-      {message:'¿Es el más vendido o lo compra mucha gente?'},
-    ],
-  },
+  {id:'C50-01-INFO-ARMOR22',family:'COMMERCIAL',title:'Armor 22 info to work-use discovery',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'Lo quiero para mi trabajo.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'Trabajo en almacén y se me cae a veces.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'Cuando se cae puedo quedarme sin equipo varias horas.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},]},
+  {id:'C50-02-INFO-X13',family:'COMMERCIAL',title:'Armor X13 info then daily-use need',turns:[
+    {message:'Qué tal es el Armor X13?',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X13'}},{message:'Lo usaría todo el día para llamadas y WhatsApp.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}},{message:'Lo que más me preocupa es que la batería no llegue a la noche.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}},{message:'¿Qué batería tiene entonces?',expected:{intent:'CAPABILITY',queryTarget:'Armor X13'}},]},
+  {id:'C50-03-INFO-X12PRO',family:'COMMERCIAL',title:'Armor X12 Pro info with field context',turns:[
+    {message:'Cuéntame del Armor X12 Pro.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X12 Pro'}},{message:'Trabajo visitando clientes en la calle.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X12 Pro'}},{message:'A veces me agarra lluvia y no quiero preocuparme por el equipo.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X12 Pro'}},{message:'¿Es resistente al agua?',expected:{intent:'CAPABILITY',queryTarget:'Armor X12 Pro'}},]},
+  {id:'C50-04-INFO-25T',family:'COMMERCIAL',title:'Armor 25T Pro info for inspection work',turns:[
+    {message:'Dame información del Armor 25T Pro.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 25T Pro'}},{message:'Lo necesito para inspecciones técnicas.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 25T Pro'}},{message:'Me interesa revisar temperatura en equipos.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 25T Pro'}},{message:'¿Tiene cámara térmica?',expected:{intent:'CAPABILITY',queryTarget:'Armor 25T Pro'}},]},
+  {id:'C50-05-INFO-ATTRIBUTE-FOLLOWUPS',family:'COMMERCIAL',title:'Direct factual follow-ups stay on Armor 22',turns:[
+    {message:'Estoy viendo el Armor 22, dame sus puntos principales.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'¿Cuánta RAM tiene?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},{message:'¿Y almacenamiento?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},{message:'¿Tiene NFC?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},{message:'Gracias.'},]},
+  {id:'C50-06-INFO-NO-REPEAT-DISCOVERY',family:'COMMERCIAL',title:'Known use is not asked again',turns:[
+    {message:'Quiero información del Armor X13.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X13'}},{message:'Es para delivery.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}},{message:'Mi problema es que estoy muchas horas fuera.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}},{message:'¿Me sirve para ese uso?',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}},]},
+  {id:'C50-07-INFO-CAMERA',family:'COMMERCIAL',title:'Camera interest follows a coherent sales thread',turns:[
+    {message:'Dime qué tal el Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'También lo usaría para tomar fotos de trabajos terminados.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'Necesito que las fotos me sirvan para reportes.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'¿Qué cámara tiene?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},]},
+  {id:'C50-08-INFO-CONSTRUCTION',family:'COMMERCIAL',title:'Construction pain develops before recommendation',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'Trabajo en construcción.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'El celular se me golpea bastante en obra.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'Ya tuve que cambiar pantalla dos veces.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'¿Crees que este me conviene?',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},]},
+  {id:'C50-09-INFO-TO-PURCHASE',family:'CLOSING',title:'Info journey reaches explicit purchase without premature close',turns:[
+    {message:'Quiero ver el Armor X13.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X13'}},{message:'Es para uso diario y llamadas.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}},{message:'¿Cuánto cuesta?',expected:{intent:'PRICE',queryTarget:'Armor X13'}},{message:'¿Hay stock?',expected:{intent:'STOCK',queryTarget:'Armor X13'}},{message:'Si está disponible lo quiero comprar.',expected:{intent:'PURCHASE',queryTarget:'Armor X13'}},]},
+  {id:'C50-10-INFO-GRACIAS',family:'COMMERCIAL',title:'Thanks closes naturally without invented discovery',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'¿Tiene buena resistencia a golpes?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},{message:'Eso era lo que quería saber.'},{message:'Gracias.'},]},
+  {id:'C50-11-PAIN-FALLS',family:'COMMERCIAL',title:'Frequent falls lead from problem to implication',turns:[
+    {message:'Busco un celular para trabajo de campo.',expected:{intent:'EVALUATE_USE'}},{message:'Se me cae seguido.',expected:{intent:'EVALUATE_USE'}},{message:'Cuando se rompe pierdo horas de trabajo.',expected:{intent:'EVALUATE_USE'}},{message:'Estoy viendo el Armor 22, ¿encaja con eso?',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},]},
+  {id:'C50-12-PAIN-WATER-DUST',family:'COMMERCIAL',title:'Water and dust pain stays on the stated problem',turns:[
+    {message:'Trabajo entre polvo y lluvia.',expected:{intent:'EVALUATE_USE'}},{message:'Ya se me malogró un celular por eso.',expected:{intent:'EVALUATE_USE'}},{message:'Lo peor es quedarme incomunicado en plena jornada.',expected:{intent:'EVALUATE_USE'}},{message:'¿El Armor 22 sería buena opción para mí?',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},]},
+  {id:'C50-13-PAIN-BATTERY',family:'COMMERCIAL',title:'Battery pain becomes business impact',turns:[
+    {message:'Necesito un celular para reparto.',expected:{intent:'EVALUATE_USE'}},{message:'La batería del mío no llega a la tarde.',expected:{intent:'EVALUATE_USE'}},{message:'Tengo que dejar de trabajar para cargarlo.',expected:{intent:'EVALUATE_USE'}},{message:'¿Qué opción me recomendarías para evitar eso?',expected:{intent:'RECOMMEND'}},]},
+  {id:'C50-14-PAIN-REPAIRS',family:'COMMERCIAL',title:'Repeated repairs are acknowledged before recommendation',turns:[
+    {message:'Ya mandé reparar mi celular dos veces por caídas.',expected:{intent:'EVALUATE_USE'}},{message:'Lo uso para trabajo.',expected:{intent:'EVALUATE_USE'}},{message:'Cada reparación me deja sin equipo uno o dos días.',expected:{intent:'EVALUATE_USE'}},{message:'Quiero algo más resistente, ¿qué me conviene?',expected:{intent:'RECOMMEND'}},]},
+  {id:'C50-15-PAIN-RAIN-FIELD',family:'COMMERCIAL',title:'Field rain problem drives resistance discussion',turns:[
+    {message:'Trabajo haciendo visitas técnicas en campo.',expected:{intent:'EVALUATE_USE'}},{message:'Me toca trabajar aunque esté lloviendo.',expected:{intent:'EVALUATE_USE'}},{message:'No quiero volver a perder un equipo por humedad.',expected:{intent:'EVALUATE_USE'}},{message:'¿El Armor X13 aguanta ese tipo de uso?',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}},]},
+  {id:'C50-16-PAIN-DROPS-ACTIVE',family:'COMMERCIAL',title:'Active Armor 22 remains in context through pain discovery',turns:[
+    {message:'Estoy interesado en el Armor 22.',expected:{queryTarget:'Armor 22'}},{message:'Es para mi trabajo.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'Se me cae mucho el celular.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'Si se rompe pierdo ventas porque no puedo responder.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'¿Qué tiene el Armor 22 que me ayude con eso?',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},]},
+  {id:'C50-17-PAIN-CAMERA-WORK',family:'COMMERCIAL',title:'Work reporting pain focuses camera need',turns:[
+    {message:'Necesito un equipo para supervisión de obras.',expected:{intent:'EVALUATE_USE'}},{message:'Tomo muchas fotos para enviar avances.',expected:{intent:'EVALUATE_USE'}},{message:'Con mi celular actual salen mal y tengo que repetirlas.',expected:{intent:'EVALUATE_USE'}},{message:'¿Qué modelo me recomendarías?',expected:{intent:'RECOMMEND'}},]},
+  {id:'C50-18-PAIN-TO-BUY',family:'CLOSING',title:'Pain journey can reach explicit purchase only after decision',turns:[
+    {message:'Trabajo en construcción y rompo seguido mis celulares.',expected:{intent:'EVALUATE_USE'}},{message:'Me hace perder tiempo y dinero.',expected:{intent:'EVALUATE_USE'}},{message:'¿Qué me recomiendas que sea resistente?',expected:{intent:'RECOMMEND'}},{message:'Si el que recomiendas está disponible, quiero comprarlo.',expected:{intent:'PURCHASE'}},]},
+  {id:'C50-19-FACT-RAM',family:'TRUTH',title:'RAM question is direct and remains on product',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'¿Cuánta RAM tiene?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},{message:'¿Esa RAM es física o incluye virtual?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},]},
+  {id:'C50-20-FACT-NFC',family:'TRUTH',title:'NFC requirement stays factual',turns:[
+    {message:'Estoy viendo el Armor 25T Pro.',expected:{queryTarget:'Armor 25T Pro'}},{message:'¿Tiene NFC?',expected:{intent:'CAPABILITY',queryTarget:'Armor 25T Pro'}},{message:'Lo necesito sí o sí porque pago con el celular.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 25T Pro'}},{message:'Entonces confírmame si cumple con eso.',expected:{intent:'CAPABILITY',queryTarget:'Armor 25T Pro'}},]},
+  {id:'C50-21-FACT-BATTERY',family:'TRUTH',title:'Battery facts remain on Armor X13',turns:[
+    {message:'Cuéntame del Armor X13.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X13'}},{message:'¿Qué capacidad de batería tiene?',expected:{intent:'CAPABILITY',queryTarget:'Armor X13'}},{message:'¿Y qué carga soporta?',expected:{intent:'CAPABILITY',queryTarget:'Armor X13'}},{message:'Perfecto, gracias.'},]},
+  {id:'C50-22-FACT-RESISTANCE',family:'TRUTH',title:'Resistance questions use product RAG only',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'¿Qué certificación de resistencia tiene?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},{message:'¿Aguanta agua y polvo?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},{message:'¿Y caídas?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},]},
+  {id:'C50-23-FACT-THERMAL',family:'TRUTH',title:'Thermal questions stay grounded on 25T Pro',turns:[
+    {message:'Estoy evaluando el Armor 25T Pro.',expected:{queryTarget:'Armor 25T Pro'}},{message:'¿Tiene cámara térmica?',expected:{intent:'CAPABILITY',queryTarget:'Armor 25T Pro'}},{message:'¿Qué datos térmicos están confirmados?',expected:{intent:'CAPABILITY',queryTarget:'Armor 25T Pro'}},{message:'No me inventes nada que no esté en ficha.'},]},
+  {id:'C50-24-FACT-STORAGE',family:'TRUTH',title:'Storage and microSD follow-up do not trigger sales pressure',turns:[
+    {message:'Dime del Armor X12 Pro.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X12 Pro'}},{message:'¿Cuánto almacenamiento trae?',expected:{intent:'CAPABILITY',queryTarget:'Armor X12 Pro'}},{message:'¿Se puede ampliar con microSD?',expected:{intent:'CAPABILITY',queryTarget:'Armor X12 Pro'}},{message:'Listo, eso necesitaba.'},]},
+  {id:'C50-25-PRICE-OBJECTION-BUDGET',family:'COMMERCIAL',title:'Price objection asks budget before alternatives',turns:[
+    {message:'¿Cuánto está el Armor 22?',expected:{intent:'PRICE',queryTarget:'Armor 22'}},{message:'Está un poco caro para mí.',expected:{intent:'HANDLE_PRICE_OBJECTION',queryTarget:'Armor 22'}},{message:'Tengo hasta 1100.',expected:{intent:'BUDGET_CONSTRAINT',budget:1100}},{message:'Quiero algo resistente dentro de ese monto.',expected:{intent:'RECOMMEND_WITHIN_BUDGET',budget:1100}},]},
+  {id:'C50-26-PRICE-BUDGET-FIRST',family:'COMMERCIAL',title:'Budget and use drive recommendation',turns:[
+    {message:'Tengo máximo 1300 para un celular.',expected:{intent:'BUDGET_CONSTRAINT',budget:1300}},{message:'Lo usaré en trabajo de campo.',expected:{intent:'EVALUATE_USE',budget:1300}},{message:'Me importa más resistencia que cámara.',expected:{intent:'EVALUATE_USE',budget:1300}},{message:'¿Qué modelo entra en mi presupuesto?',expected:{intent:'RECOMMEND_WITHIN_BUDGET',budget:1300}},]},
+  {id:'C50-27-PRICE-AFTER-INFO',family:'COMMERCIAL',title:'Price comes only when explicitly requested',turns:[
+    {message:'Dame info del Armor X13.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X13'}},{message:'Lo usaría para delivery.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}},{message:'Quiero buena autonomía.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}},{message:'Ahora sí, ¿cuánto cuesta?',expected:{intent:'PRICE',queryTarget:'Armor X13'}},]},
+  {id:'C50-28-PRICE-COMPETITOR-OBJECTION',family:'COMMERCIAL',title:'Cheaper request preserves factual tradeoff',turns:[
+    {message:'¿Cuánto cuesta el Armor 22?',expected:{intent:'PRICE',queryTarget:'Armor 22'}},{message:'Necesito algo más barato.',expected:{intent:'HANDLE_PRICE_OBJECTION',queryTarget:'Armor 22'}},{message:'Mi tope es 1000 soles.',expected:{intent:'BUDGET_CONSTRAINT',budget:1000}},{message:'Pero no quiero perder resistencia.',expected:{intent:'EVALUATE_USE',budget:1000}},{message:'¿Qué alternativa real tienes?',expected:{intent:'RECOMMEND_WITHIN_BUDGET',budget:1000}},]},
+  {id:'C50-29-PRICE-STOCK-DIRECT',family:'COMMERCIAL',title:'Explicit price and stock are answered directly',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'¿Cuánto cuesta?',expected:{intent:'PRICE',queryTarget:'Armor 22'}},{message:'¿Y cuántas unidades hay?',expected:{intent:'STOCK',queryTarget:'Armor 22'}},{message:'Todavía no quiero comprar, solo estoy evaluando.'},]},
+  {id:'C50-30-NO-FAKE-SCARCITY',family:'RELIABILITY',title:'No fabricated urgency after stock question',turns:[
+    {message:'¿Cuánto está el Armor X13?',expected:{intent:'PRICE',queryTarget:'Armor X13'}},{message:'¿Hay stock?',expected:{intent:'STOCK',queryTarget:'Armor X13'}},{message:'¿Se va a acabar hoy?'},{message:'Si no, prefiero pensarlo tranquilo.'},]},
+  {id:'C50-31-COMPARE-22-X13',family:'COMPARISON',title:'Armor 22 versus X13 pair survives follow-up',turns:[
+    {message:'Compárame el Armor 22 y el Armor X13.',expected:{intent:'COMPARE'}},{message:'¿Cuál tiene mejor batería?',expected:{intent:'COMPARE'}},{message:'¿Y cuál es más resistente?',expected:{intent:'COMPARE'}},{message:'Para trabajo de campo, ¿cuál me conviene?',expected:{intent:'EVALUATE_USE'}},]},
+  {id:'C50-32-COMPARE-22-X12',family:'COMPARISON',title:'Armor 22 versus X12 Pro with budget criterion',turns:[
+    {message:'Compara el Armor 22 con el Armor X12 Pro.',expected:{intent:'COMPARE'}},{message:'Me importa resistencia y batería.'},{message:'¿Cuál de los dos encaja mejor?',expected:{intent:'COMPARE'}},{message:'Mi presupuesto máximo es 1200.',expected:{intent:'BUDGET_CONSTRAINT',budget:1200}},{message:'Con ese tope, ¿cuál elegirías?',expected:{intent:'RECOMMEND_WITHIN_BUDGET',budget:1200}},]},
+  {id:'C50-33-COMPARE-X13-X12',family:'COMPARISON',title:'Comparison responds symmetrically then recommends by use',turns:[
+    {message:'Quiero comparar Armor X13 y Armor X12 Pro.',expected:{intent:'COMPARE'}},{message:'¿Qué diferencias importantes tienen?',expected:{intent:'COMPARE'}},{message:'Yo hago delivery todo el día.',expected:{intent:'EVALUATE_USE'}},{message:'¿Cuál escogerías para ese uso?',expected:{intent:'EVALUATE_USE'}},]},
+  {id:'C50-34-COMPARE-THERMAL',family:'COMPARISON',title:'Thermal requirement controls comparison',turns:[
+    {message:'Compara el Armor 25T Pro con el Armor 22.',expected:{intent:'COMPARE'}},{message:'Necesito hacer inspecciones de temperatura.',expected:{intent:'EVALUATE_USE'}},{message:'¿Cuál cumple realmente con cámara térmica?',expected:{intent:'COMPARE'}},{message:'Entonces recomiéndame solo si está sustentado.'},]},
+  {id:'C50-35-COMPARE-PRICE',family:'COMPARISON',title:'Price is a criterion only when user asks',turns:[
+    {message:'Compárame Armor 22 y Armor X13.',expected:{intent:'COMPARE'}},{message:'Primero dime diferencias de uso y resistencia.',expected:{intent:'COMPARE'}},{message:'Ahora compara también el precio.',expected:{intent:'COMPARE'}},{message:'¿Cuál tiene mejor relación para trabajo?',expected:{intent:'COMPARE'}},]},
+  {id:'C50-36-SWITCH-22-X13',family:'REFERENCE',title:'Explicit topic switch changes active product',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'¿Qué batería tiene?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},{message:'Ahora dime del Armor X13.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X13'}},{message:'¿Y su batería?',expected:{intent:'CAPABILITY',queryTarget:'Armor X13'}},]},
+  {id:'C50-37-QUERY-NOT-SWITCH',family:'REFERENCE',title:'Question about another product does not imply purchase selection',turns:[
+    {message:'Estoy evaluando el Armor 22.',expected:{queryTarget:'Armor 22'}},{message:'¿Cuánta RAM tiene?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},{message:'¿Y el Armor X13 cuánto trae?',expected:{intent:'CAPABILITY',queryTarget:'Armor X13'}},{message:'Volviendo al Armor 22, ¿tiene NFC?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},]},
+  {id:'C50-38-SWITCH-X13-25T',family:'REFERENCE',title:'Explicit new-product info moves context to 25T Pro',turns:[
+    {message:'Cuéntame del Armor X13.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X13'}},{message:'Lo usaría para trabajo.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor X13'}},{message:'Ahora quiero ver el Armor 25T Pro.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 25T Pro'}},{message:'¿Tiene cámara térmica?',expected:{intent:'CAPABILITY',queryTarget:'Armor 25T Pro'}},]},
+  {id:'C50-39-SWITCH-AFTER-COMPARE',family:'REFERENCE',title:'User choice after comparison becomes selected context',turns:[
+    {message:'Compara Armor 22 y Armor X13.',expected:{intent:'COMPARE'}},{message:'Me importa más resistencia.'},{message:'Prefiero el Armor 22.'},{message:'¿Cuánto cuesta ese?',expected:{intent:'PRICE',queryTarget:'Armor 22'}},]},
+  {id:'C50-40-CURRENT-INTENT-OVERRIDES',family:'REFERENCE',title:'Current direct question overrides stale prior topic',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'Es para trabajo de campo.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 22'}},{message:'Ahora dime del Armor X13.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X13'}},{message:'¿Tiene NFC?',expected:{intent:'CAPABILITY',queryTarget:'Armor X13'}},{message:'Gracias.'},]},
+  {id:'C50-41-POLICY-LOCATION',family:'INSTITUTIONAL',title:'Store location comes from institutional RAG',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'¿Dónde queda su local?',expected:{intent:'POLICY'}},{message:'¿Y cuál es el horario?',expected:{intent:'POLICY'}},{message:'Perfecto, gracias.'},]},
+  {id:'C50-42-POLICY-PAYMENTS',family:'POLICY',title:'Payment policy stays separate from product facts',turns:[
+    {message:'¿Cuánto está el Armor X13?',expected:{intent:'PRICE',queryTarget:'Armor X13'}},{message:'¿Qué medios de pago aceptan?',expected:{intent:'POLICY'}},{message:'¿Puedo pagar con tarjeta?',expected:{intent:'POLICY'}},{message:'Listo, sigo evaluando.'},]},
+  {id:'C50-43-POLICY-SHIPPING',family:'POLICY',title:'Shipping policy answers timing without inventing stock',turns:[
+    {message:'Estoy viendo el Armor 22.',expected:{queryTarget:'Armor 22'}},{message:'¿Hacen envíos a provincia?',expected:{intent:'POLICY'}},{message:'¿Cuánto suele demorar?',expected:{intent:'POLICY'}},{message:'Eso era todo por ahora.'},]},
+  {id:'C50-44-POLICY-WARRANTY',family:'POLICY',title:'Warranty overlay returns to product context safely',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'¿Qué garantía tiene?',expected:{intent:'WARRANTY',queryTarget:'Armor 22'}},{message:'¿Y dónde queda la tienda?',expected:{intent:'POLICY'}},{message:'Volviendo al equipo, ¿tiene NFC?',expected:{intent:'CAPABILITY',queryTarget:'Armor 22'}},]},
+  {id:'C50-45-RESERVE-PICKUP',family:'CLOSING',title:'Armor 22 purchase and pickup reservation with fictitious QA data',turns:[
+    {message:'Dame info del Armor 22.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 22'}},{message:'¿Cuánto cuesta?',expected:{intent:'PRICE',queryTarget:'Armor 22'}},{message:'¿Hay stock?',expected:{intent:'STOCK',queryTarget:'Armor 22'}},{message:'Lo quiero comprar y prefiero recogerlo en el local.',expected:{intent:'PURCHASE',queryTarget:'Armor 22'}},{message:'Mi DNI ficticio de QA es 70001234.'},{message:'Mi nombre ficticio es QA Cliente Uno.'},{message:'Para la prueba registra Av. QA 101, Lima.'},{message:'Dale.'},]},
+  {id:'C50-46-RESERVE-DELIVERY',family:'CLOSING',title:'Armor X13 purchase and delivery reservation with fictitious QA data',turns:[
+    {message:'Quiero información del Armor X13.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X13'}},{message:'¿Cuánto cuesta y hay stock?',expected:{queryTarget:'Armor X13'}},{message:'Si está disponible, lo quiero comprar con envío.',expected:{intent:'PURCHASE',queryTarget:'Armor X13'}},{message:'DNI ficticio QA: 74005678.'},{message:'Nombre ficticio: QA Prueba Dos.'},{message:'Dirección ficticia: Jr. QA 202, Ate.'},{message:'Sí.'},]},
+  {id:'C50-47-RESERVE-AFTER-RECOMMEND',family:'CLOSING',title:'Recommendation reaches purchase with complete fictitious reservation data',turns:[
+    {message:'Busco un celular resistente para trabajo.',expected:{intent:'RECOMMEND'}},{message:'Se me cae seguido y no quiero volver a repararlo.',expected:{intent:'EVALUATE_USE'}},{message:'¿Cuál me recomiendas?',expected:{intent:'RECOMMEND'}},{message:'Me lo llevo, quiero comprar el que recomiendas.',expected:{intent:'PURCHASE'}},{message:'DNI ficticio 75009876.'},{message:'Soy QA Venta Tres, nombre ficticio.'},{message:'Dirección de prueba: Calle QA 303, Surco.'},{message:'Listo.'},]},
+  {id:'C50-48-RESERVE-25T',family:'CLOSING',title:'25T Pro factual evaluation then explicit reservation',turns:[
+    {message:'Dame info del Armor 25T Pro.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor 25T Pro'}},{message:'Necesito cámara térmica para inspecciones.',expected:{intent:'EVALUATE_USE',queryTarget:'Armor 25T Pro'}},{message:'¿Tiene stock?',expected:{intent:'STOCK',queryTarget:'Armor 25T Pro'}},{message:'Quiero comprarlo y reservarlo.',expected:{intent:'PURCHASE',queryTarget:'Armor 25T Pro'}},{message:'Documento ficticio QA 70004321.'},{message:'Nombre ficticio QA Cliente Cuatro.'},{message:'Dirección ficticia Av. QA 404, San Miguel.'},{message:'Dale.'},]},
+  {id:'C50-49-RESERVE-X12',family:'CLOSING',title:'X12 Pro price journey completes reservation with fake details',turns:[
+    {message:'Cuéntame del Armor X12 Pro.',expected:{intent:'PRODUCT_INFO',queryTarget:'Armor X12 Pro'}},{message:'¿Cuánto cuesta?',expected:{intent:'PRICE',queryTarget:'Armor X12 Pro'}},{message:'Quiero comprarlo si tienen stock.',expected:{intent:'PURCHASE',queryTarget:'Armor X12 Pro'}},{message:'DNI ficticio: 74008765.'},{message:'Nombre QA Prueba Cinco, solo para test.'},{message:'Entrega ficticia en Jr. QA 505, Miraflores.'},{message:'Ok.'},]},
+  {id:'C50-50-RESERVE-22-DELIVERY',family:'CLOSING',title:'Armor 22 final purchase keeps delivery choice through confirmation',turns:[
+    {message:'Estoy decidido por el Armor 22.',expected:{queryTarget:'Armor 22'}},{message:'Confírmame precio y stock.',expected:{queryTarget:'Armor 22'}},{message:'Quiero comprarlo con envío.',expected:{intent:'PURCHASE',queryTarget:'Armor 22'}},{message:'DNI de prueba 75006543.'},{message:'Nombre ficticio QA Venta Seis.'},{message:'Dirección ficticia Calle QA 606, San Borja.'},{message:'Sí.'},]},
 ];
 
 export const COMMERCIAL_50_TURN_COUNT=commercial50Scenarios.reduce((sum,scenario)=>sum+scenario.turns.length,0);
-if(COMMERCIAL_50_TURN_COUNT!==50)throw new Error(`COMMERCIAL 50 must contain exactly 50 customer turns; got ${COMMERCIAL_50_TURN_COUNT}`);
+if(commercial50Scenarios.length!==50)throw new Error(`COMMERCIAL 50 must contain exactly 50 conversations; got ${commercial50Scenarios.length}`);
+if(COMMERCIAL_50_TURN_COUNT<200)throw new Error(`COMMERCIAL 50 must contain at least 200 customer turns; got ${COMMERCIAL_50_TURN_COUNT}`);

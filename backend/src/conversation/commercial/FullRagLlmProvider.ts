@@ -178,7 +178,7 @@ function painContext(input:LlmWriteInput):boolean{
 function currentMessagePain(message:string):string{
   const current=fold(message);
   if(/repar/.test(current))return /\b(?:dos|2)\b/.test(current)?'Si ya lo reparaste dos veces por caídas, lo importante es no volver al mismo gasto.':'Si ya lo reparaste varias veces, lo importante es no volver al mismo gasto.';
-  if(/caida|construccion|obra/.test(current))return'En obra una caída pasa en un segundo; conviene que el celular esté hecho para aguantar ese ritmo.';
+  if(/se me cae|\bcae\b|caida|golpe/.test(current))return'Si se te cae seguido, tiene sentido fijarnos primero en qué tan bien aguanta los golpes.';
   if(/bateria|cargador|no llega a la tarde/.test(current))return'Si a media tarde ya buscas dónde cargarlo, necesitas más margen para terminar la jornada sin estar pendiente de la batería.';
   if(/polvo|lluvia|agua|humedad/.test(current))return'Si trabajas entre polvo o lluvia, conviene que el equipo esté preparado para ese ambiente.';
   return'';
@@ -200,14 +200,32 @@ function compactPolicyCore(input:LlmWriteInput,core:string):string{
   return clean?`Estamos en ${clean}.`:core;
 }
 function policyResumeResponse(input:LlmWriteInput,core:string):string{return[compactPolicyCore(input,core),softCloseQuestion(input)].filter(Boolean).join(' ').trim();}
+function missingFactQuestion(input:LlmWriteInput):string{
+  const missing=fold(input.missingFact??input.pendingQuestion??input.state?.pendingMissingFact??'');
+  const context=fold(`${input.message} ${input.useCase??input.state?.useCase??''} ${input.problem??input.state?.problem??''}`);
+  if(/impacto|implicacion|consecuencia/.test(missing)){
+    if(/caida|golpe|repar/.test(context))return'¿Y cuando pasa, qué te afecta más: que se dañe o que te haga perder tiempo en el trabajo?';
+    if(/bateria|cargador|autonomia/.test(context))return'¿Y cuando te quedas sin batería, qué es lo que más te complica durante la jornada?';
+    if(/polvo|lluvia|agua|humedad/.test(context))return'¿Y cuando eso pasa, qué consecuencia te genera durante el trabajo?';
+    return'¿Y qué consecuencia te genera eso en el día a día?';
+  }
+  if(/problema/.test(missing))return'¿Qué es lo que más te complica con tu celular actual?';
+  if(/prioridad|criterio/.test(missing))return'¿Qué sería lo más importante para ti al elegir el equipo?';
+  if(/presupuesto|tope/.test(missing))return'¿Cuál es tu presupuesto máximo?';
+  if(/modelo|producto/.test(missing))return'¿Qué modelo estás viendo?';
+  if(/uso/.test(missing))return'¿Para qué lo usarías principalmente?';
+  return'';
+}
 function naturalFallback(input:LlmWriteInput,core:string):string{
   const lead=currentMessagePain(input.message);
-  const question=input.commercialResponsePlan?.exactNba==='SOFT_CLOSE'?softCloseQuestion(input):'';
+  const nba=String(input.commercialResponsePlan?.exactNba??input.finalExecutableNba??input.nextBestAction??'').toUpperCase();
+  const question=nba==='SOFT_CLOSE'?softCloseQuestion(input):nba==='ASK_MISSING_FACT'?missingFactQuestion(input):'';
   return [lead,core,question].filter(Boolean).join(' ').trim();
 }
 function shouldForceHumanPainResponse(input:LlmWriteInput,core:string):boolean{
   const intent=String(input.intent??'').toUpperCase();
-  return Boolean(core)&&painContext(input)&&['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
+  const nba=String(input.commercialResponsePlan?.exactNba??input.finalExecutableNba??input.nextBestAction??'').toUpperCase();
+  return Boolean(core)&&nba!=='ASK_MISSING_FACT'&&painContext(input)&&['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);
 }
 function missesRequiredCloseResult(text:string,input:LlmWriteInput):boolean{
   const plan=input.commercialResponsePlan;if(plan?.exactNba!=='SOFT_CLOSE')return false;

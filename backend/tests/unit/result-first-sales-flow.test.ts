@@ -62,9 +62,9 @@ test('deterministic price policy returns price plus availability and asks fulfil
   assert.doesNotMatch(answer,/revisar stock|quieres avanzar/i);
 });
 
-test('deterministic stock policy also returns known price and fulfillment instead of another stock question',()=>{
+test('deterministic stock policy returns availability and fulfillment without repeating price',()=>{
   const answer=stockResponse({product:'Armor 22',shortName:'Armor 22',price:1399,stock:9,currency:'PEN',source:'FAKE_TEST_DATA'},null,true);
-  assert.match(answer,/S\/\s*1399/i);
+  assert.doesNotMatch(answer,/S\/\s*1399|\b1399\b/i);
   assert.match(answer,/disponib/i);
   assert.match(answer,/env[ií]o/i);
   assert.match(answer,/recoger|recojo|local/i);

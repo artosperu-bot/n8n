@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluateSpinReadiness } from '../../src/conversation/nba/SpinProgression.ts';
 import { nextBestAction } from '../../src/conversation/nba/NextBestAction.ts';
+import { evaluatePostAnswerCommercialProgression } from '../../src/conversation/nba/PostAnswerCommercialProgression.ts';
 import { prepareCommercialWriteInput } from '../../src/conversation/commercial/CommercialWriteContract.ts';
 import { extractCommercialFacts } from '../../src/conversation/commercial/CommercialFacts.ts';
 import { buildGroundedDirectAnswer } from '../../src/conversation/commercial/GroundedDirectAnswer.ts';
 import { resolveIntentPlan } from '../../src/conversation/intent/IntentPlan.ts';
 import { validateTurnDecision } from '../../src/conversation/decision/DecisionValidator.ts';
+import { reduceState } from '../../src/conversation/state/StateReducer.ts';
 
 function turnDecision(primaryIntent:string):any{
   return {
@@ -145,4 +147,59 @@ test('worker suitability produces a grounded answer before any discovery questio
   assert.match(answer,/Armor 22/i);
   assert.match(answer,/trabajo/i);
   assert.match(answer,/IP68|1\.5 m|6600 mAh/i);
+});
+
+test('work use plus fall problem continues discovery before price or fulfillment close',()=>{
+  const state={
+    activeProduct:'Armor 22',
+    useCase:'trabajo',
+    problem:'caidas_frecuentes',
+    spinFacts:['uso:trabajo','problema:caidas_frecuentes'],
+  } as any;
+  assert.equal(evaluateSpinReadiness(state).nextMissingFact,'impacto');
+  assert.equal(nextBestAction('EVALUATE_USE',state),'ASK_MISSING_FACT');
+  const progression=evaluatePostAnswerCommercialProgression({
+    intent:'EVALUATE_USE',
+    currentNba:'ASK_MISSING_FACT',
+    state,
+    resolvedProduct:'Armor 22',
+    verifiedCurrentAnswer:true,
+  });
+  assert.equal(progression.candidateNba,'ASK_MISSING_FACT');
+  assert.equal(progression.reason,'SPIN_NEEDS_IMPLICATION');
+});
+
+test('decision validator removes the primary intent from secondary intents',()=>{
+  const planner={...turnDecision('EVALUATE_USE'),secondaryIntents:['EVALUATE_USE','PRODUCT_INFO']};
+  const decision=validateTurnDecision(planner,{activeProduct:'Armor 22'},['Armor 22'],turnDecision('EVALUATE_USE'));
+  assert.deepEqual(decision.secondaryIntents,['PRODUCT_INFO']);
+});
+
+test('decision validator does not persist a singleton comparison product',()=>{
+  const planner={...turnDecision('EVALUATE_USE'),comparisonProducts:['Armor 22']};
+  const decision=validateTurnDecision(planner,{activeProduct:'Armor 22'},['Armor 22'],turnDecision('EVALUATE_USE'));
+  assert.deepEqual(decision.comparisonProducts,[]);
+});
+
+test('evaluate-use attributes come from the current deterministic message instead of planner feature dumps',()=>{
+  const planner={...turnDecision('EVALUATE_USE'),attributes:['8 GB RAM + HASTA 8 GB VIRTUAL','256 GB INTERNO','6600 MAH BATERÍA']};
+  const noAttribute=validateTurnDecision(planner,{activeProduct:'Armor 22',useCase:'trabajo'},['Armor 22'],turnDecision('EVALUATE_USE'));
+  assert.deepEqual(noAttribute.attributes,[]);
+
+  const deterministic={...turnDecision('EVALUATE_USE'),attributes:['RESISTENCIA']};
+  const resistance=validateTurnDecision(planner,{activeProduct:'Armor 22',useCase:'trabajo'},['Armor 22'],deterministic);
+  assert.deepEqual(resistance.attributes,['RESISTENCIA']);
+});
+
+test('exploring one product does not create a comparison pair',()=>{
+  const next=reduceState({}, {
+    lastIntent:'PRODUCT_INFO',
+    lastRoute:'RAG_PRODUCT',
+    queryTarget:'Armor 22',
+    salientProduct:'Armor 22',
+    activeProduct:'Armor 22',
+    lastUserMessage:'info del armor 22',
+  } as any);
+  assert.deepEqual(next.exploredProducts,['Armor 22']);
+  assert.deepEqual(next.comparisonProducts??[],[]);
 });

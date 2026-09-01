@@ -44,12 +44,12 @@ test('overview uses six separated commercial blocks, includes virtual RAM and on
   assert.equal((result!.answer.match(/En la práctica:/g)??[]).length,1);
 });
 
-test('state remembers explored products by recency without selecting or recommending them',()=>{
+test('state remembers explored products by recency without selecting, recommending or comparing them',()=>{
   const first=reduceState({}, {lastIntent:'PRODUCT_INFO',lastRoute:'RAG_PRODUCT',queryTarget:'Armor 22',salientProduct:'Armor 22',activeProduct:'Armor 22'} as any);
   assert.deepEqual(first.exploredProducts,['Armor 22']);
   const second=reduceState(first,{lastIntent:'PRODUCT_INFO',lastRoute:'RAG_PRODUCT',queryTarget:'Armor X13',salientProduct:'Armor X13',activeProduct:'Armor X13'} as any);
   assert.deepEqual(second.exploredProducts,['Armor 22','Armor X13']);
-  assert.deepEqual(second.comparisonProducts,['Armor 22','Armor X13']);
+  assert.deepEqual(second.comparisonProducts??[],[]);
   assert.equal(second.selectedProduct??null,null);
   assert.equal(second.recommendedProduct??null,null);
 });

@@ -132,15 +132,11 @@ export function stockResponse(quote:ProductQuote|null,requestedQuantity?:number|
   const product=shortProduct(quote.shortName??quote.product);
   if(requestedQuantity!=null&&requestedQuantity>1){
     const direct=quote.stock>=requestedQuantity?'Sí, está disponible para esa cantidad.':'Para esa cantidad necesito validar disponibilidad.';
-    const price=quote.price!=null?` ${product} está a S/ ${quote.price}.`:'';
     const fulfillment=softClose&&quote.stock>=requestedQuantity?' ¿Prefieres envío o recogerlo en nuestro local?':'';
-    return`${direct}${price}${fulfillment}`;
+    return`${direct}${fulfillment}`;
   }
   if(quote.stock<=0)return'Ahora no está disponible.';
-  if(softClose){
-    const price=quote.price!=null?`${product} está a S/ ${quote.price} y sí está disponible.`:'Sí, está disponible.';
-    return`${price} ¿Prefieres envío o recogerlo en nuestro local?`;
-  }
+  if(softClose)return'Sí, está disponible. ¿Prefieres envío o recogerlo en nuestro local?';
   const continuation=renderCommercialMove(commercialMove,'STOCK');
   return continuation?`Sí, está disponible. ${continuation}`:'Sí, está disponible.';
 }
@@ -166,4 +162,10 @@ export function quoteRequestResponse(state:ConversationState):string{
   return`Con ${state.quantity} unidades de ${shortProduct(product)}, ya tengo lo necesario para que un asesor continúe con la cotización.`;
 }
 export function ambiguousReferenceResponse():string{return'¿A qué modelo te refieres?';}
+export function sqlUnavailableResponse(product:string|null|undefined):string{
+  const name=String(product??'').trim();
+  return name
+    ?`Ahora no puedo confirmar el precio, stock o disponibilidad de ${name}. Prefiero no darte un dato sin confirmar.`
+    :'Ahora no puedo confirmar ese dato de precio, stock o disponibilidad. Prefiero no darte un dato sin confirmar.';
+}
 export function noEvidenceResponse():string{return'No tengo confirmado ese dato exacto.';}

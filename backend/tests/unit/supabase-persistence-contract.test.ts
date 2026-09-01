@@ -6,6 +6,11 @@ function jsonResponse(body:unknown,status=200){
   return new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json'}});
 }
 
+const FORBIDDEN_CONTEXT_KEYS=[
+  'producto_activo','producto_objetivo_turno','producto_recomendado','cliente','venta','conversacion','debug_trace',
+  'actividad_activa','problema_activo','senal_compra','context_version','customer','commercial','pendingQuestion','pendingAction',
+] as const;
+
 test('atomic persistence omits retired fields from active conversation and context payloads',async()=>{
   let persisted:any=null;
   const fetcher:typeof fetch=async(input,init)=>{
@@ -41,10 +46,16 @@ test('atomic persistence omits retired fields from active conversation and conte
     requiresSql:true,
     requiresRag:false,
     lastSqlTools:['dbo.sp_BuscarProductosVenta'],
+    customerType:'BUSINESS',
+    sector:'construccion',
+    useCase:'trabajo_campo',
+    problem:'golpes y polvo',
+    purchaseSignal:true,
     levelOfInterest:8,
     comparisonProducts:['Armor 22'],
-    priorities:[],
-    spinFacts:[],
+    priorities:['resistencia'],
+    spinFacts:['uso:trabajo_campo'],
+    lastDecisionTrace:{finalIntent:'PRICE'} as any,
   });
 
   assert.ok(persisted);
@@ -63,4 +74,21 @@ test('atomic persistence omits retired fields from active conversation and conte
   assert.equal(conversation.confianza_producto,0.95);
   assert.equal(conversation.nivel_interes,8);
   assert.equal(conversation.requiere_sql,true);
+
+  const canonical=context.contexto as Record<string,unknown>;
+  assert.equal(canonical.activeProduct,'Armor 22');
+  assert.equal(canonical.queryTarget,'Armor 22');
+  assert.equal(canonical.useCase,'trabajo_campo');
+  assert.equal(canonical.problem,'golpes y polvo');
+  assert.equal(canonical.purchaseSignal,true);
+  assert.deepEqual(canonical.lastDecisionTrace,{finalIntent:'PRICE'});
+  for(const forbidden of FORBIDDEN_CONTEXT_KEYS){
+    assert.equal(Object.hasOwn(canonical,forbidden),false,`contexto.${forbidden}`);
+  }
+
+  // Derived SQL columns remain populated; they are projections, not JSON state authority.
+  assert.equal(context.actividad_activa,'trabajo_campo');
+  assert.equal(context.problema_activo,'golpes y polvo');
+  assert.equal(context.senal_compra,true);
+  assert.deepEqual(conversation.contexto_comercial_snapshot,canonical);
 });

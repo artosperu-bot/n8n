@@ -105,19 +105,17 @@ test('factual intents accept RELATED_VALUE as their final compatible NBA',()=>{
   assert.equal(isNbaCompatible('POLICY','RELATED_VALUE',{}),false);
 });
 
-test('stock keeps RELATED_VALUE and selects a price-supported continuation without exposing the price',()=>{
+test('stock does not manufacture price as an N+1 continuation',()=>{
   const quote={product:'Producto Prueba',shortName:'Producto Prueba',price:899,stock:3,currency:'PEN',source:'FAKE_TEST_DATA'};
   const prepared=prepareCommercialWriteInput({
     message:'¿tienen stock?',intent:'STOCK',state:{activeProduct:'Producto Prueba'},
     decision:{nextBestAction:'RELATED_VALUE'} as any,allowedProducts:['Producto Prueba'],quote,
   });
-  assert.equal(prepared.nextBestAction,'RELATED_VALUE');
-  assert.equal(prepared.commercialMove?.kind,'RELATED_VERIFIED_FACT');
-  assert.ok(prepared.commercialMove?.verifiedFacts.some(fact=>fact.key==='PRECIO'));
+  assert.equal(prepared.nextBestAction,'ANSWER_ONLY');
+  assert.equal(prepared.commercialMove,null);
   const answer=stockResponse(quote,null,false,prepared.commercialMove??null);
   assert.match(answer,/disponible/i);
-  assert.match(answer,/precio/i);
-  assert.doesNotMatch(answer,/899/);
+  assert.doesNotMatch(answer,/precio|899/i);
 });
 
 test('an attribute without customer context can use one distinct verified related fact',()=>{

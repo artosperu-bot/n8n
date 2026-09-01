@@ -46,7 +46,7 @@ function selectCommercialMove(input:LlmWriteInput,verifiedFacts:LlmWriteInput['v
     return{action:'RELATED_VALUE',kind:'CONTEXTUAL_BENEFIT',targetProduct:resolvedProduct,intensity,reason:'VERIFIED_FEATURE_WITH_CUSTOMER_CONTEXT',basis:['VERIFIED_PRODUCT_FEATURE','CUSTOMER_CONTEXT'],attribute,verifiedFacts:verifiedFeatures,relevantCustomerContext:realContext};
   }
   const directIntentKeys:Record<string,Set<string>>={
-    PRICE:new Set(['PRECIO']),PRICE_AVAILABILITY:new Set(['PRECIO','DISPONIBILIDAD']),STOCK:new Set(['DISPONIBILIDAD']),
+    PRICE:new Set(['PRECIO']),PRICE_AVAILABILITY:new Set(['PRECIO','DISPONIBILIDAD']),STOCK:new Set(['DISPONIBILIDAD','PRECIO']),
   };
   const relatedFact=(verifiedFacts??[]).find(fact=>{
     if(fact.key==='PRODUCTO'||fact.domain==='INSTITUTIONAL_RAG')return false;
@@ -157,7 +157,7 @@ export function prepareCommercialWriteInput(input:LlmWriteInput):LlmWriteInput{
   const allVerifiedFeatures=input.verifiedFeatures??verifiedFacts.filter(fact=>fact.domain==='PRODUCT_RAG');
   const attributeFeatures=attribute?allVerifiedFeatures.filter(fact=>directAttributeFamily(attribute,fact)):[];
   const verifiedFeatures=['CAPABILITY','ATTRIBUTE'].includes(intentCode)&&attributeFeatures.length?attributeFeatures:allVerifiedFeatures;
-  const directAnswer=input.directAnswer??buildGroundedDirectAnswer({message:input.message,intent:input.intent,attribute,resolvedProduct:resolvedTurnProduct,quote:input.quote,rag:input.rag,verifiedFacts});
+  const directAnswer=input.directAnswer??buildGroundedDirectAnswer({message:input.message,intent:input.intent,attribute,resolvedProduct:resolvedTurnProduct,quote:input.quote,rag:input.rag,verifiedFacts,useCase,problem});
   const moveContext={useCase,problem,priorities,budget,objection};
   const commercialMove=selectCommercialMove(input,verifiedFacts,verifiedFeatures,attribute,resolvedTurnProduct,moveContext,levelOfInterest);
   const allowedProducts=unique(input.allowedProducts??[]);
