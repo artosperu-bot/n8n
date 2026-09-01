@@ -1,0 +1,172 @@
+name: Apply Round2 Conversation Root Fixes
+
+on:
+  push:
+    branches:
+      - qa/apply-round2-root-fixes-20260901
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/canonical-conversation-state
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install
+        working-directory: backend
+        run: npm ci
+      - name: Verify new regressions are RED before implementation
+        working-directory: backend
+        shell: bash
+        run: |
+          set +e
+          node --experimental-strip-types --test tests/unit/live-round2-commercial-regressions.test.ts
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "Expected RED before implementation, but tests were already green"
+            exit 1
+          fi
+          echo "RED confirmed"
+      - name: Apply bounded root fixes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new, count=1):
+              p=Path(path)
+              text=p.read_text(encoding='utf-8')
+              actual=text.count(old)
+              if actual < count:
+                  raise SystemExit(f'{path}: expected {count} match(es), found {actual}: {old[:160]!r}')
+              text=text.replace(old,new,count)
+              p.write_text(text,encoding='utf-8')
+
+          # 1. A stated battery failure is the problem; do not ask for the problem again.
+          replace(
+            'backend/src/conversation/commercial/CommercialFacts.ts',
+            "else if (/\\bbateria\\b[^.!?]{0,65}\\b(se\\s+acaba|no\\s+aguanta|dura\\s+poco|no\\s+llega\\s+a\\s+la\\s+tarde)\\b|\\bno\\s+llega\\s+a\\s+la\\s+tarde\\b[^.!?]{0,30}\\bbateria\\b|\\bcasi\\s+no\\s+tengo\\s+donde\\s+cargar/.test(t)) problem = 'autonomia_insuficiente';",
+            "else if (/\\bbateria\\b[^.!?]{0,65}\\b(se\\s+acaba|no\\s+aguanta|dura\\s+poco|no\\s+llega\\s+a\\s+la\\s+tarde)\\b|\\bno\\s+llega\\s+a\\s+la\\s+tarde\\b[^.!?]{0,30}\\bbateria\\b|\\bcasi\\s+no\\s+tengo\\s+donde\\s+cargar|\\b(?:se\\s+queda|me\\s+quedo|nos\\s+quedamos|quedarme|quedarnos)\\s+sin\\s+bateria\\b/.test(t)) problem = 'autonomia_insuficiente';"
+          )
+
+          # 2. Explicit deterministic comparison outranks a planner downgrade.
+          replace(
+            'backend/src/conversation/decision/DecisionValidator.ts',
+            "const comparisonAuthority=fallbackIntent==='COMPARE'||(state.comparisonProducts?.length??0)>=2;\n  if(primaryIntent==='COMPARE'&&!comparisonAuthority)primaryIntent=fallbackIntent??'OTHER';",
+            "const comparisonAuthority=fallbackIntent==='COMPARE'||(state.comparisonProducts?.length??0)>=2;\n  if(fallbackIntent==='COMPARE')primaryIntent='COMPARE';\n  if(primaryIntent==='COMPARE'&&!comparisonAuthority)primaryIntent=fallbackIntent??'OTHER';"
+          )
+          replace(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            "const comparisonAuthority=deterministicDecision.primaryIntent==='COMPARE'&&(baseState.comparisonProducts?.length??0)>=2;",
+            "const comparisonAuthority=deterministicDecision.primaryIntent==='COMPARE';"
+          )
+
+          # 3. A context/priority statement is not permission to close EVALUATE_USE.
+          replace(
+            'backend/src/conversation/nba/PostAnswerCommercialProgression.ts',
+            "const consultative=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);",
+            "const consultative=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(intent);\n  const hasImplication=String(state.lastSpinContribution??'').toUpperCase()==='IMPLICACION'||(state.spinFacts??[]).some(value=>/^(?:implicacion|impacto):/i.test(String(value)));\n  const hasChosenSolution=Boolean(state.selectedProduct||state.recommendedProduct);\n  const contextOnlyEvaluate=intent==='EVALUATE_USE'&&!state.problem&&!hasImplication&&!hasChosenSolution&&!spin.nextMissingFact;"
+          )
+          replace(
+            'backend/src/conversation/nba/PostAnswerCommercialProgression.ts',
+            "if(completedRecommendation){\n    return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'COMPLETED_RECOMMENDATION_READY_FOR_COMMERCIAL_RESULT'};\n  }\n\n  if(consultative&&spin.nextMissingFact){",
+            "if(completedRecommendation){\n    return{level:'HIGH',candidateNba:'SOFT_CLOSE',reason:'COMPLETED_RECOMMENDATION_READY_FOR_COMMERCIAL_RESULT'};\n  }\n\n  if(contextOnlyEvaluate)return{level:'LOW',candidateNba:'ANSWER_ONLY',reason:'EVALUATE_CONTEXT_ONLY_NO_CLOSE'};\n\n  if(consultative&&spin.nextMissingFact){"
+          )
+
+          # 4. STOCK answers stock only; fulfillment may follow but price is never repeated.
+          replace(
+            'backend/src/conversation/commercial/ResponsePolicy.ts',
+            "const price=quote.price!=null?` ${product} está a S/ ${quote.price}.`:'';\n    const fulfillment=softClose&&quote.stock>=requestedQuantity?' ¿Prefieres envío o recogerlo en nuestro local?':'';\n    return`${direct}${price}${fulfillment}`;",
+            "const fulfillment=softClose&&quote.stock>=requestedQuantity?' ¿Prefieres envío o recogerlo en nuestro local?':'';\n    return`${direct}${fulfillment}`;"
+          )
+          replace(
+            'backend/src/conversation/commercial/ResponsePolicy.ts',
+            "if(softClose){\n    const price=quote.price!=null?`${product} está a S/ ${quote.price} y sí está disponible.`:'Sí, está disponible.';\n    return`${price} ¿Prefieres envío o recogerlo en nuestro local?`;\n  }",
+            "if(softClose)return'Sí, está disponible. ¿Prefieres envío o recogerlo en nuestro local?';"
+          )
+
+          # 5. Explicit reserve/separate confirmation is purchase authority, not policy.
+          replace(
+            'backend/src/conversation/intent/IntentPlan.ts',
+            "|| has(/\\bya\\s+(?:el|la)\\s+(?:[a-z]*\\d+[a-z0-9 -]{0,24}|\\d{2,})\\s+quiero\\b/);",
+            "|| has(/\\bya\\s+(?:el|la)\\s+(?:[a-z]*\\d+[a-z0-9 -]{0,24}|\\d{2,})\\s+quiero\\b/)\n    || has(/\\b(?:si\\s*,?\\s*)?(?:quiero|deseo|quisiera)\\s+(?:reservar|separar)(?:lo|la)?\\b|\\b(?:lo|la)\\s+quiero\\s+(?:reservar|separar)\\b/);"
+          )
+          replace(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            "return /\\b(?:continu|seguir|retom|avanz)\\w*\\b[^.!?]{0,45}\\b(?:reserva|separacion)\\b/.test(text)\n    || /\\b(?:reserva|separacion)\\b[^.!?]{0,45}\\b(?:continu|seguir|retom|avanz)\\w*\\b/.test(text);",
+            "return /\\b(?:continu|seguir|retom|avanz)\\w*\\b[^.!?]{0,45}\\b(?:reserva|separacion)\\b/.test(text)\n    || /\\b(?:reserva|separacion)\\b[^.!?]{0,45}\\b(?:continu|seguir|retom|avanz)\\w*\\b/.test(text)\n    || /\\b(?:si\\s*,?\\s*)?(?:quiero|deseo|quisiera)\\s+(?:reservar|separar)(?:lo|la)?\\b/.test(text);"
+          )
+          replace(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            "if(isReservationAbandonment(message))return{stage:null,document:null,name:null,address:null,cancelled:true,answer:'Entendido, detuve la captura de datos para la reserva. La reserva no llegó a confirmarse.',nba:'ANSWER_ONLY',route:'RESERVATION_CANCELLED'};\n\n  const incoming=extractReservationBundle(raw);",
+            "if(isReservationAbandonment(message))return{stage:null,document:null,name:null,address:null,cancelled:true,answer:'Entendido, detuve la captura de datos para la reserva. La reserva no llegó a confirmarse.',nba:'ANSWER_ONLY',route:'RESERVATION_CANCELLED'};\n\n  if(isExplicitReservationOperation(message)){\n    const existing={document:state.reservationDocument??null,name:state.reservationCustomerName??null,address:state.reservationAddress??null};\n    const missing=reservationBundleMissing(existing);\n    if(missing.length)return{stage:reservationBundleStage(existing),document:existing.document,name:existing.name,address:existing.address,answer:reservationMissingPrompt(missing),nba:'COLLECT_RESERVATION_DATA',route:'RESERVATION_DATA'};\n  }\n\n  const incoming=extractReservationBundle(raw);"
+          )
+
+          # 6. Ground EVALUATE_USE in the actual pain/use: battery continuity or night camera.
+          replace(
+            'backend/src/conversation/commercial/GroundedDirectAnswer.ts',
+            "const batteryPain=/\\bbateria\\b[^.!?]{0,60}\\b(?:se\\s+acaba|no\\s+aguanta|dura\\s+poco|no\\s+llega)\\b|\\bcasi\\s+no\\s+tengo\\s+donde\\s+cargar\\b/.test(asked);const contextualFit=",
+            "const batteryPain=/\\bautonomia\\s+insuficiente\\b|\\bbateria\\b[^.!?]{0,60}\\b(?:se\\s+acaba|no\\s+aguanta|dura\\s+poco|no\\s+llega)\\b|\\bcasi\\s+no\\s+tengo\\s+donde\\s+cargar\\b|\\b(?:se\\s+queda|me\\s+quedo|nos\\s+quedamos|quedarme|quedarnos)\\s+sin\\s+bateria\\b/.test(asked);const nightPhoto=/\\b(?:foto|fotos|camara)\\b[^.!?]{0,45}\\b(?:noche|nocturn)\\w*\\b|\\b(?:noche|nocturn)\\w*\\b[^.!?]{0,45}\\b(?:foto|fotos|camara)\\b/.test(asked);const contextualFit="
+          )
+          replace(
+            'backend/src/conversation/commercial/GroundedDirectAnswer.ts',
+            "const capacity=val(input,'BATERIA_MAH',/(?:capacidad(?:\\s+de\\s+bater[ií]a)?|bater[ií]a)\\s*[:=]?\\s*([0-9.,]+\\s*mAh)/i);const certs:string[]=[];",
+            "const capacity=val(input,'BATERIA_MAH',/(?:capacidad(?:\\s+de\\s+bater[ií]a)?|bater[ií]a)\\s*[:=]?\\s*([0-9.,]+\\s*mAh)/i);const night=val(input,'CAMARA_NOCTURNA_MP',/(?:c[aá]mara\\s+de\\s+)?visi[oó]n\\s+nocturna\\s*[:=]?\\s*([0-9.,]+\\s*MP)/i)??val(input,'CAMARA_NOCTURNA_MP',/c[aá]mara\\s+nocturna\\s*[:=]?\\s*([0-9.,]+\\s*MP)/i);const nightSensor=val(input,'CAMARA_NOCTURNA_SENSOR',/sensor\\s+c[aá]mara\\s+nocturna\\s*[:=]?\\s*([^.;\\n]+)/i);const certs:string[]=[];"
+          )
+          replace(
+            'backend/src/conversation/commercial/GroundedDirectAnswer.ts',
+            "if(!strengths.length)return null;if(damage)return",
+            "if(nightPhoto&&night)return `Si la necesitas para fotos de noche en el trabajo, la cámara nocturna es el dato que importa aquí. ${productName(input)} tiene cámara de visión nocturna de ${night}${nightSensor?` con sensor ${nightSensor}`:''}.`;if(!strengths.length)return null;if(damage)return"
+          )
+          replace(
+            'backend/src/conversation/commercial/GroundedDirectAnswer.ts',
+            "if(batteryPain&&capacity)return `Si la batería no te alcanza durante la jornada, la autonomía deja de ser un dato técnico y pasa a ser continuidad de trabajo. ${productName(input)} cuenta con ${joinNatural(strengths)}.`;",
+            "if(batteryPain&&capacity)return `Si te quedas sin batería antes de terminar la jornada, eso ya te corta el trabajo. ${productName(input)} tiene batería de ${capacity}; es el dato relevante para ganar margen durante el día, sin prometer una duración que no esté medida para tu uso.`;"
+          )
+
+          # 7. Defensive writer boundary: raw RAG/prompt wording cannot reach the customer.
+          replace(
+            'backend/src/conversation/writer/WriterGuard.ts',
+            "const roboticMeta=/\\b(?:lo\\s+tienes\\s+pensado\\s+para|cat[aá]logo\\s+verificado|evidencia\\s+verificada|datos\\s+(?:disponibles|suministrados)",
+            "const roboticMeta=/\\b(?:caracter[ií]sticas\\s+confirmadas|lo\\s+tienes\\s+pensado\\s+para|cat[aá]logo\\s+verificado|evidencia\\s+verificada|datos\\s+(?:disponibles|suministrados)"
+          )
+      - name: Run focused GREEN suite
+        working-directory: backend
+        run: |
+          node --experimental-strip-types --test \
+            tests/unit/live-round2-commercial-regressions.test.ts \
+            tests/unit/commercial-salesperson-regressions.test.ts \
+            tests/unit/live-gate5-writer-regressions.test.ts \
+            tests/unit/live-gate5-grounded-followup.test.ts \
+            tests/unit/live-gate5-reservation-ready.test.ts \
+            tests/unit/writer-pain-empathy-regressions.test.ts \
+            tests/unit/seller-led-price-guard.test.ts \
+            tests/unit/live-commercial-root-regressions.test.ts
+      - name: Build
+        working-directory: backend
+        run: npm run build
+      - name: Commit and push canonical
+        run: |
+          git config user.name "artosperu-bot"
+          git config user.email "artosperu@gmail.com"
+          git add backend/src/conversation/commercial/CommercialFacts.ts \
+                  backend/src/conversation/decision/DecisionValidator.ts \
+                  backend/src/conversation/HybridConversationEngine.ts \
+                  backend/src/conversation/nba/PostAnswerCommercialProgression.ts \
+                  backend/src/conversation/commercial/ResponsePolicy.ts \
+                  backend/src/conversation/intent/IntentPlan.ts \
+                  backend/src/conversation/commercial/GroundedDirectAnswer.ts \
+                  backend/src/conversation/writer/WriterGuard.ts
+          git commit -m "fix: prioritize customer pain and conversation intent"
+          git push origin HEAD:refactor/canonical-conversation-state
