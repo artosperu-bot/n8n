@@ -1,0 +1,97 @@
+name: Round2 Compatibility Fixes Precise
+
+on:
+  push:
+    branches:
+      - qa/round2-compat-fixes2-20260901
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/canonical-conversation-state
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Apply compatibility corrections
+        shell: python
+        run: |
+          from pathlib import Path
+          def replace(path, old, new):
+              p=Path(path); text=p.read_text(encoding='utf-8')
+              if old not in text: raise SystemExit(f'missing expected text in {path}: {old[:140]!r}')
+              p.write_text(text.replace(old,new,1),encoding='utf-8')
+
+          replace(
+            'backend/src/conversation/HybridConversationEngine.ts',
+            "const comparisonAuthority=deterministicDecision.primaryIntent==='COMPARE';",
+            "const comparisonAuthority=deterministicDecision.primaryIntent==='COMPARE'&&(baseState.comparisonProducts?.length??0)>=2;"
+          )
+          replace(
+            'backend/src/conversation/nba/PostAnswerCommercialProgression.ts',
+            "const contextOnlyEvaluate=intent==='EVALUATE_USE'&&!state.problem&&!hasImplication&&!hasChosenSolution&&!spin.nextMissingFact;",
+            "const contextOnlyEvaluate=intent==='EVALUATE_USE'&&current!=='RECOMMEND'&&!state.problem&&!hasImplication&&!hasChosenSolution&&!spin.nextMissingFact;"
+          )
+          replace(
+            'backend/tests/unit/result-first-sales-flow.test.ts',
+            "test('deterministic stock policy also returns known price and fulfillment instead of another stock question',()=>{\n  const answer=stockResponse({product:'Armor 22',shortName:'Armor 22',price:1399,stock:9,currency:'PEN',source:'FAKE_TEST_DATA'},null,true);\n  assert.match(answer,/S\\/\\s*1399/i);\n  assert.match(answer,/disponib/i);\n  assert.match(answer,/env[ií]o/i);\n  assert.match(answer,/recoger|recojo|local/i);\n});",
+            "test('deterministic stock policy returns availability and fulfillment without repeating price',()=>{\n  const answer=stockResponse({product:'Armor 22',shortName:'Armor 22',price:1399,stock:9,currency:'PEN',source:'FAKE_TEST_DATA'},null,true);\n  assert.doesNotMatch(answer,/S\\/\\s*1399|\\b1399\\b/i);\n  assert.match(answer,/disponib/i);\n  assert.match(answer,/env[ií]o/i);\n  assert.match(answer,/recoger|recojo|local/i);\n});"
+          )
+          replace(
+            'backend/tests/unit/post-answer-commercial-progression.test.ts',
+            "test('stock keeps RELATED_VALUE and selects a price-supported continuation without exposing the price',()=>{\n  const quote={product:'Producto Prueba',shortName:'Producto Prueba',price:899,stock:3,currency:'PEN',source:'FAKE_TEST_DATA'};\n  const prepared=prepareCommercialWriteInput({\n    message:'¿tienen stock?',intent:'STOCK',state:{activeProduct:'Producto Prueba'},\n    decision:{nextBestAction:'RELATED_VALUE'} as any,allowedProducts:['Producto Prueba'],quote,\n  });\n  assert.equal(prepared.nextBestAction,'RELATED_VALUE');\n  assert.equal(prepared.commercialMove?.kind,'RELATED_VERIFIED_FACT');\n  assert.ok(prepared.commercialMove?.verifiedFacts.some(fact=>fact.key==='PRECIO'));\n  const answer=stockResponse(quote,null,false,prepared.commercialMove??null);\n  assert.match(answer,/disponible/i);\n  assert.match(answer,/precio/i);\n  assert.doesNotMatch(answer,/899/);\n});",
+            "test('stock does not manufacture price as an N+1 continuation',()=>{\n  const quote={product:'Producto Prueba',shortName:'Producto Prueba',price:899,stock:3,currency:'PEN',source:'FAKE_TEST_DATA'};\n  const prepared=prepareCommercialWriteInput({\n    message:'¿tienen stock?',intent:'STOCK',state:{activeProduct:'Producto Prueba'},\n    decision:{nextBestAction:'RELATED_VALUE'} as any,allowedProducts:['Producto Prueba'],quote,\n  });\n  assert.equal(prepared.nextBestAction,'ANSWER_ONLY');\n  assert.equal(prepared.commercialMove,null);\n  const answer=stockResponse(quote,null,false,prepared.commercialMove??null);\n  assert.match(answer,/disponible/i);\n  assert.doesNotMatch(answer,/precio|899/i);\n});"
+          )
+          replace(
+            'backend/tests/unit/commercial-spin-n1-regressions.test.ts',
+            "assert.match(result.answer,/genera|interrupciones|p[eé]rdida de tiempo/i);",
+            "assert.match(result.answer,/afecta|genera|ocasiona|impacta|complica/i);\n  assert.doesNotMatch(result.answer,/interrupciones,|p[eé]rdida de tiempo u otro/i);"
+          )
+      - name: Install
+        working-directory: backend
+        run: npm ci
+      - name: New round2 regressions
+        working-directory: backend
+        run: node --experimental-strip-types --test tests/unit/live-round2-commercial-regressions.test.ts
+      - name: Commercial salesperson regressions
+        working-directory: backend
+        run: node --experimental-strip-types --test tests/unit/commercial-salesperson-regressions.test.ts
+      - name: Comparison compatibility
+        working-directory: backend
+        run: node --experimental-strip-types --test --test-name-pattern="comparison resolves both planner products even when whole-message SQL lookup misses the pair" tests/integration/hybrid-turn-engine.test.ts
+      - name: Recommendation progression compatibility
+        working-directory: backend
+        run: node --experimental-strip-types --test --test-name-pattern="two explicit needs in a use case are enough to offer stock after recommendation" tests/unit/spin-stock-progression.test.ts
+      - name: Stock response contract
+        working-directory: backend
+        run: node --experimental-strip-types --test --test-name-pattern="deterministic stock policy returns availability and fulfillment without repeating price" tests/unit/result-first-sales-flow.test.ts
+      - name: Stock N plus 1 contract
+        working-directory: backend
+        run: node --experimental-strip-types --test --test-name-pattern="stock does not manufacture price as an N\\+1 continuation" tests/unit/post-answer-commercial-progression.test.ts
+      - name: Natural implication question contract
+        working-directory: backend
+        run: node --experimental-strip-types --test --test-name-pattern="writer executes the authorized implication question and only one question" tests/unit/commercial-spin-n1-regressions.test.ts
+      - name: Build
+        working-directory: backend
+        run: npm run build
+      - name: Commit and push canonical
+        run: |
+          git config user.name "artosperu-bot"
+          git config user.email "artosperu@gmail.com"
+          git add backend/src/conversation/HybridConversationEngine.ts \
+                  backend/src/conversation/nba/PostAnswerCommercialProgression.ts \
+                  backend/tests/unit/result-first-sales-flow.test.ts \
+                  backend/tests/unit/post-answer-commercial-progression.test.ts \
+                  backend/tests/unit/commercial-spin-n1-regressions.test.ts
+          git commit -m "test: align legacy contracts with live conversation behavior"
+          git push origin HEAD:refactor/canonical-conversation-state
