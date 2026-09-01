@@ -6,8 +6,10 @@ import { validateTurnDecision } from '../../src/conversation/decision/DecisionVa
 import { evaluatePostAnswerCommercialProgression } from '../../src/conversation/nba/PostAnswerCommercialProgression.ts';
 import { stockResponse } from '../../src/conversation/commercial/ResponsePolicy.ts';
 import { buildGroundedDirectAnswer } from '../../src/conversation/commercial/GroundedDirectAnswer.ts';
+import { safeWrite } from '../../src/conversation/writer/WriterGuard.ts';
+import { reservationAdvance } from '../../src/conversation/HybridConversationEngine.ts';
 import type { ConversationState } from '../../src/domain/types.ts';
-import type { TurnDecision } from '../../src/ports/LlmProvider.ts';
+import type { LlmProvider, TurnDecision } from '../../src/ports/LlmProvider.ts';
 
 function state(patch:Partial<ConversationState>={}):ConversationState{return{...patch} as ConversationState;}
 
@@ -75,4 +77,26 @@ test('night-photo work context stays on the verified night camera instead of dri
   assert.match(answer!,/24\s*MP/i);
   assert.match(answer!,/noche|nocturn/i);
   assert.doesNotMatch(answer!,/RAM|S\/|precio|stock|disponib/i);
+});
+
+test('writer rejects internal RAG-dump phrasing and falls back to the grounded battery benefit',async()=>{
+  const llm:LlmProvider={async write(){return{text:'Armor X12 Pro: batería 4860 mAh y batería Características confirmadas de batería y carga. Autonomía en espera: 264 horas. Autonomía en llamadas: 20 horas. ¿Cómo te afecta?',model:'stub',usage:{inputTokens:1,outputTokens:1,totalTokens:2,cachedInputTokens:0},durationMs:1};}};
+  const direct='Si te quedas sin batería antes de terminar la jornada, esto ya afecta el trabajo. Armor X12 Pro tiene batería de 4860 mAh.';
+  const result=await safeWrite(llm,{
+    message:'Mi celular actual se queda sin batería antes de terminar el trabajo',intent:'EVALUATE_USE',resolvedCurrentIntent:'EVALUATE_USE',resolvedProduct:'Armor X12 Pro',activeProduct:'Armor X12 Pro',useCase:'delivery',problem:'autonomia_insuficiente',state:state({activeProduct:'Armor X12 Pro',useCase:'delivery',problem:'autonomia_insuficiente'}),directAnswer:direct,
+    rag:[{text:'Capacidad de batería: 4860 mAh. Carga cableada: 10 W. Autonomía en espera: 264 horas. Autonomía en llamadas: 20 horas.',source:'TEST:BATERIA',section:'BATERIA',domain:'PRODUCT',productId:'P-X12'} as any],verifiedFacts:[{domain:'PRODUCT_RAG',key:'BATERIA_MAH',value:'4860 mAh',productId:'P-X12',source:'TEST'} as any],allowedProducts:['Armor X12 Pro'],nextBestAction:'ASK_MISSING_FACT',finalExecutableNba:'ASK_MISSING_FACT',executableNba:'ASK_MISSING_FACT',missingFact:'impacto',decisionImpact:true,
+  } as any,direct);
+  assert.doesNotMatch(result.answer,/Caracter[ií]sticas confirmadas|Autonom[ií]a en espera|Autonom[ií]a en llamadas/i);
+  assert.match(result.answer,/4860\s*mAh/i);
+  assert.equal((result.answer.match(/\?/g)??[]).length,1);
+});
+
+test('reservation confirmation preserves already collected data and asks only the still-missing field',()=>{
+  const previous=state({activeProduct:'Armor X13',selectedProduct:'Armor X13',reservationStage:'NEED_NAME',reservationDocument:'70009999',purchaseSignal:true});
+  const next=reservationAdvance(previous,'Sí, quiero reservarlo');
+  assert.ok(next);
+  assert.equal(next!.stage,'NEED_NAME');
+  assert.equal(next!.document,'70009999');
+  assert.match(next!.answer,/nombre|nombres|apellido/i);
+  assert.doesNotMatch(next!.answer,/tel[eé]fono|correo|adelanto|fecha de recojo/i);
 });
