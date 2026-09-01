@@ -12,6 +12,7 @@ import type { ConversationState } from '../../src/domain/types.ts';
 import type { LlmProvider, TurnDecision } from '../../src/ports/LlmProvider.ts';
 
 // Round-2 live failures are executable contracts; keep this file in standard CI.
+// Compatibility refinements must preserve these live conversation boundaries.
 function state(patch:Partial<ConversationState>={}):ConversationState{return{...patch} as ConversationState;}
 
 function decision(patch:Partial<TurnDecision>={}):TurnDecision{return{
