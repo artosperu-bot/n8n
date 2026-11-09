@@ -13,6 +13,7 @@ import { OpenAIProvider } from './adapters/openai/OpenAIProvider.ts';
 import { OpenAIEmbeddingProvider } from './adapters/openai/OpenAIEmbeddingProvider.ts';
 import { SupabaseConversationRepository } from './adapters/supabase/SupabaseConversationRepository.ts';
 import { SupabaseRagRepository } from './adapters/supabase/SupabaseRagRepository.ts';
+import { SupabaseErpRepository } from './adapters/supabase/SupabaseErpRepository.ts';
 import { SupabaseTelemetryRepository } from './adapters/supabase/SupabaseTelemetryRepository.ts';
 import { SupabaseCrmAuth } from './adapters/supabase/SupabaseCrmAuth.ts';
 import { SupabaseCrmRepository } from './adapters/supabase/SupabaseCrmRepository.ts';
@@ -70,7 +71,12 @@ export function buildRuntime(env: Record<string,string|undefined> = process.env)
           token: config.sqlBridgeToken,
           catalogProcedure: config.sqlCatalogProcedure,
         })
-      : new FakeErpRepository();
+      : config.erpMode === 'supabase'
+        ? new SupabaseErpRepository({
+            url: need(config.supabaseUrl,'SUPABASE_URL'),
+            key: need(config.supabaseServiceRoleKey,'SUPABASE_SERVICE_ROLE_KEY'),
+          })
+        : new FakeErpRepository();
 
   const embeddingProvider = config.ragMode === 'supabase'
     ? new OpenAIEmbeddingProvider({apiKey: need(config.openAiApiKey,'OPENAI_API_KEY'),model: config.openAiEmbeddingModel})

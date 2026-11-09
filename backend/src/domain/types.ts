@@ -138,7 +138,7 @@ export type ProductQuote = {
   matchCount?: number|null;
   requiresClarification?: boolean|null;
   resultType?: string|null;
-  source: 'FAKE_TEST_DATA'|'SQL_BRIDGE'|'SQL_SERVER';
+  source: 'FAKE_TEST_DATA'|'SQL_BRIDGE'|'SQL_SERVER'|'SUPABASE';
 };
 
 export type CatalogResolution = Record<string, unknown>;

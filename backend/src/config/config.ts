@@ -3,7 +3,7 @@ export type AppConfig = {
   port: number;
   host: string;
   llmMode: 'fake' | 'openai';
-  erpMode: 'fake' | 'sqlserver' | 'sql-bridge';
+  erpMode: 'fake' | 'sqlserver' | 'sql-bridge' | 'supabase';
   persistenceMode: 'memory' | 'supabase';
   ragMode: 'fake' | 'disabled' | 'supabase';
   automationMode: 'noop' | 'n8n';
@@ -69,7 +69,7 @@ export function loadConfig(env: EnvLike = process.env): AppConfig {
     port: Number(env.PORT ?? 3000),
     host: env.HOST ?? '127.0.0.1',
     llmMode: env.LLM_MODE === 'fake' ? 'fake' : env.LLM_MODE === 'openai' ? 'openai' : test ? 'fake' : 'openai',
-    erpMode: env.ERP_MODE === 'fake' ? 'fake' : env.ERP_MODE === 'sql-bridge' ? 'sql-bridge' : env.ERP_MODE === 'sqlserver' ? 'sqlserver' : test ? 'fake' : 'sqlserver',
+    erpMode: env.ERP_MODE === 'fake' ? 'fake' : env.ERP_MODE === 'supabase' ? 'supabase' : env.ERP_MODE === 'sql-bridge' ? 'sql-bridge' : env.ERP_MODE === 'sqlserver' ? 'sqlserver' : test ? 'fake' : 'sqlserver',
     persistenceMode: env.PERSISTENCE_MODE === 'supabase' ? 'supabase' : 'memory',
     ragMode: env.RAG_MODE === 'supabase' ? 'supabase' : env.RAG_MODE === 'fake' ? 'fake' : env.RAG_MODE === 'disabled' ? 'disabled' : test ? 'fake' : 'disabled',
     automationMode: env.N8N_MODE === 'n8n' ? 'n8n' : env.N8N_MODE === 'noop' ? 'noop' : test ? 'noop' : 'n8n',
