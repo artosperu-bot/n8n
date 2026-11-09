@@ -7,6 +7,8 @@ import type { TelemetryRepository } from '../ports/TelemetryRepository.ts';
 import type { ChatInput, ChatTurnResult, ConversationState, ProductImage, ProductQuote, RagEvidence, RecommendationDecisionTrace, TurnDecisionTrace } from '../domain/types.ts';
 import { classifyBudgetTurn } from './budget/BudgetResolver.ts';
 import { extractCommercialFacts } from './commercial/CommercialFacts.ts';
+import { customerFacingOpening } from './commercial/CustomerFacingOpening.ts';
+import { guardNightVisionClaim } from './commercial/FeatureEvidenceGuard.ts';
 import { updateInterestLevel } from './commercial/InterestLevel.ts';
 import { prepareCommercialWriteInput } from './commercial/CommercialWriteContract.ts';
 import { normalizeGenuineUseCase, normalizeUseCaseSpinFact } from './commercial/UseCaseNormalizer.ts';
@@ -428,7 +430,8 @@ export class HybridConversationEngine {
       const budgetAuthority=['BUDGET_CONSTRAINT','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)&&!['PURCHASE','HUMAN','QUOTE'].includes(rawDecision.primaryIntent);
       const comparisonAuthority=deterministicDecision.primaryIntent==='COMPARE'&&(baseState.comparisonProducts?.length??0)>=2;
       const needTargetConflict=['EVALUATE_USE','RECOMMEND','RECOMMEND_WITHIN_BUDGET'].includes(deterministicDecision.primaryIntent)&&!deterministicDecision.targetProduct&&Boolean(rawDecision.targetProduct)&&!explicitUnknownTarget(input.message,rawDecision);
-      const forceDeterministic=(rawDecision.primaryIntent==='OTHER'&&deterministicOverride)||cameraImageConflict||strongReference||strongRecommendation||budgetAuthority||comparisonAuthority||needTargetConflict;
+      const bothPriceAndStockRequested=deterministicDecision.primaryIntent==='PRICE'&&deterministicDecision.secondaryIntents.includes('STOCK');
+      const forceDeterministic=(rawDecision.primaryIntent==='OTHER'&&deterministicOverride)||cameraImageConflict||strongReference||strongRecommendation||budgetAuthority||comparisonAuthority||needTargetConflict||bothPriceAndStockRequested;
       const guardedDecision=forceDeterministic?{...rawDecision,primaryIntent:deterministicDecision.primaryIntent,targetProduct:deterministicDecision.targetProduct,referenceType:deterministicDecision.referenceType,selectedProduct:deterministicDecision.selectedProduct,mentionedProducts:deterministicDecision.mentionedProducts,comparisonProducts:deterministicDecision.comparisonProducts,attributes:deterministicDecision.attributes,nextBestAction:deterministicDecision.nextBestAction}:rawDecision;
       const erpDiagnostics:ErpAuthorityDiagnostics={errors:[]};
       const initialCandidates=await this.#searchCandidates(input.message,guardedDecision.targetProduct,erpDiagnostics);
@@ -470,7 +473,25 @@ export class HybridConversationEngine {
       let reservationStage=commercialState.reservationStage??null;let reservationDocument=commercialState.reservationDocument??null;let reservationCustomerName=commercialState.reservationCustomerName??null;let reservationAddress=commercialState.reservationAddress??null;
       const writerProducts=(extra:Array<string|null|undefined>=[])=>unique([...initialCandidates.map(productName),commercialState.activeProduct,commercialState.selectedProduct,commercialState.recommendedProduct,recommendedProduct,productName(quote),target,...extra]);
 
-      if(erpUnavailable&&intent!=='IMAGE'){
+      const thermalSelection=resolveIntentPlan(input.message).attributes.includes('TERMICA') &&
+        /\b(?:el\s+(?:q|que)\s+(?:tiene|trae)|cual|que\s+modelo)\b/.test(fold(input.message)) &&
+        !/\b(?:armor|ulefone)\s*[x]?\d/.test(fold(input.message));
+      if(thermalSelection&&this.#deps.erp.findProductsWithVerifiedFeature){
+        const verified=await this.#deps.erp.findProductsWithVerifiedFeature('TERMICA').catch(()=>[]);
+        if(verified.length===1){
+          quote=verified[0];
+          recommendedProduct=productName(quote);
+          decision={...decision,targetProduct:recommendedProduct,referenceType:'RECOMMENDED_REFERENT'};
+          answer=`El modelo con cámara térmica confirmada es el ${recommendedProduct}. ¿La necesitas para inspecciones o mantenimiento?`;
+          nba='ANSWER_ONLY';route='VERIFIED_FEATURE_MATCH';
+        }else if(verified.length>1){
+          answer=`Estos modelos tienen cámara térmica confirmada: ${verified.slice(0,4).map(productName).filter(Boolean).join(', ')}. ¿Para qué uso la necesitas?`;
+          nba='ASK_MISSING_FACT';route='VERIFIED_FEATURE_MATCH';
+        }else{
+          answer='Por ahora no tengo un modelo con cámara térmica confirmado en el catálogo. Puedo revisarlo con un asesor.';
+          nba='ANSWER_ONLY';route='VERIFIED_FEATURE_UNKNOWN';
+        }
+      }else if(erpUnavailable&&intent!=='IMAGE'){
         route='ERP_UNAVAILABLE';nba='ANSWER_ONLY';
         answer=sqlUnavailableResponse(target);
       }else if(requestedUnknown&&intent!=='IMAGE'){
@@ -495,7 +516,10 @@ export class HybridConversationEngine {
       }else if(intent==='IMAGE'){sqlTools.push('dbo.sp_BuscarImagenesProductoVenta');route='SQL_IMAGES';images=target&&this.#deps.erp.getProductImages?await this.#deps.erp.getProductImages(target,10).catch(()=>[]):[];answer=imageResponse(images)||noEvidenceResponse();
       }else if(intent==='POLICY'||intent==='WARRANTY'){
         route='RAG_INSTITUTIONAL';try{rag=this.#deps.rag.searchInstitutional?await this.#deps.rag.searchInstitutional(input.message,4):await this.#deps.rag.search(input.message,null);}catch{rag=[];}
-        const fallback=institutionalResponse(rag)??noEvidenceResponse();writerResult=await safeWrite(this.#deps.llm,prepareCommercialWriteInput({message:input.message,intent,state:commercialState,rag,deterministicAnswer:'Responde primero la política consultada de forma clara y breve.',decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts()}),fallback);answer=writerResult.answer;nba=writerResult.nextBestAction??nba;
+        const shippingQuestion=/\b(envian|mandan|hacen envios|envio|envios|delivery|despach|entregan)\b/.test(fold(input.message));
+        const shippingEvidence=rag.some(item=>/envio|entrega|delivery|despach|cobertura|callao/i.test(fold(item.text)));
+        if(shippingQuestion){answer=shippingEvidence?'Podemos ayudarte con el envío. Para confirmar la cobertura y el costo, ¿en qué distrito o ciudad lo recibirías?':'Podemos revisar la cobertura de envío a tu zona. ¿A qué distrito o ciudad lo necesitas?';nba='ASK_MISSING_FACT';}
+        else{const fallback=institutionalResponse(rag)??noEvidenceResponse();writerResult=await safeWrite(this.#deps.llm,prepareCommercialWriteInput({message:input.message,intent,state:commercialState,rag,deterministicAnswer:'Responde primero la política consultada de forma clara y breve.',decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts()}),fallback);answer=writerResult.answer;nba=writerResult.nextBestAction??nba;}
       }else if(intent==='COMPARE'){
         route='RAG_COMPARISON';const pair=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[]),...(decision.mentionedProducts??[])]).slice(0,2);
         if(pair.length<2){answer='¿Qué dos modelos quieres comparar?';route='CLARIFICATION';}
@@ -543,7 +567,9 @@ export class HybridConversationEngine {
         route=noWinner?'RAG_RECOMMENDATION_NO_WINNER':recommendationTurn&&recommendedProduct?'RAG_RECOMMENDATION':rag.length?'RAG_PRODUCT':'COMMERCIAL_REASONING';
       }else if(intent==='PURCHASE'){
         const selected=decision.selectedProduct??commercialState.selectedProduct??target??recommendedProduct??commercialState.activeProduct??null;quote=await this.#quote(selected,initialCandidates);
-        if((commercialState.quantity??1)>=2){answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:selected,recommendedProduct},quote);handoff=true;handoffReason='CONTINUAR_VENTA';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';}
+        const paymentQuestion=/\b(como pago|pagar|yape|plin|transferencia|tarjeta|medio de pago|metodo de pago)\b/.test(fold(input.message));
+        if(paymentQuestion){answer=`¡Genial! Podemos avanzar con ${selected??'el equipo que elijas'}. El medio de pago lo confirmamos con un asesor antes de cualquier abono. ¿Prefieres envío o recogerlo en tienda?`;handoff=false;handoffReason=null;nba='ASK_MISSING_FACT';route='PAYMENT_CLARIFICATION';reservationStage=null;}
+        else if((commercialState.quantity??1)>=2){answer=purchaseResponse({...commercialState,selectedProduct:selected,queryTarget:selected,recommendedProduct},quote);handoff=true;handoffReason='CONTINUAR_VENTA';nba='ASSISTED_HANDOFF';route='ASSISTED_HANDOFF';}
         else if(!selected){answer='Claro. ¿Qué modelo quieres comprar?';handoff=false;handoffReason=null;nba='ASK_MISSING_FACT';route='CLARIFICATION';}
         else if(quote?.stock!=null&&quote.stock<=0){answer=`Ahora ${selected} no está disponible. Puedo ayudarte a revisar una alternativa disponible.`;handoff=false;handoffReason=null;nba='OFFER_ALTERNATIVE';route='PURCHASE_NO_STOCK';}
         else{answer=reservationBundlePrompt(selected);handoff=false;handoffReason=null;nba='COLLECT_RESERVATION_DATA';route='RESERVATION_DATA';reservationStage='NEED_DOCUMENT';}
@@ -562,10 +588,15 @@ export class HybridConversationEngine {
       else if(intent==='CATALOG'&&this.#deps.erp.listCatalog){const rows=await this.#deps.erp.listCatalog({onlyWithStock:true}).catch(()=>[]);answer=rows.slice(0,6).map(x=>productName(x)).filter(Boolean).join('\n')||noEvidenceResponse();sqlTools.push('dbo.sp_ListarCatalogoVenta');route='SQL_CATALOG';}
       else{writerResult=await safeWrite(this.#deps.llm,prepareCommercialWriteInput({message:input.message,intent,state:commercialState,rag:[],deterministicAnswer:'Responde lo actual sin inventar ni repetir preguntas conocidas.',decision:{...decision,nextBestAction:nba},allowedProducts:writerProducts()}),'Puedo ayudarte con productos, comparaciones, características, políticas o una compra.');answer=writerResult.answer;nba=writerResult.nextBestAction??nba;route='GENERAL_COMMERCIAL';}
 
+      if(['CAPABILITY','PRODUCT_INFO','EVALUATE_USE'].includes(intent))answer=guardNightVisionClaim({message:input.message,answer,product:productName(quote)??target,evidence:rag});
+      answer=customerFacingOpening({answer,customerMessage:input.message,priorTurnCount:previous.turnCount??0});
+
       const recommendationContinuity=writerResult?.recommendationContinuity;
       const continuityBlocked=Boolean(recommendationContinuity?.changed&&!recommendationContinuity.allowed);
       const selectedProduct=String(decision.referenceType??'').toUpperCase()==='SELECTION_REFERENT'?(decision.selectedProduct??commercialState.selectedProduct??commercialState.salientProduct??target):(decision.selectedProduct??commercialState.selectedProduct??null);
       const explicitSwitch=decision.explicitSwitch&&Boolean(selectedProduct);let activeProduct=commercialState.activeProduct??null;if(!activeProduct&&quote)activeProduct=productName(quote);if(explicitSwitch&&selectedProduct)activeProduct=selectedProduct;
+      if(quote&&['SQL_PRICE','SQL_STOCK','RAG_PRODUCT','RAG_RECOMMENDATION','VERIFIED_FEATURE_MATCH'].includes(route))activeProduct=productName(quote);
+      if(!continuityBlocked&&intent!=='COMPARE'&&String(decision.referenceType??'').toUpperCase()==='NAMED_QUERY_TARGET'&&(decision.mentionedProducts??[]).length===1&&quote)activeProduct=productName(quote);
       if(continuityBlocked)activeProduct=previous.activeProduct??previous.customerVisibleRecommendedProduct??previous.recommendedProduct??null;
       const salientProduct=continuityBlocked?(previous.salientProduct??previous.customerVisibleRecommendedProduct??previous.recommendedProduct??activeProduct):(productName(quote)??decision.targetProduct??recommendedProduct??commercialState.salientProduct??activeProduct);const comparisonProducts=unique([...(decision.comparisonProducts??[]),...(commercialState.comparisonProducts??[])]).slice(0,2);
       const stateQueryTarget=continuityBlocked?(previous.queryTarget??previous.customerVisibleRecommendedProduct??previous.recommendedProduct??activeProduct):(decision.targetProduct??productName(quote)??commercialState.queryTarget??null);

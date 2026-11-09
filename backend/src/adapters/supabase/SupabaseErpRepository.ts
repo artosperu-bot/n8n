@@ -93,6 +93,7 @@ export class SupabaseErpRepository implements ErpRepository {
       if (table === 'arm_channel_offers') {
         u.searchParams.set('channel_code', 'eq.WEB_STECH');
       }
+      if (table === 'v_ia_producto_capacidades') u.searchParams.set('seccion','eq.TERMICA');
       const response = await this.#fetcher(u, {
         headers: { apikey: this.#key, authorization: `Bearer ${this.#key}` },
       });
@@ -150,6 +151,17 @@ export class SupabaseErpRepository implements ErpRepository {
     finally { this.#pending = null; }
   }
 
+  async findProductsWithVerifiedFeature(feature:'TERMICA'):Promise<ProductQuote[]> {
+    if (feature !== 'TERMICA') return [];
+    const rows=await this.#getRows<{producto_id:string;seccion:string;content:string}>(
+      'v_ia_producto_capacidades','producto_id,seccion,content'
+    );
+    const verified=new Set(rows.filter(row=>
+      row.seccion==='TERMICA' && /\bcamara termica\s*:\s*si\b/.test(fold(row.content))
+    ).map(row=>row.producto_id));
+    return (await this.#load()).filter(q=>Boolean(q.productRagId && verified.has(q.productRagId)));
+  }
+
   async listCatalog(filters: { categoryCode?: string | null; subcategoryCode?: string | null; onlyWithStock?: boolean } = {}): Promise<ProductQuote[]> {
     return (await this.#load()).filter(p =>
       p.price != null && // Only verified, published commercial offers enter recommendations.
@@ -166,10 +178,12 @@ export class SupabaseErpRepository implements ErpRepository {
       const partNumber = key(p.partNumber);
       const shortName = key(p.shortName);
       const fullName = key(p.product);
+      const familyModel = shortName.replace(/^armor/,'');
       let score = 0;
       if (partNumber.length >= 5 && q.includes(partNumber)) score = 110;
       if (shortName.length >= 5 && q.includes(shortName)) score = Math.max(score, 100);
       if (fullName.length >= 5 && q.includes(fullName)) score = Math.max(score, 90);
+      if (familyModel.length >= 4 && /\d/.test(familyModel) && q.includes(familyModel)) score = Math.max(score, 85);
       if (q === partNumber || q === shortName || q === fullName) score += 30;
       return { product: p, score };
     }).filter(row => row.score > 0)

@@ -138,8 +138,7 @@ export function stockResponse(quote:ProductQuote|null,requestedQuantity?:number|
   }
   if(quote.stock<=0)return'Ahora no está disponible.';
   if(softClose){
-    const price=quote.price!=null?`${product} está a S/ ${quote.price} y sí está disponible.`:'Sí, está disponible.';
-    return`${price} ¿Prefieres envío o recogerlo en nuestro local?`;
+    return`Sí, está disponible. ¿Prefieres envío o recogerlo en nuestro local?`;
   }
   const continuation=renderCommercialMove(commercialMove,'STOCK');
   return continuation?`Sí, está disponible. ${continuation}`:'Sí, está disponible.';

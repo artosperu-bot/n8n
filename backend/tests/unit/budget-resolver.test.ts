@@ -30,3 +30,13 @@ test('recognizes natural cap phrases used by real customers',()=>{
   assert.equal(classifyBudgetTurn('hay algo por menos de 1000?').budget?.max,1000);
   assert.equal(classifyBudgetTurn('tengo 1000 max').budget?.max,1000);
 });
+
+test('recognizes abbreviated budgets and keeps other customer details',()=>{
+  const r=classifyBudgetTurn('presu max 1000 y q aguante, cual me rcomiendas?');
+  assert.equal(r.budget?.max,1000);
+  assert.equal(r.budgetConstraint,true);
+  assert.doesNotMatch(r.spinResidual,/presu|max|1000/);
+  assert.match(r.spinResidual,/aguante/);
+  assert.equal(classifyBudgetTurn('presu 800').budget?.max,800);
+  assert.equal(classifyBudgetTurn('max 900').budget?.max,900);
+});

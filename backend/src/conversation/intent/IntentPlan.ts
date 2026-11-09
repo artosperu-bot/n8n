@@ -67,14 +67,24 @@ function isFulfillmentSelection(message:string,t:string):boolean{
   return delivery||pickup;
 }
 
+function normalizeInformalSalesText(message:string):string {
+  return fold(message)
+    .replace(/\b(?:kuanto|kanto|cuantoo)\b/g,'cuanto')
+    .replace(/\b(?:stoc|stok|stokk|stockk)\b/g,'stock')
+    .replace(/\b(?:camra|camarra|cmara)\b/g,'camara')
+    .replace(/\b(?:termika|termicoo|termicca)\b/g,'termica')
+    .replace(/\b(?:rcomiendas|recomiedas|recomeindas)\b/g,'recomiendas')
+    .replace(/\bq\b/g,'que');
+}
+
 export function resolveIntentPlan(message: string): IntentPlan {
-  const t = fold(message);
+  const t = normalizeInformalSalesText(message);
   const hits: SemanticIntent[] = [];
   const has = (rx: RegExp) => rx.test(t);
   const fulfillmentSelection=isFulfillmentSelection(message,t);
 
   if (has(/\b(precio|cuanto cuesta|cuanto vale|cuanto esta|cuanto sale|cuanto ta|a cuanto esta|a cuanto sale|costo)\b/)) hits.push('PRICE_AVAILABILITY');
-  if (has(/\b(stock|stk|disponible|disponibilidad|hay unidades|tienen unidades|queda stock|quedan unidades)\b/)) hits.push('STOCK');
+  if (has(/\b(stock|stk|disponible|disponibilidad|hay unidades|tienen unidades|queda stock|quedan unidades)\b/) || has(/\b(?:tienen|tienes|hay)\b[^?!]{0,35}\b(?:el|la|un|una)?\s*(?:ulefone\s+)?armor\s+[x]?\d+[a-z0-9\s-]*/)) hits.push('STOCK');
   if (fulfillmentSelection) hits.push('FULFILLMENT_SELECTION');
   if (isDirectImageRequest(t)) hits.push('IMAGES');
   if (has(/\b(pedido|orden)\b/) && has(/\b(consultar|estado|seguimiento|ver|revisar|donde)\b/)) hits.push('ORDER_STATUS');
@@ -97,7 +107,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
     || has(/\b(?:cual|que)\b[^?.!]{0,30}\btiene\b[^?.!]{0,20}\b(?:la|el)\s+mejor\b/)
     || has(/\b(?:cual|que)\b\s+si\s+(?:lo\s+)?(?:tiene|cumple|ofrece)\b/)
     || has(/\bhay\s+(?:uno|un|algo|alguno)\b[^?.!]{0,25}\bmas\s+barato\b/);
-  if (recommendationLanguage) hits.push('RECOMMEND');
+  if (recommendationLanguage || has(/\bel\s+(?:que|q)\s+(?:tiene|trae)\b[^?.!]{0,55}\b(?:camara\s+termica|termica|thermal|flir)\b/)) hits.push('RECOMMEND');
 
   const useCaseLoQuiero=has(/\b(?:lo|la)\s+quiero\s+para\b/);
   const explicitPurchase = has(/\b(quiero comprar|quiero comprarlo|quiero comprarla|comprarlo|comprarla|como compro|lo compro|la compro|me llevo (?:ese|esa|este|esta)|me quedo con|quiero (?:ese|esa|este|esta)|ya (?:ese|esa|este|esta) quiero|me decidi(?: por (?:ese|esa|este|esta))?|ya me decidi|avanzar con la compra|quiero avanzar)\b/)
@@ -110,7 +120,7 @@ export function resolveIntentPlan(message: string): IntentPlan {
   if (has(/\b(caro|sale de mi presupuesto|fuera de mi presupuesto|descuento|otra tienda[^.!?]{0,60}(?:barato|economico)|mas barato)\b/)) hits.push('HANDLE_PRICE_OBJECTION');
   if (has(/\b(no confio|me preocupa|esperaba|se me hace (?:muy )?(?:grande|pesado|grueso))\b/)) hits.push('OBJECTION');
   if (has(/\bgarantia\b/)) hits.push('WARRANTY');
-  if (!fulfillmentSelection&&has(/\b(tienda fisica|direccion|ubicacion|horario|recojo|envio|envios|provincia|lima|contraentrega|forma de pago|medios? de pago|yape|plin|transferencia|tarjeta|boleta|factura|cambio|devolucion|reembolso)\b/)) hits.push('POLICY');
+  if (!fulfillmentSelection&&has(/\b(tienda fisica|direccion|ubicacion|horario|recojo|envio|envios|envian|mandan|despachan|hacen envios|provincia|lima|contraentrega|forma de pago|medios? de pago|yape|plin|transferencia|tarjeta|boleta|factura|cambio|devolucion|reembolso)\b/)) hits.push('POLICY');
 
   const attributes = unique(ATTRS.filter(([rx]) => rx.test(t)).map(([, name]) => name));
   const hasProductLike=has(/\b(celular|telefono|equipo|modelo|[a-z]+\s*[x]?\d+[a-z0-9]*)\b/);

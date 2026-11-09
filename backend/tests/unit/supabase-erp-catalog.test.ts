@@ -15,12 +15,12 @@ const arm = [
   {partnumber:'UNMAPPED-123',title:'Invented',brand:'None',price_pen:1,stock_erp:99,verified_at:'2026-11-09T15:30:00Z'},
 ];
 
-function adapter(values = arm, offers: any[] = []) {
+function adapter(values = arm, offers: any[] = [], features: any[] = []) {
   const requests:URL[]=[];
   const fetcher:typeof fetch=async request => {
     const url=new URL(String(request));
     requests.push(url);
-    const rows=url.pathname.endsWith('/arm_products')?values:url.pathname.endsWith('/arm_channel_offers')?offers.filter(o=>o.channel_code==='WEB_STECH'):catalog;
+    const rows=url.pathname.endsWith('/arm_products')?values:url.pathname.endsWith('/arm_channel_offers')?offers.filter(o=>o.channel_code==='WEB_STECH'):url.pathname.endsWith('/v_ia_producto_capacidades')?features.filter(x=>x.seccion==='TERMICA'):catalog;
     return new Response(JSON.stringify(rows),{status:200,headers:{'content-type':'application/json'}});
   };
   return {repo:new SupabaseErpRepository({url:'https://example.supabase.co',key:'test-only',fetcher,now:()=>now}),requests};
@@ -97,4 +97,21 @@ test('stale web offer cannot override canonical verified price', async () => {
   const product=await repo.getProductQuote('Armor 22');
   assert.equal(product?.price,null);
   assert.equal(product?.stock,null);
+});
+
+test('informal abbreviated model 25t pro resolves canonical product safely',async()=>{
+ const {repo}=adapter();
+ assert.equal((await repo.getProductQuote('25t pro'))?.productRagId,'P-25');
+ assert.deepEqual((await repo.searchProducts('buenasss q diferencia hay del armor 22 con el 25t pro')).map(p=>p.shortName),['Armor 22','Armor 25T Pro']);
+});
+
+test('thermal selector is grounded in verified capability section, never the model guess',async()=>{
+  const features=[
+    {producto_id:'P-25',seccion:'TERMICA',content:'Características confirmadas de cámara térmica para Armor 25T Pro: Cámara térmica: Sí. Resolución térmica: 160 x 120.'},
+    {producto_id:'P-X12',seccion:'TERMICA',content:'Cámara térmica: No.'}
+  ];
+  const {repo,requests}=adapter(arm,[],features);
+  const verified=await repo.findProductsWithVerifiedFeature('TERMICA');
+  assert.deepEqual(verified.map(p=>p.shortName),['Armor 25T Pro']);
+  assert.ok(requests.some(url=>url.pathname.endsWith('/v_ia_producto_capacidades')&&url.searchParams.get('seccion')==='eq.TERMICA'));
 });
